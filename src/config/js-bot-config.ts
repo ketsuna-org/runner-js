@@ -58,6 +58,7 @@ export const jsBotConfigSchema = z.object({
   scheduled: z.array(scheduledHandlerSchema).default([]),
   inboundWebhooks: z.array(inboundWebhookHandlerSchema).default([]),
   globalVariables: z.record(z.unknown()).default({}),
+  scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
   scriptTimeoutMs: z.number().int().positive().default(30_000),
 });
 

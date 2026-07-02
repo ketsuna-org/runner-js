@@ -14,6 +14,13 @@ import type {
 } from '../config/js-bot-config.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
+import {
+  collectAutocompleteBindings,
+  filterStaticAutocompleteChoices,
+  findAutocompleteBinding,
+  resolveInteractionOptionPath,
+  type AutocompleteBinding,
+} from './command-options.js';
 
 type HandlerDisposer = () => void;
 
@@ -26,6 +33,7 @@ export class HandlerRegistry {
   private readonly inFlightInteractions = new Set<string>();
   private readonly handledInteractions = new Set<string>();
   private variables: Record<string, unknown>;
+  private autocompleteBindings: AutocompleteBinding[] = [];
 
   constructor(
     private readonly client: Client,
@@ -45,6 +53,15 @@ export class HandlerRegistry {
         continue;
       }
       this.commandMap.set(command.name.trim().toLowerCase(), command);
+      this.autocompleteBindings.push(
+        ...collectAutocompleteBindings(
+          command.name.trim().toLowerCase(),
+          (command.options ?? []).filter(
+            (option): option is Record<string, unknown> =>
+              typeof option === 'object' && option !== null,
+          ),
+        ),
+      );
     }
 
     for (const event of this.config.events) {
@@ -70,6 +87,11 @@ export class HandlerRegistry {
     }
 
     const onInteraction = async (interaction: Interaction) => {
+      if (interaction.isAutocomplete()) {
+        await this.handleAutocomplete(interaction);
+        return;
+      }
+
       if (!interaction.isChatInputCommand()) {
         return;
       }
@@ -169,6 +191,60 @@ export class HandlerRegistry {
     this.commandMap.clear();
     this.eventMap.clear();
     this.webhookMap.clear();
+    this.autocompleteBindings = [];
+  }
+
+  private async handleAutocomplete(interaction: Interaction): Promise<void> {
+    if (!interaction.isAutocomplete()) {
+      return;
+    }
+
+    const focused = interaction.options.getFocused(true);
+    const optionPath = resolveInteractionOptionPath(interaction);
+    const binding = findAutocompleteBinding(
+      interaction.commandName.trim().toLowerCase(),
+      optionPath,
+      focused.name,
+      this.autocompleteBindings,
+    );
+
+    if (!binding) {
+      await interaction.respond([]).catch(() => undefined);
+      return;
+    }
+
+    const mode = String(binding.config.mode ?? 'javascript').trim().toLowerCase();
+    if (mode === 'static') {
+      const choices = filterStaticAutocompleteChoices(
+        binding.config,
+        String(focused.value ?? ''),
+      );
+      await interaction.respond(choices);
+      return;
+    }
+
+    if (mode === 'javascript') {
+      const script = String(binding.config.jsScript ?? '').trim();
+      if (!script) {
+        await interaction.respond([]).catch(() => undefined);
+        return;
+      }
+
+      try {
+        await this.runScript(script, { interaction });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.emitLog('error', `Autocomplete script failed: ${message}`);
+        await interaction.respond([]).catch(() => undefined);
+      }
+      return;
+    }
+
+    this.emitLog(
+      'warn',
+      `Autocomplete mode "${mode}" is not supported by the JavaScript runner.`,
+    );
+    await interaction.respond([]).catch(() => undefined);
   }
 
   private attachEvent(handler: EventHandler): void {

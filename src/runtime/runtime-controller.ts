@@ -3,6 +3,8 @@ import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.j
 import { BotStore } from './bot-store.js';
 import { BotProcessManager } from './bot-process-manager.js';
 import type { LogStore } from './log-store.js';
+import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
+import { VariableStore } from './variable-store.js';
 
 export interface RunnerBotRuntimeState {
   botId: string;
@@ -15,10 +17,12 @@ export interface RunnerBotRuntimeState {
 
 export class RuntimeController {
   readonly botStore: BotStore;
+  readonly variableStore: VariableStore;
   private readonly processManager: BotProcessManager;
 
   constructor(dataDir: string, logStore: LogStore) {
     this.botStore = new BotStore(dataDir);
+    this.variableStore = new VariableStore(`${dataDir}/variables`);
     this.processManager = new BotProcessManager({
       dataDir,
       botStore: this.botStore,
@@ -77,6 +81,192 @@ export class RuntimeController {
 
   async drainAllBots(): Promise<number> {
     return this.processManager.drainAll();
+  }
+
+  async requireBotEntry(botId: string) {
+    const entry = await this.botStore.load(botId);
+    if (!entry) {
+      const error = new Error(`Bot "${botId}" not found.`) as Error & {
+        statusCode: number;
+      };
+      error.statusCode = 404;
+      throw error;
+    }
+    return entry;
+  }
+
+  async getMergedGlobalVariables(botId: string): Promise<Record<string, unknown>> {
+    const entry = await this.requireBotEntry(botId);
+    const runtime = await this.variableStore.getGlobalVariables(botId);
+    return { ...entry.config.globalVariables, ...runtime };
+  }
+
+  async upsertGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
+    const normalizedKey = key.trim();
+    if (!normalizedKey) {
+      throw new Error('Missing variable key.');
+    }
+
+    await this.botStore.updateConfig(botId, (config) => ({
+      ...config,
+      globalVariables: {
+        ...config.globalVariables,
+        [normalizedKey]: value,
+      },
+    }));
+    await this.variableStore.setGlobalVariable(botId, normalizedKey, value);
+    await this.reloadBotIfRunning(botId);
+  }
+
+  async removeGlobalVariable(botId: string, key: string): Promise<void> {
+    const normalizedKey = key.trim();
+    if (!normalizedKey) {
+      throw new Error('Missing variable key.');
+    }
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const nextGlobals = { ...config.globalVariables };
+      delete nextGlobals[normalizedKey];
+      return { ...config, globalVariables: nextGlobals };
+    });
+    await this.variableStore.removeGlobalVariable(botId, normalizedKey);
+    await this.reloadBotIfRunning(botId);
+  }
+
+  async renameGlobalVariable(botId: string, oldKey: string, newKey: string): Promise<void> {
+    const normalizedOldKey = oldKey.trim();
+    const normalizedNewKey = newKey.trim();
+    if (!normalizedOldKey || !normalizedNewKey) {
+      throw new Error('Missing variable key.');
+    }
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const nextGlobals = { ...config.globalVariables };
+      if (!(normalizedOldKey in nextGlobals)) {
+        return config;
+      }
+      nextGlobals[normalizedNewKey] = nextGlobals[normalizedOldKey];
+      delete nextGlobals[normalizedOldKey];
+      return { ...config, globalVariables: nextGlobals };
+    });
+
+    const runtime = await this.variableStore.getGlobalVariables(botId);
+    if (normalizedOldKey in runtime) {
+      await this.variableStore.renameGlobalVariable(
+        botId,
+        normalizedOldKey,
+        normalizedNewKey,
+      );
+    }
+    await this.reloadBotIfRunning(botId);
+  }
+
+  async upsertScopedVariableDefinition(
+    botId: string,
+    key: string,
+    scope: string,
+    defaultValue: unknown,
+    valueType = 'string',
+  ): Promise<void> {
+    const normalizedKey = normalizeScopedStorageKey(key);
+    const normalizedScope = scope.trim();
+    if (!normalizedKey || !normalizedScope) {
+      throw new Error('Missing scoped variable definition.');
+    }
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const defs = config.scopedVariableDefinitions.map((entry) => ({ ...entry }));
+      const next = {
+        key: normalizedKey,
+        scope: normalizedScope,
+        defaultValue,
+        valueType,
+      };
+      const index = defs.findIndex(
+        (entry) =>
+          normalizeScopedStorageKey(String(entry.key ?? '')) === normalizedKey &&
+          String(entry.scope ?? '').trim() === normalizedScope,
+      );
+      if (index >= 0) {
+        defs[index] = next;
+      } else {
+        defs.push(next);
+      }
+      return { ...config, scopedVariableDefinitions: defs };
+    });
+    await this.reloadBotIfRunning(botId);
+  }
+
+  async deleteScopedVariableDefinition(
+    botId: string,
+    key: string,
+    scope?: string,
+    purgeStoredValues = false,
+  ): Promise<void> {
+    const normalizedKey = normalizeScopedStorageKey(key);
+    const normalizedScope = scope?.trim() ?? '';
+    if (!normalizedKey) {
+      throw new Error('Missing scoped variable key.');
+    }
+
+    const entry = await this.requireBotEntry(botId);
+    const scopesToPurge = new Set<string>();
+    if (purgeStoredValues) {
+      if (normalizedScope) {
+        scopesToPurge.add(normalizedScope);
+      } else {
+        for (const def of entry.config.scopedVariableDefinitions) {
+          if (normalizeScopedStorageKey(String(def.key ?? '')) === normalizedKey) {
+            const defScope = String(def.scope ?? '').trim();
+            if (defScope) {
+              scopesToPurge.add(defScope);
+            }
+          }
+        }
+      }
+    }
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const defs = config.scopedVariableDefinitions.filter((entry) => {
+        const matchesKey =
+          normalizeScopedStorageKey(String(entry.key ?? '')) === normalizedKey;
+        if (!matchesKey) {
+          return true;
+        }
+        if (!normalizedScope) {
+          return false;
+        }
+        return String(entry.scope ?? '').trim() !== normalizedScope;
+      });
+      return { ...config, scopedVariableDefinitions: defs };
+    });
+
+    if (purgeStoredValues) {
+      for (const scopeName of scopesToPurge) {
+        await this.purgeScopedValuesForKey(botId, scopeName, normalizedKey);
+      }
+    }
+
+    await this.reloadBotIfRunning(botId);
+  }
+
+  private async reloadBotIfRunning(botId: string): Promise<void> {
+    if (!this.isBotRunning(botId)) {
+      return;
+    }
+    await this.processManager.reloadBot(botId);
+  }
+
+  private async purgeScopedValuesForKey(
+    botId: string,
+    scope: string,
+    storageKey: string,
+  ): Promise<void> {
+    await this.variableStore.removeAllScopedValuesForKey(botId, scope, storageKey);
+    const legacyKey = toScopedReferenceKey(storageKey);
+    if (legacyKey !== storageKey) {
+      await this.variableStore.removeAllScopedValuesForKey(botId, scope, legacyKey);
+    }
   }
 
   listRuntimeStates(): RunnerBotRuntimeState[] {

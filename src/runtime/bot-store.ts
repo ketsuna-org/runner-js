@@ -98,4 +98,28 @@ export class BotStore {
     entry.running = running;
     await writeFile(this.fileForBot(botId), JSON.stringify(entry, null, 2), 'utf8');
   }
+
+  async updateConfig(
+    botId: string,
+    transform: (config: JsBotConfig) => JsBotConfig,
+  ): Promise<RunnerBotEntry> {
+    const entry = await this.load(botId);
+    if (!entry) {
+      const error = new Error(`Bot "${botId}" not found.`) as Error & {
+        statusCode: number;
+      };
+      error.statusCode = 404;
+      throw error;
+    }
+
+    const nextConfig = transform(entry.config);
+    validateJsBotConfig(nextConfig);
+    const nextEntry: RunnerBotEntry = {
+      ...entry,
+      config: nextConfig,
+      syncedAt: new Date().toISOString(),
+    };
+    await writeFile(this.fileForBot(botId), JSON.stringify(nextEntry, null, 2), 'utf8');
+    return nextEntry;
+  }
 }

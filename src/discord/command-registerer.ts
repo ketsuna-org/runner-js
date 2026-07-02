@@ -1,11 +1,11 @@
 import {
   REST,
   Routes,
-  type APIApplicationCommandOption,
   type Client,
 } from 'discord.js';
 
 import type { CommandHandler } from '../config/js-bot-config.js';
+import { transformCommandOptionsForDiscord } from './command-options.js';
 
 export async function registerSlashCommands(
   client: Client,
@@ -20,7 +20,12 @@ export async function registerSlashCommands(
   const body = enabled.map((command) => ({
     name: command.name,
     description: command.description || command.name,
-    options: (command.options ?? []) as unknown as APIApplicationCommandOption[],
+    options: transformCommandOptionsForDiscord(
+      (command.options ?? []).filter(
+        (option): option is Record<string, unknown> =>
+          typeof option === 'object' && option !== null,
+      ),
+    ),
   }));
 
   const rest = new REST({ version: '10' }).setToken(token);

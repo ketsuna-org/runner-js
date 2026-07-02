@@ -78,4 +78,86 @@ describe('HTTP server integration', () => {
     await app.close();
     await runtime.dispose();
   });
+
+  it('supports variable endpoints for global and scoped data', async () => {
+    const dataDir = './data/test-http-variables';
+    const logFile = './data/test-http-variables/logs/runner.log';
+    const env = {
+      ...loadRunnerEnv(),
+      dataDir,
+      logFile,
+      webHost: '127.0.0.1',
+      webPort: 0,
+      apiToken: '',
+    };
+
+    const logStore = new LogStore(env.logFile);
+    const runtime = new RuntimeController(env.dataDir, logStore);
+    const app = createHttpServer({ env, runtime, logStore });
+
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const baseUrl = `http://127.0.0.1:${port}`;
+    const botId = 'bot-variables';
+
+    const syncResponse = await fetch(`${baseUrl}/bots/sync`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        botId,
+        botName: 'Variables Bot',
+        config: {
+          token: 'test-token',
+          globalVariables: { foo: 'bar' },
+          scopedVariableDefinitions: [
+            {
+              scope: 'user',
+              key: 'coins',
+              defaultValue: 0,
+              valueType: 'number',
+            },
+          ],
+        },
+      }),
+    });
+    expect(syncResponse.status).toBe(200);
+
+    const globals = await fetch(`${baseUrl}/bots/${botId}/variables/global`);
+    expect(globals.status).toBe(200);
+    const globalsBody = (await globals.json()) as { variables: Record<string, unknown> };
+    expect(globalsBody.variables.foo).toBe('bar');
+
+    const setGlobal = await fetch(`${baseUrl}/bots/${botId}/variables/global/set`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'hello', value: 42 }),
+    });
+    expect(setGlobal.status).toBe(200);
+
+    const globalsAfterSet = await fetch(`${baseUrl}/bots/${botId}/variables/global`);
+    const globalsAfterSetBody = (await globalsAfterSet.json()) as {
+      variables: Record<string, unknown>;
+    };
+    expect(globalsAfterSetBody.variables.hello).toBe(42);
+
+    const defs = await fetch(`${baseUrl}/bots/${botId}/variables/scoped-definitions`);
+    expect(defs.status).toBe(200);
+    const defsBody = (await defs.json()) as { definitions: unknown[] };
+    expect(defsBody.definitions).toHaveLength(1);
+
+    await runtime.variableStore.setScopedVariable(botId, 'user', 'u1', 'coins', 99);
+
+    const scopedValues = await fetch(
+      `${baseUrl}/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
+    );
+    expect(scopedValues.status).toBe(200);
+    const scopedValuesBody = (await scopedValues.json()) as {
+      values: Record<string, unknown>;
+    };
+    expect(scopedValuesBody.values.u1).toBe(99);
+
+    await app.close();
+    await runtime.dispose();
+  });
 });

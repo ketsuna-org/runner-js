@@ -6,6 +6,10 @@ import type { RunnerEnv } from '../config/env.js';
 import { createAuthHook } from './auth.js';
 import type { RuntimeController } from '../runtime/runtime-controller.js';
 import type { LogStore } from '../runtime/log-store.js';
+import {
+  normalizeScopedStorageKey,
+  toScopedReferenceKey,
+} from '../runtime/variable-keys.js';
 
 export interface HttpServerDeps {
   env: RunnerEnv;
@@ -164,6 +168,160 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     return { stopped };
   });
 
+  app.get('/bots/:id/variables/global', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const variables = await deps.runtime.getMergedGlobalVariables(botId);
+    return { botId, variables };
+  });
+
+  app.post('/bots/:id/variables/global/set', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const body = (request.body as { key?: string; value?: unknown }) ?? {};
+    const key = (body.key ?? '').trim();
+    if (!key) {
+      throw badRequest('Missing key.');
+    }
+    await deps.runtime.upsertGlobalVariable(botId, key, body.value);
+    return { ok: true };
+  });
+
+  app.post('/bots/:id/variables/global/rename', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const body = (request.body as { oldKey?: string; newKey?: string }) ?? {};
+    const oldKey = (body.oldKey ?? '').trim();
+    const newKey = (body.newKey ?? '').trim();
+    if (!oldKey || !newKey) {
+      throw badRequest('Missing oldKey or newKey.');
+    }
+    await deps.runtime.renameGlobalVariable(botId, oldKey, newKey);
+    return { ok: true };
+  });
+
+  app.post('/bots/:id/variables/global/remove', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const body = (request.body as { key?: string }) ?? {};
+    const key = (body.key ?? '').trim();
+    if (!key) {
+      throw badRequest('Missing key.');
+    }
+    await deps.runtime.removeGlobalVariable(botId, key);
+    return { ok: true };
+  });
+
+  app.get('/bots/:id/variables/scoped-definitions', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const entry = await deps.runtime.requireBotEntry(botId);
+    return {
+      botId,
+      definitions: entry.config.scopedVariableDefinitions,
+    };
+  });
+
+  app.post('/bots/:id/variables/scoped-definitions/set', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const body =
+      (request.body as {
+        scope?: string;
+        key?: string;
+        defaultValue?: unknown;
+        valueType?: string;
+      }) ?? {};
+    const scope = (body.scope ?? '').trim();
+    const key = normalizeScopedStorageKey((body.key ?? '').toString());
+    if (!scope || !key) {
+      throw badRequest('Missing scope or key.');
+    }
+    await deps.runtime.upsertScopedVariableDefinition(
+      botId,
+      key,
+      scope,
+      body.defaultValue,
+      (body.valueType ?? 'string').toString(),
+    );
+    return { ok: true };
+  });
+
+  app.post('/bots/:id/variables/scoped-definitions/remove', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const body =
+      (request.body as {
+        key?: string;
+        scope?: string;
+        purgeStoredValues?: boolean;
+      }) ?? {};
+    const key = normalizeScopedStorageKey((body.key ?? '').toString());
+    if (!key) {
+      throw badRequest('Missing key.');
+    }
+    const scope = (body.scope ?? '').trim();
+    await deps.runtime.deleteScopedVariableDefinition(
+      botId,
+      key,
+      scope || undefined,
+      body.purgeStoredValues === true,
+    );
+    return { ok: true };
+  });
+
+  app.get('/bots/:id/variables/scoped-values', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const entry = await deps.runtime.requireBotEntry(botId);
+    const query = request.query as { scope?: string; key?: string };
+    const scope = (query.scope ?? '').trim();
+    const keyRaw = (query.key ?? '').trim();
+    if (!scope || !keyRaw) {
+      throw badRequest('Missing scope or key query parameter.');
+    }
+
+    const storageKey = normalizeScopedStorageKey(keyRaw);
+    const legacyKey = toScopedReferenceKey(storageKey);
+    const contextIds = new Set(
+      await deps.runtime.variableStore.listContextIds(botId, scope, storageKey),
+    );
+    if (legacyKey !== storageKey) {
+      for (const contextId of await deps.runtime.variableStore.listContextIds(
+        botId,
+        scope,
+        legacyKey,
+      )) {
+        contextIds.add(contextId);
+      }
+    }
+
+    const values: Record<string, unknown> = {};
+    for (const contextId of [...contextIds].sort()) {
+      let value = await deps.runtime.variableStore.getScopedVariable(
+        botId,
+        scope,
+        contextId,
+        storageKey,
+      );
+      if (value == null && legacyKey !== storageKey) {
+        value = await deps.runtime.variableStore.getScopedVariable(
+          botId,
+          scope,
+          contextId,
+          legacyKey,
+        );
+      }
+      if (isMissingOrEmpty(value)) {
+        const defaultValue = defaultValueFor(
+          entry.config.scopedVariableDefinitions,
+          scope,
+          storageKey,
+        );
+        if (defaultValue != null) {
+          value = defaultValue;
+        }
+      }
+      if (value != null) {
+        values[contextId] = value;
+      }
+    }
+
+    return { botId, scope, key: storageKey, values };
+  });
+
   app.post('/bots/:id/inbound/:pathKey', async (request) => {
     const { id: botId, pathKey } = request.params as { id: string; pathKey: string };
     const entry = await deps.runtime.botStore.load(botId);
@@ -313,4 +471,37 @@ function unauthorized(message: string): Error & { statusCode: number } {
   const error = new Error(message) as Error & { statusCode: number };
   error.statusCode = 401;
   return error;
+}
+
+function isMissingOrEmpty(value: unknown): boolean {
+  if (value == null) {
+    return true;
+  }
+  if (typeof value === 'string') {
+    return value.trim().length === 0;
+  }
+  return false;
+}
+
+function defaultValueFor(
+  definitions: Array<Record<string, unknown>>,
+  scope: string,
+  storageKey: string,
+): unknown {
+  for (const def of definitions) {
+    const defKey = normalizeScopedStorageKey(String(def.key ?? ''));
+    const defScope = String(def.scope ?? '').trim();
+    if (defKey !== storageKey || defScope !== scope.trim()) {
+      continue;
+    }
+    const defaultValue = def.defaultValue;
+    if (defaultValue == null) {
+      return null;
+    }
+    if (typeof defaultValue === 'string' && defaultValue.trim().length === 0) {
+      return null;
+    }
+    return defaultValue;
+  }
+  return null;
 }
