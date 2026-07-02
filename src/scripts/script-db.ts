@@ -9,7 +9,7 @@ import {
   type ScopedExecutionContext,
 } from '../runtime/scoped-context.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from '../runtime/variable-keys.js';
-import type { VariableStore } from '../runtime/variable-store.js';
+import type { VariableDatabase } from '../runtime/variable-database.js';
 
 export type { DbTarget, DbListOptions };
 
@@ -55,7 +55,7 @@ export class ScriptDb {
   constructor(
     private readonly botId: string,
     private readonly config: JsBotConfig,
-    private readonly store: VariableStore,
+    private readonly store: VariableDatabase,
     private readonly ctx: ScopedExecutionContext,
     private readonly variables: Record<string, unknown>,
   ) {

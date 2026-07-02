@@ -19,7 +19,7 @@ describe('HTTP server integration', () => {
     };
 
     const logStore = new LogStore(env.logFile);
-    const runtime = new RuntimeController(env.dataDir, logStore);
+    const runtime = await RuntimeController.create(env.dataDir, logStore, env);
     const app = createHttpServer({ env, runtime, logStore });
 
     await app.listen({ host: '127.0.0.1', port: 0 });
@@ -92,7 +92,7 @@ describe('HTTP server integration', () => {
     };
 
     const logStore = new LogStore(env.logFile);
-    const runtime = new RuntimeController(env.dataDir, logStore);
+    const runtime = await RuntimeController.create(env.dataDir, logStore, env);
     const app = createHttpServer({ env, runtime, logStore });
 
     await app.listen({ host: '127.0.0.1', port: 0 });

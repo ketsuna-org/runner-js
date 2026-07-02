@@ -4,12 +4,13 @@ import path from 'node:path';
 
 import { describe, expect, it, afterEach } from 'vitest';
 
-import { VariableStore } from '../src/runtime/variable-store.js';
+import { SqliteVariableStore } from '../src/runtime/sqlite-variable-store.js';
+import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import { ScriptDb } from '../src/scripts/script-db.js';
 
 describe('ScriptDb', () => {
   let dataDir = '';
-  let store: VariableStore;
+  let store: VariableDatabase;
 
   const config = {
     globalVariables: { welcome: 'hi' },
@@ -33,6 +34,9 @@ describe('ScriptDb', () => {
   };
 
   afterEach(async () => {
+    if (store?.dispose) {
+      store.dispose();
+    }
     if (dataDir) {
       await rm(dataDir, { recursive: true, force: true });
       dataDir = '';
@@ -41,7 +45,8 @@ describe('ScriptDb', () => {
 
   async function createDb(variables: Record<string, unknown> = {}) {
     dataDir = await mkdtemp(path.join(os.tmpdir(), 'runner-js-db-'));
-    store = new VariableStore(path.join(dataDir, 'variables'));
+    store = new SqliteVariableStore(path.join(dataDir, 'variables'));
+    await store.init();
     return new ScriptDb('bot-1', config, store, interactionCtx, variables);
   }
 

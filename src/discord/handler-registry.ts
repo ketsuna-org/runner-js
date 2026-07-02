@@ -16,7 +16,7 @@ import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
-import type { VariableStore } from '../runtime/variable-store.js';
+import type { VariableDatabase } from '../runtime/variable-database.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -42,7 +42,7 @@ export class HandlerRegistry {
     private config: JsBotConfig,
     private readonly botId: string,
     private readonly executor: ScriptExecutor,
-    private readonly variableStore: VariableStore,
+    private readonly variableStore: VariableDatabase,
     private readonly emitLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void,
   ) {}
 

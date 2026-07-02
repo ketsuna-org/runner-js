@@ -4,7 +4,9 @@ import { BotStore } from './bot-store.js';
 import { BotProcessManager } from './bot-process-manager.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
-import { VariableStore } from './variable-store.js';
+import type { VariableDatabase } from './variable-database.js';
+import { resolveVariableStore } from './resolve-variable-store.js';
+import type { VariableStoreEnv } from './resolve-variable-store.js';
 
 export interface RunnerBotRuntimeState {
   botId: string;
@@ -17,12 +19,21 @@ export interface RunnerBotRuntimeState {
 
 export class RuntimeController {
   readonly botStore: BotStore;
-  readonly variableStore: VariableStore;
+  readonly variableStore: VariableDatabase;
   private readonly processManager: BotProcessManager;
 
-  constructor(dataDir: string, logStore: LogStore) {
+  static async create(
+    dataDir: string,
+    logStore: LogStore,
+    env: VariableStoreEnv,
+  ): Promise<RuntimeController> {
+    const variableStore = await resolveVariableStore(dataDir, env);
+    return new RuntimeController(dataDir, logStore, variableStore);
+  }
+
+  constructor(dataDir: string, logStore: LogStore, variableStore: VariableDatabase) {
     this.botStore = new BotStore(dataDir);
-    this.variableStore = new VariableStore(`${dataDir}/variables`);
+    this.variableStore = variableStore;
     this.processManager = new BotProcessManager({
       dataDir,
       botStore: this.botStore,
@@ -294,5 +305,6 @@ export class RuntimeController {
 
   async dispose(): Promise<void> {
     await this.processManager.dispose();
+    await this.variableStore.dispose?.();
   }
 }

@@ -21,6 +21,7 @@
     "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.18.0",
     "@snazzah/davey": "^0.1.6",
+    "better-sqlite3": "^11.10.0",
     "bufferutil": "^4.0.9",
     "canvas": "^3.1.0",
     "discord.js": "^14.21.0",
@@ -32,6 +33,7 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.16.5",
     "@yao-pkg/pkg": "^6.3.0",
     "tsx": "^4.20.3",

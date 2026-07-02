@@ -3,9 +3,10 @@ import process from 'node:process';
 import { isParentMessage, type ParentToWorkerMessage } from '../ipc/messages.js';
 import { BotStore } from '../runtime/bot-store.js';
 import { parseJsBotConfig } from '../config/js-bot-config.js';
+import { resolveVariableStore } from '../runtime/resolve-variable-store.js';
 import { JsDiscordRunner } from './js-discord-runner.js';
 
-export function runBotWorker(): void {
+export async function runBotWorker(): Promise<void> {
   const botId = (process.env.BOT_CREATOR_BOT_ID ?? '').trim();
   const dataDir = (process.env.BOT_CREATOR_DATA_DIR ?? './data/bots').trim();
 
@@ -13,6 +14,11 @@ export function runBotWorker(): void {
     console.error('[worker] BOT_CREATOR_BOT_ID is required.');
     process.exit(1);
   }
+
+  const variableStore = await resolveVariableStore(dataDir, {
+    managedRunnerApi: process.env.BOT_CREATOR_MANAGED_RUNNER_API ?? '',
+    managedRunnerToken: process.env.BOT_CREATOR_MANAGED_RUNNER_TOKEN ?? '',
+  });
 
   const store = new BotStore(dataDir);
   let runner: JsDiscordRunner | null = null;
@@ -43,7 +49,7 @@ export function runBotWorker(): void {
     }
 
     const config = await loadConfig();
-    runner = new JsDiscordRunner(botId, config, dataDir, emitLog);
+    runner = new JsDiscordRunner(botId, config, variableStore, emitLog);
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
     send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });

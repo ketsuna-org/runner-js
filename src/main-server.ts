@@ -15,7 +15,7 @@ export async function startMainServer(): Promise<void> {
   const logStore = new LogStore(env.logFile);
   await logStore.init();
 
-  const runtime = new RuntimeController(env.dataDir, logStore);
+  const runtime = await RuntimeController.create(env.dataDir, logStore, env);
   const app = createHttpServer({ env, runtime, logStore });
 
   const shutdown = async (signal: string) => {

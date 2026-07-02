@@ -2,7 +2,7 @@ import type { Guild, GuildMember, Interaction, Message } from 'discord.js';
 
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
-import type { VariableStore } from './variable-store.js';
+import type { VariableDatabase } from './variable-database.js';
 
 export interface ScopedExecutionContext {
   interaction?: Interaction;
@@ -143,7 +143,7 @@ export function hasResolvableScopedContext(ctx: ScopedExecutionContext): boolean
 export async function buildScriptVariables(
   botId: string,
   config: JsBotConfig,
-  store: VariableStore,
+  store: VariableDatabase,
   ctx: ScopedExecutionContext,
 ): Promise<Record<string, unknown>> {
   const runtimeGlobals = await store.getGlobalVariables(botId);
