@@ -1,0 +1,83 @@
+name: Binaries
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - runner-js-v*
+    paths:
+      - src/**
+      - package.json
+      - package-lock.json
+      - pkg.config.json
+  workflow_dispatch:
+
+jobs:
+  pkg:
+    name: PKG ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            pkg_script: pkg:linux-x64
+            artifact: bot-creator-runner-js-linux-x64
+          - runner: ubuntu-24.04-arm
+            pkg_script: pkg:linux-arm64
+            artifact: bot-creator-runner-js-linux-arm64
+          - runner: windows-latest
+            pkg_script: pkg:win-x64
+            artifact: bot-creator-runner-js-win.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and test
+        run: |
+          npm run build
+          npm test
+
+      - name: Build PKG binary
+        run: npm run ${{ matrix.pkg_script }}
+
+      - name: Upload PKG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: build/${{ matrix.artifact }}
+
+  release:
+    name: Attach PKG binaries to release
+    needs: pkg
+    if: startsWith(github.ref, 'refs/tags/runner-js-v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten release assets
+        run: |
+          mkdir -p release
+          find artifacts -type f \( \
+            -name 'bot-creator-runner-js-linux-x64' -o \
+            -name 'bot-creator-runner-js-linux-arm64' -o \
+            -name 'bot-creator-runner-js-win.exe' \
+            \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*

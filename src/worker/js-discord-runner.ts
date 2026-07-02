@@ -1,4 +1,4 @@
-import { Client } from 'discord.js';
+import { Client, Events } from 'discord.js';
 
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { registerSlashCommands } from '../discord/command-registerer.js';
@@ -37,12 +37,9 @@ export class JsDiscordRunner {
       (level, message) => this.onLog(level, message),
     );
 
-    this.client.once('ready', () => {
-      if (!this.client) {
-        return;
-      }
-      applyPresence(this.client, this.config);
-      void registerSlashCommands(this.client, this.config.token, this.config.commands).catch(
+    this.client.once(Events.ClientReady, (client) => {
+      applyPresence(client, this.config);
+      void registerSlashCommands(client, this.config.token, this.config.commands).catch(
         (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
           this.onLog('error', `Failed to register slash commands: ${message}`);

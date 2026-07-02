@@ -57,6 +57,24 @@ describe('HTTP server integration', () => {
     const botsBody = (await bots.json()) as { bots: Array<{ id: string }> };
     expect(botsBody.bots.some((bot) => bot.id === 'http-bot')).toBe(true);
 
+    logStore.append('info', 'hello from bot', 'http-bot');
+
+    const botLogs = await fetch(`${baseUrl}/bots/http-bot/logs?limit=10`);
+    expect(botLogs.status).toBe(200);
+    const botLogsBody = (await botLogs.json()) as { lines: string[] };
+    expect(botLogsBody.lines.some((line) => line.includes('hello from bot'))).toBe(true);
+
+    const botMetrics = await fetch(`${baseUrl}/bots/http-bot/metrics`);
+    expect(botMetrics.status).toBe(200);
+    const botMetricsBody = (await botMetrics.json()) as { bots: Array<{ botId: string }> };
+    expect(botMetricsBody.bots).toHaveLength(1);
+    expect(botMetricsBody.bots[0]?.botId).toBe('http-bot');
+
+    const botStatus = await fetch(`${baseUrl}/bots/http-bot/status`);
+    expect(botStatus.status).toBe(200);
+    const botStatusBody = (await botStatus.json()) as { bot: { botId: string } };
+    expect(botStatusBody.bot.botId).toBe('http-bot');
+
     await app.close();
     await runtime.dispose();
   });

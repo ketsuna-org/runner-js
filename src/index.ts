@@ -1,9 +1,10 @@
 import { startMainServer } from './main-server.js';
+import { runBotWorker } from './worker/bot-worker.js';
 
-const isBotWorker = process.argv.includes('--bot-worker');
+const isBotWorker = process.env.BOT_CREATOR_WORKER_MODE === '1';
 
 if (isBotWorker) {
-  await import('./worker/bot-worker.js');
+  runBotWorker();
 } else {
   startMainServer().catch((error) => {
     console.error('[FATAL]', error);

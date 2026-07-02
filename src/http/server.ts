@@ -53,10 +53,32 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
 
   app.get('/metrics', async () => buildMetricsPayload(deps.runtime));
 
+  app.get('/bots/:id/metrics', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    return buildBotMetricsPayload(deps.runtime, botId);
+  });
+
   app.get('/logs', async (request) => {
     const query = request.query as { limit?: string };
     const limit = Number.parseInt(query.limit ?? '200', 10);
     return { lines: deps.logStore.tail(Number.isFinite(limit) ? limit : 200) };
+  });
+
+  app.get('/bots/:id/logs', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    const query = request.query as { limit?: string };
+    const limit = Number.parseInt(query.limit ?? '200', 10);
+    return {
+      lines: deps.logStore.tailForBot(botId, Number.isFinite(limit) ? limit : 200),
+    };
+  });
+
+  app.get('/bots/:id/status', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    return {
+      apiVersion: 2,
+      bot: buildBotStatePayload(deps.runtime, botId),
+    };
   });
 
   app.get('/bots', async () => {
@@ -221,6 +243,25 @@ function buildMetricsPayload(runtime: RuntimeController) {
     cpuPercent: readCpuPercent(),
     bots: runtime.listRuntimeStates(),
   };
+}
+
+function buildBotMetricsPayload(runtime: RuntimeController, botId: string) {
+  const botState = runtime.runtimeStateForBot(botId);
+  const botRunning = botState.state === 'running' || botState.state === 'starting';
+  const memory = process.memoryUsage();
+
+  return {
+    apiVersion: 2,
+    running: runtime.isRunning,
+    runningCount: runtime.runningCount,
+    rssBytes: botRunning ? (botState.baselineRssBytes ?? memory.rss) : null,
+    cpuPercent: botRunning ? readCpuPercent() : null,
+    bots: [botState],
+  };
+}
+
+function buildBotStatePayload(runtime: RuntimeController, botId: string) {
+  return runtime.runtimeStateForBot(botId);
 }
 
 let lastCpu = { idle: 0, total: 0 };

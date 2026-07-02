@@ -4,3 +4,7 @@ coverage/
 *.log
 .env
 .DS_Store
+
+# PKG binaries and local bot runtime data
+build/
+data/

@@ -1,11 +1,12 @@
-import { fork, type ChildProcess } from 'node:child_process';
+import { fork, spawn, type ChildProcess, type StdioOptions } from 'node:child_process';
 
 import {
   isWorkerMessage,
   type ParentToWorkerMessage,
   type WorkerToParentMessage,
 } from '../ipc/messages.js';
-import { resolveWorkerLaunch } from './worker-launch.js';
+import { resolveWorkerLaunch, shouldSpawnWorkerProcess } from './worker-launch.js';
+import { buildWorkerProcessEnv } from './worker-env.js';
 import type { LogStore } from '../runtime/log-store.js';
 import type { BotStore } from '../runtime/bot-store.js';
 
@@ -36,6 +37,7 @@ export class BotProcessManager {
     string,
     { resolve: (ok: boolean) => void; timer: NodeJS.Timeout }
   >();
+  private readonly workerStderr = new Map<string, string>();
 
   constructor(private readonly options: BotProcessManagerOptions) {}
 
@@ -81,17 +83,25 @@ export class BotProcessManager {
     }
 
     const launch = resolveWorkerLaunch();
+    this.options.logStore.append(
+      'debug',
+      `Spawning worker via ${shouldSpawnWorkerProcess(launch) ? 'spawn' : 'fork'}: ${launch.executable}`,
+      botId,
+    );
+    const child = this.spawnWorker(
+      launch,
+      buildWorkerProcessEnv(botId, this.options.dataDir),
+    );
 
-    const child = fork(launch.executable, launch.args, {
-      env: {
-        ...process.env,
-        BOT_CREATOR_BOT_ID: botId,
-        BOT_CREATOR_DATA_DIR: this.options.dataDir,
-      },
-      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    child.on('error', (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      const previous = this.workerStderr.get(botId) ?? '';
+      this.workerStderr.set(botId, `${previous}\n${message}`.trim());
+      this.options.logStore.append('error', `Worker spawn error: ${message}`, botId);
     });
 
     this.workers.set(botId, child);
+    this.workerStderr.set(botId, '');
     this.states.set(botId, {
       botId,
       botName: botName || entry.name,
@@ -109,7 +119,10 @@ export class BotProcessManager {
     });
 
     child.stderr?.on('data', (chunk: Buffer) => {
-      this.options.logStore.append('error', chunk.toString().trim(), botId);
+      const text = chunk.toString().trim();
+      const previous = this.workerStderr.get(botId) ?? '';
+      this.workerStderr.set(botId, `${previous}\n${text}`.trim());
+      this.options.logStore.append('error', text, botId);
     });
 
     child.on('message', (raw: unknown) => {
@@ -118,11 +131,17 @@ export class BotProcessManager {
 
     child.on('exit', (code, signal) => {
       this.workers.delete(botId);
+      const stderr = (this.workerStderr.get(botId) ?? '').trim();
+      this.workerStderr.delete(botId);
       const intentionalStop = this.stoppingBots.delete(botId);
       const current = this.states.get(botId);
       if (!current) {
         return;
       }
+
+      const exitDetail = stderr.length > 0
+        ? `Worker exited (code=${code}, signal=${signal}): ${stderr}`
+        : `Worker exited (code=${code}, signal=${signal})`;
 
       if (intentionalStop) {
         this.states.set(botId, {
@@ -140,7 +159,7 @@ export class BotProcessManager {
           ...current,
           state: 'error',
           pid: null,
-          lastError: current.lastError ?? `Worker exited (code=${code}, signal=${signal})`,
+          lastError: current.lastError ?? exitDetail,
           lastSeenAt: new Date().toISOString(),
         });
 
@@ -310,12 +329,48 @@ export class BotProcessManager {
     });
   }
 
+  private spawnWorker(
+    launch: { executable: string; args: string[] },
+    env: NodeJS.ProcessEnv,
+  ): ChildProcess {
+    const stdio: StdioOptions = ['pipe', 'pipe', 'pipe', 'ipc'];
+    const options = {
+      env,
+      stdio,
+      cwd: this.options.dataDir,
+      windowsHide: true,
+    };
+
+    if (shouldSpawnWorkerProcess(launch)) {
+      return spawn(launch.executable, launch.args, options);
+    }
+
+    return fork(launch.executable, launch.args, options);
+  }
+
+  private workerStartError(botId: string, reason: string): Error {
+    const stderr = (this.workerStderr.get(botId) ?? '').trim();
+    if (stderr.length > 0) {
+      return new Error(`${reason} ${stderr}`);
+    }
+    return new Error(reason);
+  }
+
   private async waitForReady(botId: string, timeoutMs: number): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < timeoutMs) {
       const child = this.workers.get(botId);
-      if (!child?.pid) {
-        throw new Error(`Worker for bot "${botId}" failed to start.`);
+      if (!child) {
+        throw this.workerStartError(
+          botId,
+          `Worker for bot "${botId}" failed to start.`,
+        );
+      }
+      if (!child.pid) {
+        throw this.workerStartError(
+          botId,
+          `Worker for bot "${botId}" failed to start.`,
+        );
       }
       const requestId = `${botId}-${Date.now()}`;
       const ok = await this.ping(botId, requestId, 1000);
@@ -324,7 +379,10 @@ export class BotProcessManager {
       }
       await delay(100);
     }
-    throw new Error(`Worker for bot "${botId}" did not become ready in time.`);
+    throw this.workerStartError(
+      botId,
+      `Worker for bot "${botId}" did not become ready in time.`,
+    );
   }
 
   private ping(botId: string, requestId: string, timeoutMs: number): Promise<boolean> {

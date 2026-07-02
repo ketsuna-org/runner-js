@@ -40,11 +40,9 @@ jobs:
           - runner: ubuntu-latest
             platform: linux/amd64
             arch_tag: amd64
-            pkg_script: pkg:linux-x64
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
             arch_tag: arm64
-            pkg_script: pkg:linux-arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -61,15 +59,6 @@ jobs:
         run: |
           npm run build
           npm test
-
-      - name: Build PKG binary
-        run: npm run ${{ matrix.pkg_script }}
-
-      - name: Upload PKG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: pkg-${{ matrix.arch_tag }}
-          path: build/bot-creator-runner-js-linux-*
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -118,20 +107,3 @@ jobs:
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:amd64 \
             ${{ env.GHCR_REGISTRY }}/${{ env.GHCR_IMAGE_NAME }}:arm64
 
-  release-assets:
-    name: Attach PKG to release
-    needs: build
-    if: startsWith(github.ref, 'refs/tags/runner-js-v')
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-          merge-multiple: true
-
-      - name: Upload release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/**/*

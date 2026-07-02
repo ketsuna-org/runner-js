@@ -23,6 +23,8 @@ export class HandlerRegistry {
   private readonly commandMap = new Map<string, CommandHandler>();
   private readonly eventMap = new Map<string, EventHandler>();
   private readonly webhookMap = new Map<string, InboundWebhookHandler>();
+  private readonly inFlightInteractions = new Set<string>();
+  private readonly handledInteractions = new Set<string>();
   private variables: Record<string, unknown>;
 
   constructor(
@@ -72,17 +74,26 @@ export class HandlerRegistry {
         return;
       }
 
-      const handler = this.commandMap.get(interaction.commandName.trim().toLowerCase());
-      if (!handler) {
+      if (!this.tryAcquireInteraction(interaction.id)) {
         return;
       }
 
-      await this.runScript(handler.script, {
-        interaction,
-        guild: interaction.guild,
-        member: interaction.member,
-        channel: interaction.channel,
-      });
+      const handler = this.commandMap.get(interaction.commandName.trim().toLowerCase());
+      if (!handler) {
+        this.releaseInteraction(interaction.id);
+        return;
+      }
+
+      try {
+        await this.runScript(handler.script, {
+          interaction,
+          guild: interaction.guild,
+          member: interaction.member,
+          channel: interaction.channel,
+        });
+      } finally {
+        this.releaseInteraction(interaction.id);
+      }
     };
 
     this.client.on(Events.InteractionCreate, onInteraction);
@@ -167,6 +178,15 @@ export class HandlerRegistry {
       const message = isMessage(first) ? first : undefined;
       const interaction = isInteraction(first) ? first : undefined;
 
+      if (interaction?.isChatInputCommand()) {
+        const slashHandler = this.commandMap.get(
+          interaction.commandName.trim().toLowerCase(),
+        );
+        if (slashHandler) {
+          return;
+        }
+      }
+
       await this.runScript(handler.script, {
         message,
         interaction,
@@ -221,7 +241,36 @@ export class HandlerRegistry {
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      if (
+        isUnknownInteractionError(message) &&
+        partial.interaction?.isRepliable() &&
+        (partial.interaction.replied || partial.interaction.deferred)
+      ) {
+        this.emitLog(
+          'debug',
+          `Ignored duplicate interaction response for ${partial.interaction.id}`,
+        );
+        return;
+      }
       this.emitLog('error', `Handler script failed: ${message}`);
+    }
+  }
+
+  private tryAcquireInteraction(interactionId: string): boolean {
+    if (this.inFlightInteractions.has(interactionId) || this.handledInteractions.has(interactionId)) {
+      return false;
+    }
+
+    this.inFlightInteractions.add(interactionId);
+    return true;
+  }
+
+  private releaseInteraction(interactionId: string): void {
+    this.inFlightInteractions.delete(interactionId);
+    this.handledInteractions.add(interactionId);
+
+    if (this.handledInteractions.size > 500) {
+      this.handledInteractions.clear();
     }
   }
 
@@ -242,4 +291,8 @@ function isMessage(value: unknown): value is Message {
 
 function isInteraction(value: unknown): value is Interaction {
   return typeof value === 'object' && value !== null && 'isChatInputCommand' in value;
+}
+
+function isUnknownInteractionError(message: string): boolean {
+  return message.includes('Unknown interaction');
 }
