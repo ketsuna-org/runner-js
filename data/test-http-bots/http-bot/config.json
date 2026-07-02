@@ -1,0 +1,17 @@
+{
+  "id": "http-bot",
+  "name": "HTTP Bot",
+  "syncedAt": "2026-07-02T09:56:28.949Z",
+  "config": {
+    "token": "test-token",
+    "intents": {},
+    "autoRestart": true,
+    "commands": [],
+    "events": [],
+    "scheduled": [],
+    "inboundWebhooks": [],
+    "globalVariables": {},
+    "scriptTimeoutMs": 30000
+  },
+  "running": false
+}
