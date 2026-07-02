@@ -22,7 +22,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
 
   app.addHook('onRequest', async (request, reply) => {
     reply.header('access-control-allow-origin', '*');
-    reply.header('access-control-allow-methods', 'GET, POST, OPTIONS');
+    reply.header('access-control-allow-methods', 'GET, POST, PATCH, OPTIONS');
     reply.header(
       'access-control-allow-headers',
       'content-type, authorization, x-bot-webhook-secret, x-webhook-secret',
@@ -161,6 +161,19 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
   app.get('/pool/config', async () => ({
     max_bots: deps.env.poolMaxBots,
   }));
+
+  app.patch('/pool/config', async (request) => {
+    const body = (request.body as { max_bots?: number | string } | undefined) ?? {};
+    const parsed =
+      typeof body.max_bots === 'number'
+        ? body.max_bots
+        : Number.parseInt(String(body.max_bots ?? ''), 10);
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      throw badRequest('Invalid max_bots value.');
+    }
+    deps.env.poolMaxBots = parsed;
+    return { max_bots: deps.env.poolMaxBots };
+  });
 
   app.post('/pool/drain', async () => {
     const stopped = await deps.runtime.drainAllBots();
@@ -320,6 +333,56 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     }
 
     return { botId, scope, key: storageKey, values };
+  });
+
+  app.post('/bots/:id/variables/scoped-values/set', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    await deps.runtime.requireBotEntry(botId);
+    const body = (request.body as {
+      scope?: string;
+      key?: string;
+      contextId?: string;
+      value?: unknown;
+    }) ?? {};
+    const scope = (body.scope ?? '').trim();
+    const keyRaw = (body.key ?? '').trim();
+    const contextId = (body.contextId ?? '').trim();
+    if (!scope || !keyRaw || !contextId) {
+      throw badRequest('Missing scope, key, or contextId.');
+    }
+    const storageKey = normalizeScopedStorageKey(keyRaw);
+    await deps.runtime.variableStore.setScopedVariable(
+      botId,
+      scope,
+      contextId,
+      storageKey,
+      body.value,
+    );
+    return { ok: true };
+  });
+
+  app.post('/bots/:id/variables/scoped-values/remove', async (request) => {
+    const botId = (request.params as { id: string }).id;
+    await deps.runtime.requireBotEntry(botId);
+    const body = (request.body as {
+      scope?: string;
+      key?: string;
+      contextId?: string;
+    }) ?? {};
+    const scope = (body.scope ?? '').trim();
+    const keyRaw = (body.key ?? '').trim();
+    const contextId = (body.contextId ?? '').trim();
+    if (!scope || !keyRaw || !contextId) {
+      throw badRequest('Missing scope, key, or contextId.');
+    }
+    const storageKey = normalizeScopedStorageKey(keyRaw);
+    await deps.runtime.variableStore.removeScopedVariable(
+      botId,
+      scope,
+      contextId,
+      storageKey,
+    );
+    return { ok: true };
   });
 
   app.post('/bots/:id/inbound/:pathKey', async (request) => {

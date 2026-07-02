@@ -14,6 +14,9 @@ import type {
 } from '../config/js-bot-config.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
+import { ScriptDb } from '../scripts/script-db.js';
+import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
+import type { VariableStore } from '../runtime/variable-store.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -32,7 +35,6 @@ export class HandlerRegistry {
   private readonly webhookMap = new Map<string, InboundWebhookHandler>();
   private readonly inFlightInteractions = new Set<string>();
   private readonly handledInteractions = new Set<string>();
-  private variables: Record<string, unknown>;
   private autocompleteBindings: AutocompleteBinding[] = [];
 
   constructor(
@@ -40,10 +42,9 @@ export class HandlerRegistry {
     private config: JsBotConfig,
     private readonly botId: string,
     private readonly executor: ScriptExecutor,
+    private readonly variableStore: VariableStore,
     private readonly emitLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void,
-  ) {
-    this.variables = { ...config.globalVariables };
-  }
+  ) {}
 
   mount(): void {
     this.clear();
@@ -153,7 +154,6 @@ export class HandlerRegistry {
 
   updateConfig(config: JsBotConfig): void {
     this.config = config;
-    this.variables = { ...config.globalVariables };
     this.mount();
   }
 
@@ -297,14 +297,36 @@ export class HandlerRegistry {
     },
   ): Promise<void> {
     const logger = this.createLogger();
+    const scopedCtx: ScopedExecutionContext = {
+      interaction: partial.interaction,
+      message: partial.message,
+      guild: partial.guild ?? null,
+      member: partial.member ?? null,
+      channel: partial.channel ?? null,
+    };
 
     try {
+      const variables = await buildScriptVariables(
+        this.botId,
+        this.config,
+        this.variableStore,
+        scopedCtx,
+      );
+      const db = new ScriptDb(
+        this.botId,
+        this.config,
+        this.variableStore,
+        scopedCtx,
+        variables,
+      );
+
       await this.executor.execute(
         script,
         {
           client: this.client,
           config: this.config,
-          variables: this.variables,
+          variables,
+          db,
           interaction: partial.interaction,
           message: partial.message,
           guild: partial.guild ?? null,

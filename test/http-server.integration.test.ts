@@ -157,6 +157,38 @@ describe('HTTP server integration', () => {
     };
     expect(scopedValuesBody.values.u1).toBe(99);
 
+    const setScoped = await fetch(`${baseUrl}/bots/${botId}/variables/scoped-values/set`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'user',
+        key: 'coins',
+        contextId: 'u2',
+        value: 12,
+      }),
+    });
+    expect(setScoped.status).toBe(200);
+
+    const scopedAfterSet = await fetch(
+      `${baseUrl}/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
+    );
+    const scopedAfterSetBody = (await scopedAfterSet.json()) as {
+      values: Record<string, unknown>;
+    };
+    expect(scopedAfterSetBody.values.u2).toBe(12);
+
+    const poolConfig = await fetch(`${baseUrl}/pool/config`);
+    expect(poolConfig.status).toBe(200);
+
+    const patchPool = await fetch(`${baseUrl}/pool/config`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ max_bots: 25 }),
+    });
+    expect(patchPool.status).toBe(200);
+    const patchPoolBody = (await patchPool.json()) as { max_bots: number };
+    expect(patchPoolBody.max_bots).toBe(25);
+
     await app.close();
     await runtime.dispose();
   });

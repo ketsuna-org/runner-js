@@ -6,21 +6,27 @@ import { HandlerRegistry } from '../discord/handler-registry.js';
 import { mapIntents } from '../discord/intent-mapper.js';
 import { applyPresence } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
+import { VariableStore } from '../runtime/variable-store.js';
+import path from 'node:path';
 
 export class JsDiscordRunner {
   private client: Client | null = null;
   private registry: HandlerRegistry | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
+  private readonly variableStore: VariableStore;
 
   constructor(
     private readonly botId: string,
     private config: JsBotConfig,
+    dataDir: string,
     private readonly onLog: (
       level: 'info' | 'warn' | 'error' | 'debug',
       message: string,
     ) => void,
-  ) {}
+  ) {
+    this.variableStore = new VariableStore(path.join(dataDir, 'variables'));
+  }
 
   async start(): Promise<void> {
     await this.stop();
@@ -34,6 +40,7 @@ export class JsDiscordRunner {
       this.config,
       this.botId,
       new ScriptExecutor(this.config.scriptTimeoutMs),
+      this.variableStore,
       (level, message) => this.onLog(level, message),
     );
 

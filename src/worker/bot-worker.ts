@@ -43,7 +43,7 @@ export function runBotWorker(): void {
     }
 
     const config = await loadConfig();
-    runner = new JsDiscordRunner(botId, config, emitLog);
+    runner = new JsDiscordRunner(botId, config, dataDir, emitLog);
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
     send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });

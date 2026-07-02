@@ -16,6 +16,7 @@ export interface ScriptExecutionContext {
     payload: unknown;
     headers: Record<string, string>;
   };
+  db?: import('./script-db.js').ScriptDb;
 }
 
 export interface ScriptLogger {
