@@ -38,6 +38,12 @@ jobs:
           node-version: 22
           cache: npm
 
+      # windows-latest ships VS 2026 (v18); Node 22's bundled node-gyp 11.x cannot use it.
+      # npm 11.6.3+ bundles node-gyp 12.1.0+ with VS 2026 support.
+      - name: Upgrade npm (Windows)
+        if: runner.os == 'Windows'
+        run: npm install -g npm@latest
+
       - name: Install dependencies
         run: npm ci
 
