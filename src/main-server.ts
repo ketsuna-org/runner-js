@@ -29,7 +29,12 @@ export async function startMainServer(): Promise<void> {
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
   await app.listen({ host: env.webHost, port: env.webPort });
-  logStore.append('info', `Runner JS listening on http://${env.webHost}:${env.webPort}`);
+  const listenUrl = `http://${env.webHost}:${env.webPort}`;
+  logStore.append('info', `Runner JS listening on ${listenUrl}`);
+  // PKG builds have no visible console by default; echo startup for local testing.
+  console.log(`[runner-js] Listening on ${listenUrl}`);
+  console.log(`[runner-js] Logs: ${env.logFile}`);
+  console.log(`[runner-js] Health: ${listenUrl}/health`);
 
   if (env.poolMode) {
     void bootstrapFromPool(env, runtime, logStore);
