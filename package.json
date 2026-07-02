@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "pkg:linux-x64": "pkg dist/index.js --config pkg.config.json --targets node22-linux-x64 --output build/bot-creator-runner-js-linux-x64",
-    "pkg:linux-arm64": "pkg dist/index.js --config pkg.config.json --targets node22-linux-arm64 --output build/bot-creator-runner-js-linux-arm64"
+    "pkg:linux-arm64": "pkg dist/index.js --config pkg.config.json --targets node22-linux-arm64 --output build/bot-creator-runner-js-linux-arm64",
+    "pkg:win-x64": "pkg dist/index.js --config pkg.config.json --targets node22-win-x64 --output build/bot-creator-runner-js-win.exe"
   },
   "engines": {
     "node": ">=20"

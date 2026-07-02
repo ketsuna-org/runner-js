@@ -23,6 +23,7 @@ COPY src ./src
 COPY test ./test
 
 RUN npm run build && npm test
+RUN npm prune --omit=dev
 
 # Runtime stage
 FROM node:22-bookworm-slim
@@ -39,8 +40,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
-
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 
 ENV BOT_CREATOR_DATA_DIR=/bots
