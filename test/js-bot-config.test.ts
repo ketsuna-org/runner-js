@@ -36,4 +36,18 @@ describe('JsBotConfig', () => {
 
     expect(() => validateJsBotConfig(config)).toThrow(/Duplicate command name/);
   });
+
+  it('accepts empty or null command lists', () => {
+    const empty = parseJsBotConfig({ token: 'test-token', commands: [] });
+    validateJsBotConfig(empty);
+    expect(empty.commands).toEqual([]);
+
+    const missing = parseJsBotConfig({ token: 'test-token' });
+    validateJsBotConfig(missing);
+    expect(missing.commands).toEqual([]);
+
+    const nil = parseJsBotConfig({ token: 'test-token', commands: null });
+    validateJsBotConfig(nil);
+    expect(nil.commands).toEqual([]);
+  });
 });
