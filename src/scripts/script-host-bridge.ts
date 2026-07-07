@@ -1,6 +1,10 @@
 import ivm from 'isolated-vm';
 
 import type { JsBotConfig } from '../config/js-bot-config.js';
+import { invokeHostTarget, resolveInvokeTarget } from './script-host-invoke.js';
+import { isBlockedClientProperty, wrapDynamicHostRead } from './script-host-dynamic.js';
+import type { ModuleRegistry } from './script-host-modules.js';
+import { createScriptModuleRegistry, type ModuleSpec } from './script-module-specs.js';
 import type { ScriptDb } from './script-db.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 
@@ -9,69 +13,37 @@ export interface HostObjectSpec {
   snapshot: Record<string, unknown>;
   methods: string[];
   target: unknown;
+  dynamic?: boolean;
 }
 
 export interface HostBridgeBundle {
-  invokeRef: ivm.Reference<
-    (targetId: string, method: string, args: unknown[]) => Promise<unknown>
+  bridgeRef: ivm.Reference<
+    (kind: string, arg1: string, arg2: unknown, arg3?: unknown) => unknown
   >;
   objectSpecs: HostObjectSpec[];
+  moduleSpecs: ModuleSpec[];
+  moduleRegistry: ModuleRegistry;
   release: () => void;
   clearTimers: () => void;
 }
 
-const INTERACTION_METHODS = [
-  'reply',
-  'deferReply',
-  'editReply',
-  'followUp',
-  'respond',
-  'update',
-  'deferUpdate',
-  'fetchReply',
-  'deleteReply',
-  'showModal',
-  'isButton',
-  'isChatInputCommand',
-  'isAutocomplete',
-  'isModalSubmit',
-  'isRepliable',
-] as const;
-
-const INTERACTION_OPTIONS_METHODS = [
-  'getString',
-  'getInteger',
-  'getNumber',
-  'getBoolean',
-  'getUser',
-  'getMember',
-  'getRole',
-  'getChannel',
-  'getAttachment',
-  'getMentionable',
-  'getSubcommand',
-  'getSubcommandGroup',
-  'getFocused',
-] as const;
-
-const MESSAGE_METHODS = [
-  'reply',
-  'react',
-  'delete',
-  'edit',
-  'fetch',
-  'pin',
-  'unpin',
-] as const;
-
-const CLIENT_METHODS = [
-  'fetchWebhook',
-  'fetchInvites',
-] as const;
-
 const DB_METHODS = ['get', 'set', 'delete', 'has', 'list', 'reset'] as const;
 const DB_GLOBAL_METHODS = ['get', 'set', 'delete', 'has'] as const;
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
+
+function registerDynamicHost(
+  register: (spec: HostObjectSpec) => void,
+  id: string,
+  target: unknown,
+): void {
+  register({
+    id,
+    target,
+    snapshot: {},
+    methods: [],
+    dynamic: true,
+  });
+}
 
 export function buildHostBridge(
   context: ScriptExecutionContext,
@@ -80,6 +52,8 @@ export function buildHostBridge(
   const targets = new Map<string, unknown>();
   const objectSpecs: HostObjectSpec[] = [];
   const timers = new Set<NodeJS.Timeout>();
+  const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context);
+  let released = false;
 
   const register = (spec: HostObjectSpec) => {
     targets.set(spec.id, spec.target);
@@ -87,98 +61,27 @@ export function buildHostBridge(
   };
 
   if (context.client) {
-    register({
-      id: 'client',
-      target: context.client,
-      snapshot: {
-        user: snapshotUser(context.client.user),
-        readyAt: context.client.readyTimestamp,
-        uptime: context.client.uptime,
-      },
-      methods: [...CLIENT_METHODS],
-    });
+    registerDynamicHost(register, 'client', context.client);
   }
 
   if (context.interaction) {
-    const interaction = context.interaction;
-    register({
-      id: 'interaction',
-      target: interaction,
-      snapshot: {
-        id: interaction.id,
-        type: interaction.type,
-        commandName: 'commandName' in interaction ? interaction.commandName : undefined,
-        customId: 'customId' in interaction ? interaction.customId : undefined,
-        guildId: interaction.guildId,
-        channelId: interaction.channelId,
-        user: snapshotUser(interaction.user),
-        member: snapshotMember(interaction.member),
-        guild: snapshotGuild(interaction.guild),
-        channel: snapshotChannel(interaction.channel),
-        createdTimestamp: interaction.createdTimestamp,
-        replied: 'replied' in interaction ? interaction.replied : undefined,
-        deferred: 'deferred' in interaction ? interaction.deferred : undefined,
-      },
-      methods: [...INTERACTION_METHODS],
-    });
-
-    if ('options' in interaction && interaction.options) {
-      register({
-        id: 'interaction.options',
-        target: interaction.options,
-        snapshot: {},
-        methods: [...INTERACTION_OPTIONS_METHODS],
-      });
-    }
+    registerDynamicHost(register, 'interaction', context.interaction);
   }
 
   if (context.message) {
-    const message = context.message;
-    register({
-      id: 'message',
-      target: message,
-      snapshot: {
-        id: message.id,
-        content: message.content,
-        guildId: message.guildId,
-        channelId: message.channelId,
-        author: snapshotUser(message.author),
-        member: snapshotMember(message.member),
-        guild: snapshotGuild(message.guild),
-        channel: snapshotChannel(message.channel),
-        createdTimestamp: message.createdTimestamp,
-        pinned: message.pinned,
-        system: message.system,
-      },
-      methods: [...MESSAGE_METHODS],
-    });
+    registerDynamicHost(register, 'message', context.message);
   }
 
   if (context.member) {
-    register({
-      id: 'member',
-      target: context.member,
-      snapshot: snapshotMember(context.member) ?? {},
-      methods: [],
-    });
+    registerDynamicHost(register, 'member', context.member);
   }
 
   if (context.guild) {
-    register({
-      id: 'guild',
-      target: context.guild,
-      snapshot: snapshotGuild(context.guild) ?? {},
-      methods: [],
-    });
+    registerDynamicHost(register, 'guild', context.guild);
   }
 
   if (context.channel) {
-    register({
-      id: 'channel',
-      target: context.channel,
-      snapshot: snapshotChannel(context.channel) ?? {},
-      methods: [],
-    });
+    registerDynamicHost(register, 'channel', context.channel);
   }
 
   if (context.db) {
@@ -204,41 +107,75 @@ export function buildHostBridge(
     timers.delete(handle);
   });
 
-  let released = false;
-
   const invoke = async (targetId: string, method: string, args: unknown[]) => {
     if (released) {
       return undefined;
     }
 
-    const target = targets.get(targetId);
-    if (target == null) {
-      throw new Error(`Host bridge target "${targetId}" is not available.`);
-    }
-
     if (targetId === '__fetch') {
       const response = await fetch(...(args as Parameters<typeof fetch>));
-      return copyHostValue(await responseToPlain(response));
+      return moduleRegistry.wrapHostResult(await responseToPlain(response));
     }
 
-    if (typeof target === 'function') {
-      return copyHostValue(await (target as (...fnArgs: unknown[]) => unknown)(...args));
-    }
-
-    const record = target as Record<string, unknown>;
-    const fn = record[method];
-    if (typeof fn !== 'function') {
-      throw new Error(`Host bridge method "${targetId}.${method}" is not available.`);
-    }
-
-    return copyHostValue(await fn.apply(target, args));
+    return invokeHostTarget(
+      moduleRegistry,
+      targets,
+      targetId,
+      method,
+      args,
+      context.client,
+    );
   };
 
-  const invokeRef = new ivm.Reference(invoke);
+  const readPropertySync = (targetId: string, property: string): unknown => {
+    const target = resolveInvokeTarget(
+      moduleRegistry,
+      moduleRegistry.registry,
+      targets,
+      targetId,
+    );
+
+    if (
+      context.client != null &&
+      isBlockedClientProperty(context.client, target, property)
+    ) {
+      return undefined;
+    }
+
+    const value = (target as Record<string, unknown>)[property];
+    const spec = objectSpecs.find((entry) => entry.id === targetId);
+
+    if (spec?.dynamic || moduleRegistry.registry.has(targetId)) {
+      return wrapDynamicHostRead(moduleRegistry, targetId, property, value);
+    }
+
+    return copyHostValue(value);
+  };
+
+  const bridgeDispatch = (
+    kind: string,
+    arg1: string,
+    arg2: unknown,
+    arg3?: unknown,
+  ): unknown => {
+    if (released) {
+      return undefined;
+    }
+
+    if (kind === 'read') {
+      return readPropertySync(arg1, arg2 as string);
+    }
+
+    return invoke(arg1, arg2 as string, arg3 as unknown[]);
+  };
+
+  const bridgeRef = new ivm.Reference(bridgeDispatch);
 
   return {
-    invokeRef,
+    bridgeRef,
     objectSpecs,
+    moduleSpecs,
+    moduleRegistry,
     release: () => {
       released = true;
       for (const handle of timers) {
@@ -246,7 +183,8 @@ export function buildHostBridge(
       }
       timers.clear();
       targets.clear();
-      invokeRef.release();
+      moduleRegistry.registry.clear();
+      bridgeRef.release();
     },
     clearTimers: () => {
       for (const handle of timers) {
@@ -278,68 +216,6 @@ function registerDbTargets(
     snapshot: {},
     methods: [...DB_GLOBAL_METHODS],
   });
-}
-
-function snapshotUser(user: unknown): Record<string, unknown> | null {
-  if (!user || typeof user !== 'object') {
-    return null;
-  }
-
-  const value = user as Record<string, unknown>;
-  return copyHostValue({
-    id: value.id,
-    username: value.username,
-    tag: value.tag,
-    globalName: value.globalName,
-    bot: value.bot,
-    discriminator: value.discriminator,
-    avatar: value.avatar,
-    displayAvatarURL: typeof value.displayAvatarURL === 'function' ? value.displayAvatarURL() : undefined,
-  }) as Record<string, unknown>;
-}
-
-function snapshotMember(member: unknown): Record<string, unknown> | null {
-  if (!member || typeof member !== 'object') {
-    return null;
-  }
-
-  const value = member as Record<string, unknown>;
-  return copyHostValue({
-    id: value.id,
-    nickname: value.nickname,
-    displayName: typeof value.displayName === 'string' ? value.displayName : undefined,
-    user: snapshotUser(value.user),
-    joinedAt: value.joinedAt instanceof Date ? value.joinedAt.toISOString() : value.joinedAt,
-  }) as Record<string, unknown>;
-}
-
-function snapshotGuild(guild: unknown): Record<string, unknown> | null {
-  if (!guild || typeof guild !== 'object') {
-    return null;
-  }
-
-  const value = guild as Record<string, unknown>;
-  return copyHostValue({
-    id: value.id,
-    name: value.name,
-    icon: value.icon,
-    memberCount: value.memberCount,
-    ownerId: value.ownerId,
-  }) as Record<string, unknown>;
-}
-
-function snapshotChannel(channel: unknown): Record<string, unknown> | null {
-  if (!channel || typeof channel !== 'object') {
-    return null;
-  }
-
-  const value = channel as Record<string, unknown>;
-  return copyHostValue({
-    id: value.id,
-    name: value.name,
-    type: value.type,
-    guildId: value.guildId,
-  }) as Record<string, unknown>;
 }
 
 async function responseToPlain(response: Response): Promise<Record<string, unknown>> {

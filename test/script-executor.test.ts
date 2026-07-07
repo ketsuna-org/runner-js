@@ -42,7 +42,7 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
-  it('does not expose require to user scripts', async () => {
+  it('rejects disallowed require modules', async () => {
     const executor = new ScriptExecutor(5000);
 
     await expect(
@@ -55,7 +55,43 @@ describe('ScriptExecutor', () => {
         },
         createLogger(),
       ),
-    ).rejects.toThrow(/require is not defined/i);
+    ).rejects.toThrow(/not allowed/i);
+
+    executor.dispose();
+  });
+
+  it('exposes allowlisted canvas and voice modules via require', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        let canvasCreate = 'missing';
+        let voiceJoin = 'missing';
+        let voiceStatus = 'missing';
+        try {
+          canvasCreate = typeof require('canvas').createCanvas;
+        } catch {}
+        try {
+          const voice = require('@discordjs/voice');
+          voiceJoin = typeof voice.joinVoiceChannel;
+          voiceStatus = typeof voice.VoiceConnectionStatus;
+        } catch {}
+        return { canvasCreate, voiceJoin, voiceStatus };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { canvasCreate?: string; voiceJoin?: string; voiceStatus?: string };
+
+    if (result.canvasCreate === 'function') {
+      expect(result.voiceJoin).toBe('function');
+      expect(result.voiceStatus).toBe('object');
+    } else {
+      expect(result.canvasCreate).toBe('missing');
+    }
 
     executor.dispose();
   });
@@ -92,6 +128,123 @@ describe('ScriptExecutor', () => {
     );
 
     expect(result).toBeUndefined();
+    executor.dispose();
+  });
+
+  it('exposes the full client but not the token', async () => {
+    const executor = new ScriptExecutor(5000);
+    const fetchInvites = vi.fn(async () => ['invite']);
+    const client = {
+      token: 'super-secret-token',
+      uptime: 1000,
+      ws: {
+        get ping() {
+          return 42;
+        },
+      },
+      guilds: {
+        cache: {
+          size: 2,
+        },
+      },
+      fetchInvites,
+    };
+
+    const result = await executor.execute(
+      `
+        return {
+          ping: client.ws.ping,
+          guildCount: client.guilds.cache.size,
+          token: client.token,
+          invites: await client.fetchInvites('guild-id'),
+        };
+      `,
+      {
+        client: client as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as {
+      ping?: number;
+      guildCount?: number;
+      token?: string;
+      invites?: string[];
+    };
+
+    expect(result.ping).toBe(42);
+    expect(result.guildCount).toBe(2);
+    expect(result.token).toBeUndefined();
+    expect(result.invites).toEqual(['invite']);
+    expect(fetchInvites).toHaveBeenCalledWith('guild-id');
+    executor.dispose();
+  });
+
+  it('exposes client.ws.ping from the host websocket manager', async () => {
+    const executor = new ScriptExecutor(5000);
+    const client = {
+      user: null,
+      readyTimestamp: Date.now(),
+      uptime: 1000,
+      ws: {
+        get ping() {
+          return 42;
+        },
+        status: 0,
+      },
+    };
+
+    const result = await executor.execute(
+      'return client.ws.ping;',
+      {
+        client: client as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe(42);
+    executor.dispose();
+  });
+
+  it('exposes full interaction and message APIs dynamically', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async () => ({ ok: true }));
+    const react = vi.fn(async () => undefined);
+    const getString = vi.fn(() => 'hello');
+
+    const result = await executor.execute(
+      `
+        await interaction.reply({ content: await interaction.options.getString('name') });
+        await message.react('✅');
+        return {
+          commandName: interaction.commandName,
+          content: message.content,
+        };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        interaction: {
+          commandName: 'greet',
+          reply,
+          options: { getString },
+        } as never,
+        message: {
+          content: 'ping',
+          react,
+        } as never,
+      },
+      createLogger(),
+    ) as { commandName?: string; content?: string };
+
+    expect(result.commandName).toBe('greet');
+    expect(result.content).toBe('ping');
+    expect(getString).toHaveBeenCalledWith('name');
+    expect(reply).toHaveBeenCalledWith({ content: 'hello' });
+    expect(react).toHaveBeenCalledWith('✅');
     executor.dispose();
   });
 

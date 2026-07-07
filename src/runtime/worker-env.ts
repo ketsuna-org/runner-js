@@ -1,3 +1,8 @@
+const WORKER_INHERITED_ENV_KEYS = [
+  'BOT_CREATOR_MANAGED_RUNNER_API',
+  'BOT_CREATOR_MANAGED_RUNNER_TOKEN',
+] as const;
+
 export function buildWorkerProcessEnv(
   botId: string,
   dataDir: string,
@@ -8,8 +13,9 @@ export function buildWorkerProcessEnv(
     BOT_CREATOR_WORKER_MODE: '1',
   };
 
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith('BOT_CREATOR_') && value) {
+  for (const key of WORKER_INHERITED_ENV_KEYS) {
+    const value = process.env[key];
+    if (value) {
       env[key] = value;
     }
   }
