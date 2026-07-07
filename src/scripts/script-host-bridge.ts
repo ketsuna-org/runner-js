@@ -1,6 +1,6 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { invokeHostTarget, invokeHostTargetSync, resolveInvokeTarget } from './script-host-invoke.js';
-import { isBlockedClientProperty, wrapDynamicHostRead } from './script-host-dynamic.js';
+import { isBlockedClientProperty, isBlockedNestedClientAccess, wrapDynamicHostRead } from './script-host-dynamic.js';
 import type { ModuleRegistry } from './script-host-modules.js';
 import { createScriptModuleRegistry, type ModuleSpec } from './script-module-specs.js';
 import type { ScriptDb } from './script-db.js';
@@ -153,7 +153,10 @@ export function createHostBridgeSession(
     );
 
     if (property === '__json') {
-      return copyHostValue(target);
+      if (context.client != null && target === context.client) {
+        return serializeClientForJson(target);
+      }
+      return copyHostValue(target, { redactSensitive: true });
     }
 
     if (
@@ -161,6 +164,13 @@ export function createHostBridgeSession(
       isBlockedClientProperty(context.client, target, property)
     ) {
       return undefined;
+    }
+
+    if (
+      context.client != null &&
+      isBlockedNestedClientAccess(context.client, target, property)
+    ) {
+      throw new Error('Access to "client" is not allowed here. Use the global "client" object.');
     }
 
     const value = (target as Record<string, unknown>)[property];
@@ -263,7 +273,52 @@ async function responseToPlain(response: Response): Promise<Record<string, unkno
   };
 }
 
-function copyHostValue(value: unknown): unknown {
+function serializeClientForJson(client: unknown): Record<string, unknown> {
+  if (client == null || typeof client !== 'object') {
+    return {};
+  }
+
+  const record = client as Record<string, unknown>;
+  const output: Record<string, unknown> = {};
+
+  for (const key of ['uptime', 'readyTimestamp'] as const) {
+    const value = record[key];
+    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+      output[key] = value;
+    }
+  }
+
+  const user = record.user;
+  if (user != null && typeof user === 'object') {
+    const userRecord = user as Record<string, unknown>;
+    output.user = {
+      id: userRecord.id,
+      username: userRecord.username,
+      discriminator: userRecord.discriminator,
+      tag: userRecord.tag,
+      bot: userRecord.bot,
+    };
+  }
+
+  const ws = record.ws;
+  if (ws != null && typeof ws === 'object' && 'ping' in ws) {
+    output.ws = { ping: (ws as { ping?: unknown }).ping };
+  }
+
+  const guilds = record.guilds;
+  if (guilds != null && typeof guilds === 'object') {
+    const cache = (guilds as { cache?: { size?: number } }).cache;
+    output.guilds = { cache: { size: cache?.size ?? 0 } };
+  }
+
+  return output;
+}
+
+function copyHostValue(
+  value: unknown,
+  options?: { redactSensitive?: boolean },
+  seen: WeakSet<object> = new WeakSet(),
+): unknown {
   if (value == null) {
     return value;
   }
@@ -285,13 +340,18 @@ function copyHostValue(value: unknown): unknown {
   }
 
   if (Array.isArray(value)) {
-    return value.map((entry) => copyHostValue(entry));
+    return value.map((entry) => copyHostValue(entry, options, seen));
   }
 
   if (typeof value === 'object') {
+    if (seen.has(value)) {
+      return undefined;
+    }
+    seen.add(value);
+
     if (typeof (value as { toJSON?: () => unknown }).toJSON === 'function') {
       try {
-        return copyHostValue((value as { toJSON: () => unknown }).toJSON());
+        return copyHostValue((value as { toJSON: () => unknown }).toJSON(), options, seen);
       } catch {
         // Fall through to manual copy.
       }
@@ -299,11 +359,17 @@ function copyHostValue(value: unknown): unknown {
 
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (options?.redactSensitive && (key === 'client' || key === 'token')) {
+        continue;
+      }
       if (typeof entry === 'function') {
         continue;
       }
       try {
-        output[key] = copyHostValue(entry);
+        const copied = copyHostValue(entry, options, seen);
+        if (copied !== undefined) {
+          output[key] = copied;
+        }
       } catch {
         // Skip non-serializable fields.
       }

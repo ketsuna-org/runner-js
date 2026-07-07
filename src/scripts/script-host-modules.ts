@@ -2,6 +2,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 import type { ScriptExecutionContext } from './script-context.js';
+import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
 import {
   asDynamicDescriptor,
 } from './script-host-dynamic.js';
@@ -259,13 +260,23 @@ function buildVoiceModule(
         AUDIO_PLAYER_METHODS,
         () => ({}),
       ),
-    createAudioResource: (input: unknown, options?: Record<string, unknown>) =>
-      wrapHostResult(
+    createAudioResource: (input: unknown, options?: Record<string, unknown>) => {
+      if (typeof input === 'string' && /^https?:\/\//i.test(input)) {
+        const ffmpeg = ensureFfmpegAvailable();
+        if (!ffmpeg.available) {
+          throw new Error(
+            'FFmpeg is required to play remote audio URLs. ffmpeg-static is bundled with the runner but was not found in this environment.',
+          );
+        }
+      }
+
+      return wrapHostResult(
         voice.createAudioResource(input as never, options as never),
         'audio-resource',
         AUDIO_RESOURCE_METHODS,
         () => ({}),
-      ),
+      );
+    },
     getVoiceConnection: (guildId: string) => {
       const connection = voice.getVoiceConnection(guildId);
       if (!connection) {

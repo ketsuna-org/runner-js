@@ -14,6 +14,14 @@ export interface HostMethodBridge {
 
 export const CLIENT_BLOCKED_PROPERTIES = new Set(['token']);
 
+export function isBlockedNestedClientAccess(
+  clientRoot: unknown,
+  target: unknown,
+  property: string,
+): boolean {
+  return property === 'client' && clientRoot != null && target !== clientRoot;
+}
+
 export function isHostMethodBridge(value: unknown): value is HostMethodBridge {
   return (
     typeof value === 'object' &&

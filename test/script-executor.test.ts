@@ -428,6 +428,37 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('supports return inside eval content', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string) => ({ content: payload }));
+
+    await executor.execute(
+      `
+        let content = message.content.split(" ").slice(1).join(" ");
+        let result = eval(content);
+        if (result != null && typeof result.then === 'function') {
+          result = await result;
+        }
+        if (result !== undefined) {
+          await message.reply(String(result));
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: '!eval if (false) { return "nope"; } return "yes"',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('yes');
+    executor.dispose();
+  });
+
   it('does not expose host bridge internals to eval', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
@@ -475,6 +506,82 @@ describe('ScriptExecutor', () => {
       ),
     ).rejects.toThrow(/timed out/i);
 
+    executor.dispose();
+  });
+
+  it('blocks nested client access on message', async () => {
+    const executor = new ScriptExecutor(5000);
+    const sharedClient = { token: 'secret', tag: 'Bot#1' };
+
+    await expect(
+      executor.execute(
+        'message.client;',
+        {
+          client: sharedClient as never,
+          config: { token: 'x' } as never,
+          variables: {},
+          message: {
+            content: 'hi',
+            client: sharedClient,
+          } as never,
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/not allowed/i);
+
+    await expect(
+      executor.execute(
+        'message["client"];',
+        {
+          client: sharedClient as never,
+          config: { token: 'x' } as never,
+          variables: {},
+          message: {
+            content: 'hi',
+            client: sharedClient,
+          } as never,
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/not allowed/i);
+
+    executor.dispose();
+  });
+
+  it('serializes client safely via JSON.stringify', async () => {
+    const executor = new ScriptExecutor(5000);
+    const client = {
+      token: 'super-secret-token',
+      uptime: 12345,
+      user: { id: '1', username: 'JeanMichel', tag: 'JeanMichel#7892', bot: true },
+      ws: { ping: 42 },
+      guilds: { cache: { size: 3 } },
+      channels: { cache: { get: () => ({ guild: null }) } },
+    };
+    // Simulate circular reference like Discord.js Client
+    (client as Record<string, unknown>).channels = {
+      cache: {
+        size: 1,
+        get: () => client,
+      },
+    };
+
+    const result = await executor.execute(
+      'return JSON.stringify(client);',
+      {
+        client: client as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as string;
+
+    const parsed = JSON.parse(result) as Record<string, unknown>;
+    expect(parsed.uptime).toBe(12345);
+    expect(parsed.ws).toEqual({ ping: 42 });
+    expect(parsed.guilds).toEqual({ cache: { size: 3 } });
+    expect(parsed.token).toBeUndefined();
+    expect(JSON.stringify(parsed)).not.toContain('super-secret-token');
     executor.dispose();
   });
 
