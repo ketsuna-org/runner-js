@@ -54,6 +54,7 @@ export function createScriptModuleRegistry(
   moduleSpecs: ModuleSpec[];
 } {
   const moduleRegistry = createModuleRegistry();
+  moduleRegistry.voiceSession = voiceSession;
   const registered = registerAllowedModuleTargets(context, moduleRegistry, voiceSession);
 
   const moduleSpecs: ModuleSpec[] = [];

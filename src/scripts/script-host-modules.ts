@@ -649,6 +649,7 @@ export interface ModuleRegistry {
   getInvokeTarget: (id: string) => RegisteredModule | null;
   registry: HostObjectRegistry;
   wrapHostResult: ReturnType<typeof createHostResultWrapper>;
+  voiceSession?: VoiceSessionCleanup;
 }
 
 export function createModuleRegistry(): ModuleRegistry {

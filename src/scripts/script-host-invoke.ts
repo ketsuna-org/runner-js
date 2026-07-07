@@ -1,5 +1,6 @@
 import type { ModuleRegistry } from './script-host-modules.js';
 import { assertAllowedHostInvokeArgs } from './script-host-args.js';
+import { assertValidAudioResourceForPlay } from './script-host-voice-play.js';
 import { isBlockedClientProperty } from './script-host-dynamic.js';
 import {
   HostObjectRegistry,
@@ -80,6 +81,11 @@ function invokeHostTargetInternal(
   }
 
   const target = resolveInvokeTarget(moduleRegistry, registry, targets, targetId);
+
+  if (method === 'play' && targetId.startsWith('audio-player:')) {
+    assertValidAudioResourceForPlay(resolvedArgs[0]);
+    moduleRegistry.voiceSession?.markPlayerPlayed(target as never);
+  }
 
   if (typeof target === 'function') {
     const rawResult = (target as (...fnArgs: unknown[]) => unknown)(...resolvedArgs);

@@ -53,6 +53,64 @@ describe('voice session cleanup', () => {
     expect(once).toHaveBeenCalledWith('idle', expect.any(Function));
   });
 
+  it('keeps playback alive while the player is buffering', () => {
+    const destroy = vi.fn();
+    const stop = vi.fn();
+    const once = vi.fn();
+    const session = createVoiceSessionCleanup();
+    session.trackConnection({ destroy });
+    const player = {
+      state: { status: 'buffering' },
+      stop,
+      once,
+    };
+    session.trackPlayer(player);
+
+    session.dispose();
+
+    expect(stop).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+    expect(once).toHaveBeenCalledWith('idle', expect.any(Function));
+  });
+
+  it('keeps playback alive after play() until the player becomes idle', () => {
+    const destroy = vi.fn();
+    const stop = vi.fn();
+    const once = vi.fn();
+    const session = createVoiceSessionCleanup();
+    session.trackConnection({ destroy });
+    const player = {
+      state: { status: 'idle' },
+      stop,
+      once,
+    };
+    session.trackPlayer(player);
+    session.markPlayerPlayed(player);
+
+    session.dispose();
+
+    expect(stop).not.toHaveBeenCalled();
+    expect(destroy).not.toHaveBeenCalled();
+    expect(once).toHaveBeenCalledWith('idle', expect.any(Function));
+  });
+
+  it('does not destroy streams while playback is still active', () => {
+    const destroy = vi.fn();
+    const once = vi.fn();
+    const session = createVoiceSessionCleanup();
+    session.trackStream({ destroy });
+    session.trackConnection({ destroy: vi.fn() });
+    session.trackPlayer({
+      state: { status: 'playing' },
+      stop: vi.fn(),
+      once,
+    });
+
+    session.dispose();
+
+    expect(destroy).not.toHaveBeenCalled();
+  });
+
   it('destroys tracked streams on dispose', () => {
     const destroy = vi.fn();
     const session = createVoiceSessionCleanup();

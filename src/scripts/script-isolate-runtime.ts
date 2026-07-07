@@ -172,6 +172,40 @@ const BOOTSTRAP_SCRIPT = `
     return value;
   }
 
+  function __hostProxyToStringValue(spec, hint) {
+    if (hint === 'number') {
+      return NaN;
+    }
+    try {
+      const json = __hostRead(spec.id, '__json');
+      if (json == null) {
+        return '[HostObject]';
+      }
+      if (typeof json === 'string') {
+        return json;
+      }
+      return JSON.stringify(json);
+    } catch {
+      return '[HostObject]';
+    }
+  }
+
+  function __hostProxyCoercion(spec) {
+    return function(hint) {
+      return __hostProxyToStringValue(spec, hint);
+    };
+  }
+
+  function __handleHostProxySymbol(spec, prop) {
+    if (prop === Symbol.toPrimitive) {
+      return __hostProxyCoercion(spec);
+    }
+    if (prop === Symbol.toStringTag) {
+      return 'HostProxy';
+    }
+    return undefined;
+  }
+
   function __hostProxyToJson(spec) {
     return () => __hostRead(spec.id, '__json');
   }
@@ -179,6 +213,10 @@ const BOOTSTRAP_SCRIPT = `
   function __makeDynamicHostProxy(spec) {
     return __markHostProxyTarget(new Proxy(Object.create(null), {
       get(obj, prop) {
+        const symbolValue = __handleHostProxySymbol(spec, prop);
+        if (symbolValue !== undefined) {
+          return symbolValue;
+        }
         if (typeof prop === 'symbol') {
           return undefined;
         }
@@ -188,6 +226,9 @@ const BOOTSTRAP_SCRIPT = `
         }
         if (key === 'toJSON') {
           return __hostProxyToJson(spec);
+        }
+        if (key === 'toString' || key === 'valueOf') {
+          return () => __hostProxyToStringValue(spec, 'string');
         }
         return __normalizeHostValue(__hostRead(spec.id, key));
       },
@@ -221,6 +262,10 @@ const BOOTSTRAP_SCRIPT = `
 
     return __markHostProxyTarget(new Proxy(target, {
       get(obj, prop) {
+        const symbolValue = __handleHostProxySymbol(spec, prop);
+        if (symbolValue !== undefined) {
+          return symbolValue;
+        }
         if (typeof prop === 'symbol') {
           return undefined;
         }
@@ -230,6 +275,9 @@ const BOOTSTRAP_SCRIPT = `
         }
         if (key === 'toJSON') {
           return __hostProxyToJson(spec);
+        }
+        if (key === 'toString' || key === 'valueOf') {
+          return () => __hostProxyToStringValue(spec, 'string');
         }
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
           return obj[key];

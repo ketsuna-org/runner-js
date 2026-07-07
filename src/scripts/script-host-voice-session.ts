@@ -16,15 +16,30 @@ export interface VoiceSessionCleanup {
   trackConnection(connection: VoiceConnectionLike): void;
   trackPlayer(player: AudioPlayerLike): void;
   trackStream(stream: DestroyableStream): void;
+  markPlayerPlayed(player: AudioPlayerLike): void;
   dispose(): void;
 }
 
-const PLAYING_STATUS = 'playing';
+const ACTIVE_PLAYER_STATUSES = new Set([
+  'playing',
+  'buffering',
+  'paused',
+  'autopaused',
+]);
+
+function shouldKeepPlaybackAlive(
+  player: AudioPlayerLike,
+  playedPlayers: Set<AudioPlayerLike>,
+): boolean {
+  const status = String(player.state?.status ?? '');
+  return ACTIVE_PLAYER_STATUSES.has(status) || playedPlayers.has(player);
+}
 
 export function createVoiceSessionCleanup(): VoiceSessionCleanup {
   const connections = new Set<VoiceConnectionLike>();
   const players = new Set<AudioPlayerLike>();
   const streams = new Set<DestroyableStream>();
+  const playedPlayers = new Set<AudioPlayerLike>();
 
   return {
     trackConnection(connection) {
@@ -36,24 +51,21 @@ export function createVoiceSessionCleanup(): VoiceSessionCleanup {
     trackStream(stream) {
       streams.add(stream);
     },
+    markPlayerPlayed(player) {
+      playedPlayers.add(player);
+    },
     dispose() {
-      for (const stream of streams) {
-        try {
-          stream.destroy();
-        } catch {
-          // Ignore stream cleanup errors.
-        }
-      }
-      streams.clear();
-
       const connectionsToDestroy = [...connections];
       const playersToStop = [...players];
-      const playingPlayers = playersToStop.filter(
-        (player) => player.state?.status === PLAYING_STATUS,
+      const streamsToDestroy = [...streams];
+      const keepAlivePlayers = playersToStop.filter((player) =>
+        shouldKeepPlaybackAlive(player, playedPlayers),
       );
 
+      streams.clear();
+
       for (const player of playersToStop) {
-        if (player.state?.status === PLAYING_STATUS) {
+        if (keepAlivePlayers.includes(player)) {
           continue;
         }
         try {
@@ -63,7 +75,18 @@ export function createVoiceSessionCleanup(): VoiceSessionCleanup {
         }
       }
 
-      if (playingPlayers.length === 0) {
+      const destroyStreams = () => {
+        for (const stream of streamsToDestroy) {
+          try {
+            stream.destroy();
+          } catch {
+            // Ignore stream cleanup errors.
+          }
+        }
+      };
+
+      if (keepAlivePlayers.length === 0) {
+        destroyStreams();
         for (const connection of connectionsToDestroy) {
           try {
             connection.destroy();
@@ -72,16 +95,18 @@ export function createVoiceSessionCleanup(): VoiceSessionCleanup {
           }
         }
         players.clear();
+        playedPlayers.clear();
         connections.clear();
         return;
       }
 
-      let idleCallbacks = playingPlayers.length;
+      let idleCallbacks = keepAlivePlayers.length;
       const destroyConnections = () => {
         idleCallbacks -= 1;
         if (idleCallbacks > 0) {
           return;
         }
+        destroyStreams();
         for (const connection of connectionsToDestroy) {
           try {
             connection.destroy();
@@ -90,11 +115,16 @@ export function createVoiceSessionCleanup(): VoiceSessionCleanup {
           }
         }
         players.clear();
+        playedPlayers.clear();
         connections.clear();
       };
 
-      for (const player of playingPlayers) {
-        player.once('idle', destroyConnections);
+      for (const player of keepAlivePlayers) {
+        if (typeof player.once === 'function') {
+          player.once('idle', destroyConnections);
+        } else {
+          destroyConnections();
+        }
       }
     },
   };

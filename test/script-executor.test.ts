@@ -428,6 +428,36 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('allows String() coercion on host reply objects in eval handlers', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string) => ({ content: payload, id: '123' }));
+
+    await executor.execute(
+      `
+        let content = message.content.split(" ").slice(1).join(" ");
+        let result = eval(content);
+        if (result != null && typeof result.then === 'function') {
+          result = await result;
+        }
+        await message.reply(String(result ?? 'done'));
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: '!eval await message.reply("ok")',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledTimes(2);
+    expect(String(reply.mock.calls[1]?.[0])).not.toBe('undefined');
+    executor.dispose();
+  });
+
   it('supports return inside eval content', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
@@ -668,6 +698,61 @@ describe('ScriptExecutor', () => {
     expect(result.error ?? '').not.toMatch(/could not be cloned/i);
     expect(result.ok).toBe(true);
     expect(result.resourceType).toBe('object');
+    executor.dispose();
+  });
+
+  it('rejects player.play when createAudioResource was not awaited', async () => {
+    const executor = new ScriptExecutor(5000);
+    const mp3Bytes = Buffer.from([
+      0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(mp3Bytes);
+            controller.close();
+          },
+        }),
+      })),
+    );
+
+    const result = await executor.execute(
+      `
+        try {
+          const voice = require('@discordjs/voice');
+          if (typeof voice.createAudioPlayer !== 'function') {
+            return { skipped: true };
+          }
+          const player = voice.createAudioPlayer();
+          const resource = voice.createAudioResource('https://example.com/test.mp3');
+          player.play(resource);
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: String(err.message) };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { skipped?: boolean; ok?: boolean; error?: string };
+
+    vi.unstubAllGlobals();
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/await createAudioResource/i);
     executor.dispose();
   });
 
