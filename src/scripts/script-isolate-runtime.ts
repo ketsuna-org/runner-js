@@ -59,7 +59,7 @@ async function __drainPendingHostWork() {
 }
 function __normalizeHostValue(value) {
   if (value && value.type === 'host-method') {
-    return (...args) => __hostCall(value.id, value.method, args);
+    return (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
   }
   if (value && typeof value.id === 'string' && value.dynamic) {
     return __makeDynamicHostProxy(value);
@@ -143,6 +143,7 @@ export class ScriptIsolateRuntime {
   private readonly isolate: ivm.Isolate;
   private readonly bootstrap: ivm.Script;
   private disposed = false;
+  private executionChain: Promise<void> = Promise.resolve();
 
   constructor(memoryLimitMb = DEFAULT_MEMORY_LIMIT_MB) {
     this.isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
@@ -152,6 +153,22 @@ export class ScriptIsolateRuntime {
   }
 
   async execute(
+    script: string,
+    context: ScriptExecutionContext,
+    logger: ScriptLogger,
+    timeoutMs: number,
+  ): Promise<unknown> {
+    let run!: () => Promise<unknown>;
+    run = () => this.executeInIsolate(script, context, logger, timeoutMs);
+    const result = this.executionChain.then(run);
+    this.executionChain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+
+  private async executeInIsolate(
     script: string,
     context: ScriptExecutionContext,
     logger: ScriptLogger,
@@ -221,6 +238,14 @@ export class ScriptIsolateRuntime {
         __setHostSpecs(__specs);
         __setHostBridge(__hostInvoke);
         delete globalThis.__hostInvoke;
+        const __globalEval = eval;
+        globalThis.eval = (code) => {
+          const result = __globalEval(code);
+          if (result != null && typeof result.then === 'function') {
+            return __trackHostPromise(Promise.resolve(result));
+          }
+          return result;
+        };
       `);
 
       const wrappedScript = `(async () => {

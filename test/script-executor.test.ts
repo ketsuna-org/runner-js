@@ -248,6 +248,76 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('supports eval-based prefix command scripts', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: { content: string }) => ({ content: payload.content }));
+
+    await executor.execute(
+      `
+        let args = message.content.split(" ");
+        let content = args.slice(1).join(" ");
+        try {
+          await message.reply(String(eval(content)));
+        } catch (err) {
+          await message.reply(String(err.message));
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: '!eval 2 + 2',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('4');
+    executor.dispose();
+  });
+
+  it('serializes concurrent script executions on the same isolate', async () => {
+    const executor = new ScriptExecutor(5000);
+    const order: string[] = [];
+    const reply = vi.fn(async (payload: { content: string }) => {
+      order.push(payload.content);
+      return { content: payload.content };
+    });
+
+    const first = executor.execute(
+      `
+        await new Promise((resolve) => setTimeout(resolve, 40));
+        await message.reply({ content: 'first' });
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: { reply } as never,
+      },
+      createLogger(),
+    );
+
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    const second = executor.execute(
+      `await message.reply({ content: 'second' });`,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: { reply } as never,
+      },
+      createLogger(),
+    );
+
+    await Promise.all([first, second]);
+    expect(order).toEqual(['first', 'second']);
+    executor.dispose();
+  });
+
   it('runs setTimeout callbacks before releasing the host bridge', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async () => ({ ok: true }));
