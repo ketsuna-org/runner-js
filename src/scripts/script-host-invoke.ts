@@ -14,6 +14,45 @@ export async function invokeHostTarget(
   args: unknown[],
   clientRoot?: unknown,
 ): Promise<unknown> {
+  return invokeHostTargetInternal(
+    moduleRegistry,
+    targets,
+    targetId,
+    method,
+    args,
+    clientRoot,
+    'async',
+  ) as Promise<unknown>;
+}
+
+export function invokeHostTargetSync(
+  moduleRegistry: ModuleRegistry,
+  targets: Map<string, unknown>,
+  targetId: string,
+  method: string,
+  args: unknown[],
+  clientRoot?: unknown,
+): unknown {
+  return invokeHostTargetInternal(
+    moduleRegistry,
+    targets,
+    targetId,
+    method,
+    args,
+    clientRoot,
+    'sync',
+  );
+}
+
+function invokeHostTargetInternal(
+  moduleRegistry: ModuleRegistry,
+  targets: Map<string, unknown>,
+  targetId: string,
+  method: string,
+  args: unknown[],
+  clientRoot: unknown | undefined,
+  mode: 'sync' | 'async',
+): unknown {
   const { registry, wrapHostResult } = moduleRegistry;
 
   const resolvedArgs = args.map((arg) =>
@@ -33,7 +72,8 @@ export async function invokeHostTarget(
   const target = resolveInvokeTarget(moduleRegistry, registry, targets, targetId);
 
   if (typeof target === 'function') {
-    return wrapHostResult(await (target as (...fnArgs: unknown[]) => unknown)(...resolvedArgs));
+    const rawResult = (target as (...fnArgs: unknown[]) => unknown)(...resolvedArgs);
+    return finalizeInvokeResult(targetId, method, rawResult, wrapHostResult, mode);
   }
 
   const record = target as Record<string, unknown>;
@@ -42,7 +82,25 @@ export async function invokeHostTarget(
     throw new Error(`Host bridge method "${targetId}.${method}" is not available.`);
   }
 
-  return wrapHostResult(await fn.apply(target, resolvedArgs));
+  const rawResult = fn.apply(target, resolvedArgs);
+  return finalizeInvokeResult(targetId, method, rawResult, wrapHostResult, mode);
+}
+
+function finalizeInvokeResult(
+  targetId: string,
+  method: string,
+  rawResult: unknown,
+  wrapHostResult: (value: unknown) => unknown,
+  mode: 'sync' | 'async',
+): unknown {
+  if (mode === 'sync') {
+    if (rawResult != null && typeof (rawResult as Promise<unknown>).then === 'function') {
+      throw new Error(`Host bridge method "${targetId}.${method}" is async — use await.`);
+    }
+    return wrapHostResult(rawResult);
+  }
+
+  return Promise.resolve(rawResult).then((value) => wrapHostResult(value));
 }
 
 function resolveBridgeArg(

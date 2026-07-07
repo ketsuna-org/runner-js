@@ -449,6 +449,68 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('serializes host proxies via JSON.stringify', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string) => ({ content: payload }));
+
+    const result = await executor.execute(
+      `
+        return {
+          message: JSON.stringify(message),
+          reference: JSON.stringify(message.reference),
+          content: message.content,
+        };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: 'hello world',
+          id: '123456789012345678',
+          reference: {
+            messageId: '987654321098765432',
+            channelId: '111111111111111111',
+            guildId: '222222222222222222',
+            toJSON() {
+              return {
+                messageId: this.messageId,
+                channelId: this.channelId,
+                guildId: this.guildId,
+              };
+            },
+          },
+          toJSON() {
+            return {
+              content: this.content,
+              id: this.id,
+              reference: this.reference?.toJSON?.() ?? this.reference,
+            };
+          },
+          reply,
+        } as never,
+      },
+      createLogger(),
+    ) as { message?: string; reference?: string; content?: string };
+
+    expect(JSON.parse(result.message ?? '{}')).toEqual({
+      content: 'hello world',
+      id: '123456789012345678',
+      reference: {
+        messageId: '987654321098765432',
+        channelId: '111111111111111111',
+        guildId: '222222222222222222',
+      },
+    });
+    expect(JSON.parse(result.reference ?? '{}')).toEqual({
+      messageId: '987654321098765432',
+      channelId: '111111111111111111',
+      guildId: '222222222222222222',
+    });
+    expect(result.content).toBe('hello world');
+    executor.dispose();
+  });
+
   it('allows passing host proxy objects to host methods', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async (payload: unknown) => ({ ok: true, payload }));

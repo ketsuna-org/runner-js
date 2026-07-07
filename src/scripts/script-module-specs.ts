@@ -11,6 +11,7 @@ export interface ModuleSpec {
   name: string;
   id: string;
   functions: string[];
+  syncFunctions?: string[];
   constants: Record<string, unknown>;
 }
 
@@ -18,6 +19,7 @@ const CANVAS_SPEC = {
   name: 'canvas',
   id: 'module:canvas',
   functions: ['createCanvas', 'loadImage', 'registerFont', 'createImageData'],
+  syncFunctions: ['createCanvas', 'registerFont', 'createImageData'],
 };
 
 const VOICE_SPEC = {

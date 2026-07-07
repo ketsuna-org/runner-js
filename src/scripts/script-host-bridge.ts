@@ -1,5 +1,5 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
-import { invokeHostTarget, resolveInvokeTarget } from './script-host-invoke.js';
+import { invokeHostTarget, invokeHostTargetSync, resolveInvokeTarget } from './script-host-invoke.js';
 import { isBlockedClientProperty, wrapDynamicHostRead } from './script-host-dynamic.js';
 import type { ModuleRegistry } from './script-host-modules.js';
 import { createScriptModuleRegistry, type ModuleSpec } from './script-module-specs.js';
@@ -125,6 +125,21 @@ export function createHostBridgeSession(
     );
   };
 
+  const invokeSync = (targetId: string, method: string, args: unknown[]) => {
+    if (closed) {
+      throw new Error('Host bridge is not available.');
+    }
+
+    return invokeHostTargetSync(
+      moduleRegistry,
+      targets,
+      targetId,
+      method,
+      args,
+      context.client,
+    );
+  };
+
   const readPropertySync = (targetId: string, property: string): unknown => {
     if (closed) {
       throw new Error('Host bridge is not available.');
@@ -136,6 +151,10 @@ export function createHostBridgeSession(
       targets,
       targetId,
     );
+
+    if (property === '__json') {
+      return copyHostValue(target);
+    }
 
     if (
       context.client != null &&
@@ -166,6 +185,10 @@ export function createHostBridgeSession(
 
     if (kind === 'read') {
       return readPropertySync(arg1, arg2 as string);
+    }
+
+    if (kind === 'invokeSync') {
+      return invokeSync(arg1, arg2 as string, arg3 as unknown[]);
     }
 
     bridgeInFlight += 1;

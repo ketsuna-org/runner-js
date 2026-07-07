@@ -1,4 +1,5 @@
 import type { ModuleRegistry } from './script-host-modules.js';
+import { isSyncHostMethod } from './script-host-sync.js';
 import {
   type HostProxyDescriptor,
   isHostProxyDescriptor,
@@ -8,6 +9,7 @@ export interface HostMethodBridge {
   type: 'host-method';
   id: string;
   method: string;
+  sync?: boolean;
 }
 
 export const CLIENT_BLOCKED_PROPERTIES = new Set(['token']);
@@ -45,6 +47,7 @@ export function wrapDynamicHostRead(
       type: 'host-method',
       id: targetId,
       method: property,
+      sync: isSyncHostMethod(targetId, property),
     } satisfies HostMethodBridge;
   }
 

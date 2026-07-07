@@ -118,8 +118,27 @@ const BOOTSTRAP_SCRIPT = `
     return __trackHostPromise(Promise.resolve(result).then(__normalizeHostValue));
   }
 
+  function __hostCallSync(targetId, method, args) {
+    if (!__bridgeRef) {
+      throw new Error('Host bridge is not available.');
+    }
+    return __normalizeHostValue(__bridgeRef.applySync(undefined, [
+      __sessionId,
+      'invokeSync',
+      targetId,
+      method,
+      __sanitizeHostArgs(args),
+    ], {
+      arguments: { copy: true },
+      result: { copy: true },
+    }));
+  }
+
   function __normalizeHostValue(value) {
     if (value && value.type === 'host-method') {
+      if (value.sync) {
+        return (...args) => __hostCallSync(value.id, value.method, args);
+      }
       return (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
     }
     if (value && typeof value.id === 'string' && value.dynamic) {
@@ -131,6 +150,10 @@ const BOOTSTRAP_SCRIPT = `
     return value;
   }
 
+  function __hostProxyToJson(spec) {
+    return () => __hostRead(spec.id, '__json');
+  }
+
   function __makeDynamicHostProxy(spec) {
     return __markHostProxyTarget(new Proxy(Object.create(null), {
       get(obj, prop) {
@@ -140,6 +163,9 @@ const BOOTSTRAP_SCRIPT = `
         const key = String(prop);
         if (key === 'then' || key === 'catch' || key === 'finally') {
           return undefined;
+        }
+        if (key === 'toJSON') {
+          return __hostProxyToJson(spec);
         }
         return __normalizeHostValue(__hostRead(spec.id, key));
       },
@@ -158,6 +184,7 @@ const BOOTSTRAP_SCRIPT = `
       return __makeDynamicHostProxy(spec);
     }
     const methods = new Set(Array.isArray(spec.methods) ? spec.methods : []);
+    const syncMethods = new Set(Array.isArray(spec.syncMethods) ? spec.syncMethods : []);
     const target = Object.assign({}, spec.snapshot || {});
 
     for (const method of methods) {
@@ -165,7 +192,9 @@ const BOOTSTRAP_SCRIPT = `
         target.fetch = (...args) => __hostCall(spec.id, '__call', args);
         continue;
       }
-      target[method] = (...args) => __hostCall(spec.id, method, args);
+      target[method] = syncMethods.has(method)
+        ? (...args) => __hostCallSync(spec.id, method, args)
+        : (...args) => __hostCall(spec.id, method, args);
     }
 
     return __markHostProxyTarget(new Proxy(target, {
@@ -176,6 +205,9 @@ const BOOTSTRAP_SCRIPT = `
         const key = String(prop);
         if (key === 'then' || key === 'catch' || key === 'finally') {
           return undefined;
+        }
+        if (key === 'toJSON') {
+          return __hostProxyToJson(spec);
         }
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
           return obj[key];
@@ -195,9 +227,12 @@ const BOOTSTRAP_SCRIPT = `
 
   function __buildModule(spec) {
     const mod = Object.assign({}, spec.constants || {});
+    const syncFunctions = new Set(Array.isArray(spec.syncFunctions) ? spec.syncFunctions : []);
     for (let i = 0; i < spec.functions.length; i++) {
       const fnName = spec.functions[i];
-      mod[fnName] = (...args) => __hostCall(spec.id, fnName, args);
+      mod[fnName] = syncFunctions.has(fnName)
+        ? (...args) => __hostCallSync(spec.id, fnName, args)
+        : (...args) => __hostCall(spec.id, fnName, args);
     }
     return mod;
   }
