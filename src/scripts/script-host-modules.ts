@@ -3,7 +3,8 @@ import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import type { ScriptExecutionContext } from './script-context.js';
-import { assertHttpOrDataUrl, assertHttpUrl, isBlockedLocalPath } from './script-host-path.js';
+import { assertHttpOrDataUrl, isBlockedLocalPath } from './script-host-path.js';
+import type { VoiceSessionCleanup } from './script-host-voice-session.js';
 import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
 import {
   asDynamicDescriptor,
@@ -123,6 +124,7 @@ const AUDIO_RESOURCE_METHODS = [] as const;
 export function registerAllowedModuleTargets(
   context: ScriptExecutionContext,
   moduleRegistry: ModuleRegistry,
+  voiceSession?: VoiceSessionCleanup,
 ): string[] {
   const registered: string[] = [];
   const { wrapHostResult } = moduleRegistry;
@@ -139,7 +141,7 @@ export function registerAllowedModuleTargets(
 
   try {
     const voice = getVoice();
-    const voiceModule = buildVoiceModule(context, voice, moduleRegistry, wrapHostResult);
+    const voiceModule = buildVoiceModule(context, voice, moduleRegistry, wrapHostResult, voiceSession);
     moduleRegistry.registerModule('@discordjs/voice', voiceModule);
     moduleRegistry.registerInvokeTarget('module:voice', voiceModule);
     registered.push('@discordjs/voice');
@@ -260,7 +262,9 @@ function wrapVoiceConnection(
   voice: VoiceModule,
   wrapHostResult: ModuleRegistry['wrapHostResult'],
   connection: InstanceType<VoiceModule['VoiceConnection']>,
+  voiceSession?: VoiceSessionCleanup,
 ): unknown {
+  voiceSession?.trackConnection(connection);
   return wrapHostResult(
     connection,
     'voice-connection',
@@ -276,6 +280,7 @@ async function createRemoteAudioResource(
   wrapHostResult: ModuleRegistry['wrapHostResult'],
   url: string,
   options?: Record<string, unknown>,
+  voiceSession?: VoiceSessionCleanup,
 ): Promise<unknown> {
   const ffmpeg = ensureFfmpegAvailable();
   if (!ffmpeg.available) {
@@ -293,7 +298,11 @@ async function createRemoteAudioResource(
   }
 
   const stream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+  voiceSession?.trackStream(stream);
   const probed = await voice.demuxProbe(stream);
+  if (probed.stream != null && typeof (probed.stream as Readable).destroy === 'function') {
+    voiceSession?.trackStream(probed.stream as Readable);
+  }
   return wrapHostResult(
     voice.createAudioResource(probed.stream, {
       ...(options as Record<string, unknown>),
@@ -310,6 +319,7 @@ function buildVoiceModule(
   voice: VoiceModule,
   moduleRegistry: ModuleRegistry,
   wrapHostResult: ModuleRegistry['wrapHostResult'],
+  voiceSession?: VoiceSessionCleanup,
 ) {
   return {
     joinVoiceChannel: (options: Record<string, unknown>) =>
@@ -317,6 +327,7 @@ function buildVoiceModule(
         voice,
         wrapHostResult,
         voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never),
+        voiceSession,
       ),
     joinVoiceChannelReady: async (
       options: Record<string, unknown>,
@@ -324,15 +335,18 @@ function buildVoiceModule(
     ) => {
       const connection = voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never);
       await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, timeoutMs);
-      return wrapVoiceConnection(voice, wrapHostResult, connection);
+      return wrapVoiceConnection(voice, wrapHostResult, connection, voiceSession);
     },
-    createAudioPlayer: (options?: Record<string, unknown>) =>
-      wrapHostResult(
-        voice.createAudioPlayer(options as never),
+    createAudioPlayer: (options?: Record<string, unknown>) => {
+      const player = voice.createAudioPlayer(options as never);
+      voiceSession?.trackPlayer(player);
+      return wrapHostResult(
+        player,
         'audio-player',
         AUDIO_PLAYER_METHODS,
         () => ({}),
-      ),
+      );
+    },
     createAudioResource: (input: unknown, options?: Record<string, unknown>) => {
       if (typeof input === 'string') {
         if (isBlockedLocalPath(input)) {
@@ -341,7 +355,7 @@ function buildVoiceModule(
           );
         }
         if (/^https?:\/\//i.test(input)) {
-          return createRemoteAudioResource(voice, wrapHostResult, input, options);
+          return createRemoteAudioResource(voice, wrapHostResult, input, options, voiceSession);
         }
         throw new Error(
           'createAudioResource: unsupported string input — use an http(s) audio URL.',
@@ -360,6 +374,7 @@ function buildVoiceModule(
       if (!connection) {
         return null;
       }
+      voiceSession?.trackConnection(connection);
       return wrapHostResult(
         connection,
         'voice-connection',

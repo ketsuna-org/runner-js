@@ -1,4 +1,5 @@
 import type { ScriptExecutionContext } from './script-context.js';
+import type { VoiceSessionCleanup } from './script-host-voice-session.js';
 import {
   createModuleRegistry,
   getCanvasModuleConstants,
@@ -45,12 +46,15 @@ const VOICE_SPEC = {
   ],
 };
 
-export function createScriptModuleRegistry(context: ScriptExecutionContext): {
+export function createScriptModuleRegistry(
+  context: ScriptExecutionContext,
+  voiceSession?: VoiceSessionCleanup,
+): {
   moduleRegistry: ModuleRegistry;
   moduleSpecs: ModuleSpec[];
 } {
   const moduleRegistry = createModuleRegistry();
-  const registered = registerAllowedModuleTargets(context, moduleRegistry);
+  const registered = registerAllowedModuleTargets(context, moduleRegistry, voiceSession);
 
   const moduleSpecs: ModuleSpec[] = [];
 

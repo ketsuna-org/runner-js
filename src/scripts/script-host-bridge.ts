@@ -3,6 +3,7 @@ import { invokeHostTarget, invokeHostTargetSync, resolveInvokeTarget } from './s
 import { isBlockedClientProperty, isBlockedNestedClientAccess, wrapDynamicHostRead } from './script-host-dynamic.js';
 import type { ModuleRegistry } from './script-host-modules.js';
 import { createScriptModuleRegistry, type ModuleSpec } from './script-module-specs.js';
+import { createVoiceSessionCleanup } from './script-host-voice-session.js';
 import type { ScriptDb } from './script-db.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 
@@ -50,7 +51,8 @@ export function createHostBridgeSession(
   const targets = new Map<string, unknown>();
   const objectSpecs: HostObjectSpec[] = [];
   const timers = new Set<NodeJS.Timeout>();
-  const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context);
+  const voiceSession = createVoiceSessionCleanup();
+  const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context, voiceSession);
   let closed = false;
   let bridgeInFlight = 0;
 
@@ -245,6 +247,7 @@ export function createHostBridgeSession(
       timers.clear();
     },
     close: () => {
+      voiceSession.dispose();
       closed = true;
       targets.clear();
       moduleRegistry.registry.clear();
