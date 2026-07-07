@@ -25,6 +25,7 @@ export interface HostBridgeBundle {
   moduleRegistry: ModuleRegistry;
   release: () => void;
   clearTimers: () => void;
+  drain: (timeoutMs: number) => Promise<void>;
 }
 
 const DB_METHODS = ['get', 'set', 'delete', 'has', 'list', 'reset'] as const;
@@ -54,6 +55,7 @@ export function buildHostBridge(
   const timers = new Set<NodeJS.Timeout>();
   const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context);
   let released = false;
+  let bridgeInFlight = 0;
 
   const register = (spec: HostObjectSpec) => {
     targets.set(spec.id, spec.target);
@@ -166,7 +168,17 @@ export function buildHostBridge(
       return readPropertySync(arg1, arg2 as string);
     }
 
-    return invoke(arg1, arg2 as string, arg3 as unknown[]);
+    bridgeInFlight += 1;
+    return invoke(arg1, arg2 as string, arg3 as unknown[]).finally(() => {
+      bridgeInFlight -= 1;
+    });
+  };
+
+  const drain = async (timeoutMs: number): Promise<void> => {
+    const deadline = Date.now() + timeoutMs;
+    while (bridgeInFlight > 0 && Date.now() < deadline) {
+      await delay(10);
+    }
   };
 
   const bridgeRef = new ivm.Reference(bridgeDispatch);
@@ -192,7 +204,12 @@ export function buildHostBridge(
       }
       timers.clear();
     },
+    drain,
   };
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 export function sanitizeConfigForScript(config: JsBotConfig): Record<string, unknown> {

@@ -27,12 +27,18 @@ function __findHostSpec(id) {
   return null;
 }
 function __hostRead(targetId, prop) {
+  if (!__hostBridgeHolder.ref) {
+    throw new Error('Host bridge is not available.');
+  }
   return __hostBridgeHolder.ref.applySync(undefined, ['read', targetId, prop], {
     arguments: { copy: true },
     result: { copy: true },
   });
 }
 function __hostCall(targetId, method, args) {
+  if (!__hostBridgeHolder.ref) {
+    return Promise.reject(new Error('Host bridge is not available.'));
+  }
   const result = __hostBridgeHolder.ref.apply(undefined, ['invoke', targetId, method, args], {
     arguments: { copy: true },
     result: { promise: true, copy: true },
@@ -244,6 +250,7 @@ export class ScriptIsolateRuntime {
         compiled.release();
       }
     } finally {
+      await bridgeBundle.drain(timeoutMs);
       bridgeBundle.clearTimers();
       ivmContext.release();
       bridgeBundle.release();

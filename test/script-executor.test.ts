@@ -248,6 +248,31 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('waits for fire-and-forget host calls before releasing the bridge', async () => {
+    const executor = new ScriptExecutor(5000);
+    let replyFinished = false;
+    const reply = vi.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      replyFinished = true;
+      return { ok: true };
+    });
+
+    await executor.execute(
+      "interaction.reply({ content: 'pong' });",
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        interaction: { reply } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith({ content: 'pong' });
+    expect(replyFinished).toBe(true);
+    executor.dispose();
+  });
+
   it('calls host bridged methods such as interaction.reply', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async () => ({ ok: true }));
