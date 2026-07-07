@@ -166,7 +166,7 @@ function buildCanvasModule(
       ),
     loadImage: async (source: string | Buffer) =>
       wrapHostResult(
-        await canvas.loadImage(source),
+        await loadCanvasImage(canvas, source),
         'canvas-image',
         CANVAS_IMAGE_METHODS,
         (value) => ({
@@ -185,6 +185,34 @@ function buildCanvasModule(
     PNG_FILTER_AVG: canvas.Canvas.PNG_FILTER_AVG,
     PNG_FILTER_PAETH: canvas.Canvas.PNG_FILTER_PAETH,
   };
+}
+
+async function loadCanvasImage(
+  canvas: CanvasModule,
+  source: string | Buffer,
+): Promise<InstanceType<CanvasModule['Image']>> {
+  if (Buffer.isBuffer(source)) {
+    return canvas.loadImage(source);
+  }
+
+  const url = normalizeCanvasImageUrl(String(source));
+  try {
+    return await canvas.loadImage(url);
+  } catch {
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch image (${response.status} ${response.statusText}).`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    return canvas.loadImage(buffer);
+  }
+}
+
+function normalizeCanvasImageUrl(url: string): string {
+  return url
+    .replace(/\.webp(\?|$)/i, '.png$1')
+    .replace(/([?&])format=webp(&|$)/i, '$1format=png$2')
+    .replace(/([?&])extension=webp(&|$)/i, '$1extension=png$2');
 }
 
 function buildVoiceModule(

@@ -253,7 +253,15 @@ const BOOTSTRAP_SCRIPT = `
 
   const __globalEval = eval;
   globalThis.eval = (code) => {
-    const result = __globalEval(code);
+    const source = String(code);
+    if (new RegExp('\\\\bawait\\\\b').test(source)) {
+      const trimmed = source.trim();
+      const looksLikeStatements = /[;{}]/.test(trimmed) || trimmed.indexOf(String.fromCharCode(10)) !== -1;
+      const body = looksLikeStatements ? source : ('return (' + source + ')');
+      const fn = __globalEval('(async () => {' + String.fromCharCode(10) + body + String.fromCharCode(10) + '})');
+      return __trackHostPromise(Promise.resolve(fn()).then(__normalizeHostValue));
+    }
+    const result = __globalEval(source);
     if (result != null && typeof result.then === 'function') {
       return __trackHostPromise(Promise.resolve(result));
     }

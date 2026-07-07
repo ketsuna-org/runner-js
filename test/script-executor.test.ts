@@ -399,6 +399,35 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('supports await inside eval content', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string) => ({ content: payload }));
+
+    await executor.execute(
+      `
+        let content = message.content.split(" ").slice(1).join(" ");
+        let result = eval(content);
+        if (result != null && typeof result.then === 'function') {
+          result = await result;
+        }
+        await message.reply(String(result ?? 'done'));
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: '!eval await 21 + 21',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('42');
+    executor.dispose();
+  });
+
   it('does not expose host bridge internals to eval', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
