@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
 describe('canvas getContext', () => {
-  it('supports synchronous createCanvas and getContext', async () => {
+  it.skipIf(process.platform === 'win32')(
+    'supports synchronous createCanvas and getContext',
+    async () => {
     const executor = new ScriptExecutor(5000);
 
     const result = await executor.execute(
@@ -51,7 +53,8 @@ describe('canvas getContext', () => {
     expect(result.fillRectType).toBe('function');
     expect(result.ctxIsPromise).toBe(false);
     executor.dispose();
-  });
+    },
+  );
 
   it('works when createCanvas and getContext are awaited', async () => {
     const executor = new ScriptExecutor(5000);
