@@ -18,10 +18,14 @@ export class ScriptBridgeHost {
     );
   }
 
-  createSession(context: ScriptExecutionContext, logger: ScriptLogger): number {
+  createSession(
+    context: ScriptExecutionContext,
+    logger: ScriptLogger,
+    dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  ): number {
     this.assertActive();
     const sessionId = this.nextSessionId++;
-    this.sessions.set(sessionId, createHostBridgeSession(context, logger));
+    this.sessions.set(sessionId, createHostBridgeSession(context, logger, dispatchListener));
     return sessionId;
   }
 

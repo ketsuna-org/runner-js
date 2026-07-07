@@ -548,6 +548,80 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('registers isolate callbacks on voice player event listeners', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        try {
+          const voice = require('@discordjs/voice');
+          if (typeof voice.createAudioPlayer !== 'function') {
+            return { skipped: true };
+          }
+          const player = voice.createAudioPlayer();
+          player.on('error', () => {});
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: String(err.message) };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { skipped?: boolean; ok?: boolean; error?: string };
+
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.error ?? '').not.toMatch(/could not be cloned/i);
+    expect(result.ok).toBe(true);
+    executor.dispose();
+  });
+
+  it('passes voiceAdapterCreator functions to voice join without clone errors', async () => {
+    const executor = new ScriptExecutor(5000);
+    const adapterCreator = vi.fn(() => ({ sendPackets: vi.fn() }));
+
+    const result = await executor.execute(
+      `
+        try {
+          const voice = require('@discordjs/voice');
+          if (typeof voice.joinVoiceChannel !== 'function') {
+            return { skipped: true };
+          }
+          voice.joinVoiceChannel({
+            channelId: '123',
+            guildId: '456',
+            adapterCreator: guild.voiceAdapterCreator,
+          });
+          return { ok: true };
+        } catch (err) {
+          return { ok: false, error: String(err.message) };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        guild: { voiceAdapterCreator: adapterCreator } as never,
+      },
+      createLogger(),
+    ) as { skipped?: boolean; ok?: boolean; error?: string };
+
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.error ?? '').not.toMatch(/could not be cloned/i);
+    executor.dispose();
+  });
+
   it('exposes synchronous voice player methods', async () => {
     const executor = new ScriptExecutor(5000);
 

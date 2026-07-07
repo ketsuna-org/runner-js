@@ -9,11 +9,39 @@ export interface HostArgRef {
   __hostArgRef: string;
 }
 
+export interface HostMethodRef {
+  __hostMethodRef: {
+    targetId: string;
+    property: string;
+  };
+}
+
+export interface HostListenerRef {
+  __hostListenerRef: number;
+}
+
+export function isHostListenerRef(value: unknown): value is HostListenerRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as HostListenerRef).__hostListenerRef === 'number'
+  );
+}
+
 export function isHostArgRef(value: unknown): value is HostArgRef {
   return (
     typeof value === 'object' &&
     value !== null &&
     typeof (value as HostArgRef).__hostArgRef === 'string'
+  );
+}
+
+export function isHostMethodRef(value: unknown): value is HostMethodRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as HostMethodRef).__hostMethodRef?.targetId === 'string' &&
+    typeof (value as HostMethodRef).__hostMethodRef?.property === 'string'
   );
 }
 

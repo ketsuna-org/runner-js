@@ -16,6 +16,21 @@ const BOOTSTRAP_SCRIPT = `
   const __hostSpecs = [];
   const __pendingHostWork = new Set();
   const __hostProxyTargets = new WeakMap();
+  let __listenerSeq = 0;
+  const __hostListeners = new Map();
+
+  globalThis.__registerHostListener = (fn) => {
+    const id = ++__listenerSeq;
+    __hostListeners.set(id, fn);
+    return id;
+  };
+
+  globalThis.__dispatchHostListener = (id, args) => {
+    const fn = __hostListeners.get(id);
+    if (typeof fn === 'function') {
+      fn(...args);
+    }
+  };
 
   function __markHostProxyTarget(proxy, spec) {
     __hostProxyTargets.set(proxy, spec.id);
@@ -28,6 +43,12 @@ const BOOTSTRAP_SCRIPT = `
     }
     if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
       return value;
+    }
+    if (typeof value === 'function') {
+      if (value.__hostMethodRef) {
+        return { __hostMethodRef: value.__hostMethodRef };
+      }
+      return { __hostListenerRef: globalThis.__registerHostListener(value) };
     }
     const hostId = __hostProxyTargets.get(value);
     if (hostId) {
@@ -136,10 +157,11 @@ const BOOTSTRAP_SCRIPT = `
 
   function __normalizeHostValue(value) {
     if (value && value.type === 'host-method') {
-      if (value.sync) {
-        return (...args) => __hostCallSync(value.id, value.method, args);
-      }
-      return (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
+      const fn = value.sync
+        ? (...args) => __hostCallSync(value.id, value.method, args)
+        : (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
+      fn.__hostMethodRef = { targetId: value.id, property: value.method };
+      return fn;
     }
     if (value && typeof value.id === 'string' && value.dynamic) {
       return __makeDynamicHostProxy(value);
@@ -333,14 +355,27 @@ export class ScriptIsolateRuntime {
       return undefined;
     }
 
-    const sessionId = this.bridgeHost.createSession(context, logger);
-    const { objectSpecs, moduleSpecs } = this.bridgeHost.getSessionSpecs(sessionId);
     const ivmContext = await this.isolate.createContext();
     const jail = ivmContext.global;
+    let sessionId = 0;
 
     try {
       await jail.set('global', jail.derefInto());
       this.bootstrap.runSync(ivmContext);
+
+      const listenerDispatchRef = ivmContext.evalClosureSync(
+        'return function(id, args) { globalThis.__dispatchHostListener(id, args); }',
+        [],
+        { result: { reference: true } },
+      );
+
+      sessionId = this.bridgeHost.createSession(context, logger, (listenerId, args) => {
+        listenerDispatchRef.applyIgnored(undefined, [listenerId, args], {
+          arguments: { copy: true },
+          result: { promise: true, copy: true },
+        });
+      });
+      const { objectSpecs, moduleSpecs } = this.bridgeHost.getSessionSpecs(sessionId);
 
       jail.setSync('__hostBridge', this.bridgeHost.bridgeRef);
 

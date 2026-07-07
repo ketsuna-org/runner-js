@@ -2,7 +2,10 @@ import type { ModuleRegistry } from './script-host-modules.js';
 import { isBlockedClientProperty } from './script-host-dynamic.js';
 import {
   HostObjectRegistry,
+  type HostMethodRef,
   isHostArgRef,
+  isHostListenerRef,
+  isHostMethodRef,
   isHostProxyDescriptor,
 } from './script-host-registry.js';
 
@@ -13,6 +16,7 @@ export async function invokeHostTarget(
   method: string,
   args: unknown[],
   clientRoot?: unknown,
+  dispatchListener?: (listenerId: number, args: unknown[]) => void,
 ): Promise<unknown> {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -22,6 +26,7 @@ export async function invokeHostTarget(
     args,
     clientRoot,
     'async',
+    dispatchListener,
   ) as Promise<unknown>;
 }
 
@@ -32,6 +37,7 @@ export function invokeHostTargetSync(
   method: string,
   args: unknown[],
   clientRoot?: unknown,
+  dispatchListener?: (listenerId: number, args: unknown[]) => void,
 ): unknown {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -41,6 +47,7 @@ export function invokeHostTargetSync(
     args,
     clientRoot,
     'sync',
+    dispatchListener,
   );
 }
 
@@ -52,11 +59,12 @@ function invokeHostTargetInternal(
   args: unknown[],
   clientRoot: unknown | undefined,
   mode: 'sync' | 'async',
+  dispatchListener?: (listenerId: number, args: unknown[]) => void,
 ): unknown {
   const { registry, wrapHostResult } = moduleRegistry;
 
   const resolvedArgs = args.map((arg) =>
-    resolveBridgeArg(moduleRegistry, registry, targets, arg),
+    resolveBridgeArg(moduleRegistry, registry, targets, arg, dispatchListener),
   );
 
   if (method === '__set') {
@@ -108,25 +116,61 @@ function resolveBridgeArg(
   registry: HostObjectRegistry,
   targets: Map<string, unknown>,
   value: unknown,
+  dispatchListener?: (listenerId: number, args: unknown[]) => void,
 ): unknown {
   if (isHostProxyDescriptor(value) || isHostArgRef(value)) {
     const id = isHostArgRef(value) ? value.__hostArgRef : value.id;
     return resolveInvokeTarget(moduleRegistry, registry, targets, id);
   }
 
+  if (isHostMethodRef(value)) {
+    return resolveHostMethodRef(moduleRegistry, registry, targets, value);
+  }
+
+  if (isHostListenerRef(value)) {
+    if (!dispatchListener) {
+      throw new Error('Host listener bridge is not available.');
+    }
+    const listenerId = value.__hostListenerRef;
+    return (...args: unknown[]) => dispatchListener(listenerId, args);
+  }
+
   if (Array.isArray(value)) {
-    return value.map((entry) => resolveBridgeArg(moduleRegistry, registry, targets, entry));
+    return value.map((entry) =>
+      resolveBridgeArg(moduleRegistry, registry, targets, entry, dispatchListener),
+    );
   }
 
   if (value != null && typeof value === 'object') {
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      output[key] = resolveBridgeArg(moduleRegistry, registry, targets, entry);
+      output[key] = resolveBridgeArg(moduleRegistry, registry, targets, entry, dispatchListener);
     }
     return output;
   }
 
   return value;
+}
+
+function resolveHostMethodRef(
+  moduleRegistry: ModuleRegistry,
+  registry: HostObjectRegistry,
+  targets: Map<string, unknown>,
+  value: HostMethodRef,
+): unknown {
+  const target = resolveInvokeTarget(
+    moduleRegistry,
+    registry,
+    targets,
+    value.__hostMethodRef.targetId,
+  );
+  const fn = (target as Record<string, unknown>)[value.__hostMethodRef.property];
+  if (typeof fn !== 'function') {
+    throw new Error(
+      `Host property "${value.__hostMethodRef.property}" on "${value.__hostMethodRef.targetId}" is not a function.`,
+    );
+  }
+  return fn.bind(target);
 }
 
 export function resolveInvokeTarget(
