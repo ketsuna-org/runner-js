@@ -53,10 +53,13 @@ export const jsBotConfigSchema = z.object({
   prefix: z.string().optional(),
   autoRestart: z.boolean().default(true),
   presence: presenceSchema,
-  commands: z.array(commandHandlerSchema).nullish().default([]),
-  events: z.array(eventHandlerSchema).nullish().default([]),
-  scheduled: z.array(scheduledHandlerSchema).nullish().default([]),
-  inboundWebhooks: z.array(inboundWebhookHandlerSchema).nullish().default([]),
+  commands: z.array(commandHandlerSchema).nullish().transform((value) => value ?? []),
+  events: z.array(eventHandlerSchema).nullish().transform((value) => value ?? []),
+  scheduled: z.array(scheduledHandlerSchema).nullish().transform((value) => value ?? []),
+  inboundWebhooks: z
+    .array(inboundWebhookHandlerSchema)
+    .nullish()
+    .transform((value) => value ?? []),
   globalVariables: z.record(z.unknown()).default({}),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
   scriptTimeoutMs: z.number().int().positive().default(30_000),
@@ -82,7 +85,7 @@ export function validateJsBotConfig(config: JsBotConfig): void {
   jsBotConfigSchema.parse(config);
 
   const commandNames = new Set<string>();
-  for (const command of config.commands) {
+  for (const command of config.commands ?? []) {
     const key = command.name.trim().toLowerCase();
     if (commandNames.has(key)) {
       throw new Error(`Duplicate command name: ${command.name}`);
@@ -91,7 +94,7 @@ export function validateJsBotConfig(config: JsBotConfig): void {
   }
 
   const eventNames = new Set<string>();
-  for (const event of config.events) {
+  for (const event of config.events ?? []) {
     const key = event.name.trim();
     if (eventNames.has(key)) {
       throw new Error(`Duplicate event handler: ${event.name}`);
@@ -100,7 +103,7 @@ export function validateJsBotConfig(config: JsBotConfig): void {
   }
 
   const webhookPaths = new Set<string>();
-  for (const webhook of config.inboundWebhooks) {
+  for (const webhook of config.inboundWebhooks ?? []) {
     const key = webhook.path.trim().toLowerCase();
     if (webhookPaths.has(key)) {
       throw new Error(`Duplicate inbound webhook path: ${webhook.path}`);

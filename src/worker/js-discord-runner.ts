@@ -42,7 +42,7 @@ export class JsDiscordRunner {
 
     this.client.once(Events.ClientReady, (client) => {
       applyPresence(client, this.config);
-      void registerSlashCommands(client, this.config.token, this.config.commands).catch(
+      void registerSlashCommands(client, this.config.token, this.config.commands ?? []).catch(
         (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
           this.onLog('error', `Failed to register slash commands: ${message}`);
@@ -69,7 +69,7 @@ export class JsDiscordRunner {
 
     this.registry.updateConfig(config);
     applyPresence(this.client, config);
-    await registerSlashCommands(this.client, config.token, config.commands);
+    await registerSlashCommands(this.client, config.token, config.commands ?? []);
   }
 
   async triggerWebhook(

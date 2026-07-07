@@ -392,7 +392,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       throw notFound(`Bot "${botId}" not found.`);
     }
 
-    const webhook = entry.config.inboundWebhooks.find(
+    const webhook = (entry.config.inboundWebhooks ?? []).find(
       (candidate) =>
         candidate.path.trim().toLowerCase() === pathKey.trim().toLowerCase() &&
         candidate.enabled !== false,

@@ -49,7 +49,7 @@ export class HandlerRegistry {
   mount(): void {
     this.clear();
 
-    for (const command of this.config.commands) {
+    for (const command of this.config.commands ?? []) {
       if (command.enabled === false) {
         continue;
       }
@@ -65,7 +65,7 @@ export class HandlerRegistry {
       );
     }
 
-    for (const event of this.config.events) {
+    for (const event of this.config.events ?? []) {
       if (event.enabled === false) {
         continue;
       }
@@ -73,7 +73,7 @@ export class HandlerRegistry {
       this.attachEvent(event);
     }
 
-    for (const webhook of this.config.inboundWebhooks) {
+    for (const webhook of this.config.inboundWebhooks ?? []) {
       if (webhook.enabled === false) {
         continue;
       }
