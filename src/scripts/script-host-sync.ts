@@ -62,7 +62,6 @@ const AUDIO_PLAYER_METHODS = new Set([
 const VOICE_MODULE_SYNC_FUNCTIONS = new Set([
   'joinVoiceChannel',
   'createAudioPlayer',
-  'createAudioResource',
   'getVoiceConnection',
   'generateDependencyReport',
   'validateDiscordOpusHead',

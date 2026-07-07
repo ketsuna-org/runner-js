@@ -27,6 +27,7 @@ const VOICE_SPEC = {
   id: 'module:voice',
   functions: [
     'joinVoiceChannel',
+    'joinVoiceChannelReady',
     'createAudioPlayer',
     'createAudioResource',
     'getVoiceConnection',
@@ -38,7 +39,6 @@ const VOICE_SPEC = {
   syncFunctions: [
     'joinVoiceChannel',
     'createAudioPlayer',
-    'createAudioResource',
     'getVoiceConnection',
     'generateDependencyReport',
     'validateDiscordOpusHead',

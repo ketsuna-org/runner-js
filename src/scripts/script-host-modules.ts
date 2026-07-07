@@ -1,7 +1,9 @@
 import { createRequire } from 'node:module';
+import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
 import type { ScriptExecutionContext } from './script-context.js';
+import { assertHttpOrDataUrl, assertHttpUrl, isBlockedLocalPath } from './script-host-path.js';
 import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
 import {
   asDynamicDescriptor,
@@ -177,7 +179,12 @@ function buildCanvasModule(
       ),
     createImageData: (array: Uint8ClampedArray, width: number, height?: number) =>
       wrapHostResult(canvas.createImageData(array, width, height)),
-    registerFont: (path: string, options: { family: string }) => canvas.registerFont(path, options),
+    registerFont: (path: string, options: { family: string }) => {
+      if (isBlockedLocalPath(String(path))) {
+        throw new Error('registerFont: local file paths are blocked.');
+      }
+      return canvas.registerFont(path, options);
+    },
     PNG_NO_FILTERS: canvas.Canvas.PNG_NO_FILTERS,
     PNG_ALL_FILTERS: canvas.Canvas.PNG_ALL_FILTERS,
     PNG_FILTER_NONE: canvas.Canvas.PNG_FILTER_NONE,
@@ -196,11 +203,17 @@ async function loadCanvasImage(
     return canvas.loadImage(source);
   }
 
-  const url = normalizeCanvasImageUrl(String(source));
+  const url = String(source);
+  if (isBlockedLocalPath(url)) {
+    throw new Error('loadImage: only http(s) or data URLs are allowed — local file paths are blocked.');
+  }
+  assertHttpOrDataUrl(url, 'loadImage');
+
+  const normalizedUrl = normalizeCanvasImageUrl(url);
   try {
-    return await canvas.loadImage(url);
+    return await canvas.loadImage(normalizedUrl);
   } catch {
-    const response = await fetch(url);
+    const response = await fetch(normalizedUrl);
     if (!response.ok) {
       throw new Error(`Failed to fetch image (${response.status} ${response.statusText}).`);
     }
@@ -216,6 +229,82 @@ function normalizeCanvasImageUrl(url: string): string {
     .replace(/([?&])extension=webp(&|$)/i, '$1extension=png$2');
 }
 
+function normalizeVoiceJoinOptions(
+  context: ScriptExecutionContext,
+  options: Record<string, unknown>,
+): Record<string, unknown> {
+  const guildId = String(options.guildId ?? '');
+  const channelId = String(options.channelId ?? '');
+  let adapterCreator = options.adapterCreator;
+
+  if (adapterCreator == null && context.client && guildId) {
+    const guild = context.client.guilds.cache.get(guildId);
+    adapterCreator = guild?.voiceAdapterCreator;
+  }
+
+  if (adapterCreator == null) {
+    throw new Error(
+      'joinVoiceChannel: missing adapterCreator — provide guildId from a connected guild.',
+    );
+  }
+
+  return {
+    ...(options as Record<string, unknown>),
+    guildId,
+    channelId,
+    adapterCreator: adapterCreator as never,
+  };
+}
+
+function wrapVoiceConnection(
+  voice: VoiceModule,
+  wrapHostResult: ModuleRegistry['wrapHostResult'],
+  connection: InstanceType<VoiceModule['VoiceConnection']>,
+): unknown {
+  return wrapHostResult(
+    connection,
+    'voice-connection',
+    VOICE_CONNECTION_METHODS,
+    (value) => ({
+      joinConfig: (value as InstanceType<VoiceModule['VoiceConnection']>).joinConfig,
+    }),
+  );
+}
+
+async function createRemoteAudioResource(
+  voice: VoiceModule,
+  wrapHostResult: ModuleRegistry['wrapHostResult'],
+  url: string,
+  options?: Record<string, unknown>,
+): Promise<unknown> {
+  const ffmpeg = ensureFfmpegAvailable();
+  if (!ffmpeg.available) {
+    throw new Error(
+      'FFmpeg is required to play remote audio URLs. ffmpeg-static is bundled with the runner but was not found in this environment.',
+    );
+  }
+
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Failed to fetch audio URL (${response.status} ${response.statusText}).`);
+  }
+  if (response.body == null) {
+    throw new Error('Audio URL returned an empty body.');
+  }
+
+  const stream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
+  const probed = await voice.demuxProbe(stream);
+  return wrapHostResult(
+    voice.createAudioResource(probed.stream, {
+      ...(options as Record<string, unknown>),
+      inputType: probed.type,
+    } as never),
+    'audio-resource',
+    AUDIO_RESOURCE_METHODS,
+    () => ({}),
+  );
+}
+
 function buildVoiceModule(
   context: ScriptExecutionContext,
   voice: VoiceModule,
@@ -223,35 +312,19 @@ function buildVoiceModule(
   wrapHostResult: ModuleRegistry['wrapHostResult'],
 ) {
   return {
-    joinVoiceChannel: (options: Record<string, unknown>) => {
-      const guildId = String(options.guildId ?? '');
-      const channelId = String(options.channelId ?? '');
-      let adapterCreator = options.adapterCreator;
-
-      if (adapterCreator == null && context.client && guildId) {
-        const guild = context.client.guilds.cache.get(guildId);
-        adapterCreator = guild?.voiceAdapterCreator;
-      }
-
-      if (adapterCreator == null) {
-        throw new Error(
-          'joinVoiceChannel: missing adapterCreator — provide guildId from a connected guild.',
-        );
-      }
-
-      return wrapHostResult(
-        voice.joinVoiceChannel({
-          ...(options as Record<string, unknown>),
-          guildId,
-          channelId,
-          adapterCreator: adapterCreator as never,
-        } as never),
-        'voice-connection',
-        VOICE_CONNECTION_METHODS,
-        (value) => ({
-          joinConfig: (value as InstanceType<VoiceModule['VoiceConnection']>).joinConfig,
-        }),
-      );
+    joinVoiceChannel: (options: Record<string, unknown>) =>
+      wrapVoiceConnection(
+        voice,
+        wrapHostResult,
+        voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never),
+      ),
+    joinVoiceChannelReady: async (
+      options: Record<string, unknown>,
+      timeoutMs = 30_000,
+    ) => {
+      const connection = voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never);
+      await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, timeoutMs);
+      return wrapVoiceConnection(voice, wrapHostResult, connection);
     },
     createAudioPlayer: (options?: Record<string, unknown>) =>
       wrapHostResult(
@@ -261,13 +334,18 @@ function buildVoiceModule(
         () => ({}),
       ),
     createAudioResource: (input: unknown, options?: Record<string, unknown>) => {
-      if (typeof input === 'string' && /^https?:\/\//i.test(input)) {
-        const ffmpeg = ensureFfmpegAvailable();
-        if (!ffmpeg.available) {
+      if (typeof input === 'string') {
+        if (isBlockedLocalPath(input)) {
           throw new Error(
-            'FFmpeg is required to play remote audio URLs. ffmpeg-static is bundled with the runner but was not found in this environment.',
+            'createAudioResource: only http(s) URLs are allowed — local file paths are blocked.',
           );
         }
+        if (/^https?:\/\//i.test(input)) {
+          return createRemoteAudioResource(voice, wrapHostResult, input, options);
+        }
+        throw new Error(
+          'createAudioResource: unsupported string input — use an http(s) audio URL.',
+        );
       }
 
       return wrapHostResult(

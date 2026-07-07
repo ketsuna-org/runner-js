@@ -548,6 +548,123 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('blocks local filesystem paths in voice and canvas modules', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        const checks = {};
+
+        try {
+          const voice = require('@discordjs/voice');
+          try {
+            voice.createAudioResource('/etc/passwd');
+            checks.audio = 'allowed';
+          } catch (err) {
+            checks.audio = err.message;
+          }
+        } catch {
+          checks.audio = 'voice-unavailable';
+        }
+
+        try {
+          const canvas = require('canvas');
+          try {
+            canvas.registerFont('/etc/passwd', { family: 'x' });
+            checks.font = 'allowed';
+          } catch (err) {
+            checks.font = err.message;
+          }
+          try {
+            await canvas.loadImage('/etc/passwd');
+            checks.image = 'allowed';
+          } catch (err) {
+            checks.image = err.message;
+          }
+        } catch {
+          checks.font = 'canvas-unavailable';
+          checks.image = 'canvas-unavailable';
+        }
+
+        return checks;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { audio?: string; font?: string; image?: string };
+
+    if (result.audio !== 'voice-unavailable') {
+      expect(result.audio).toMatch(/local file paths are blocked/i);
+    }
+    if (result.font !== 'canvas-unavailable') {
+      expect(result.font).toMatch(/local file paths are blocked/i);
+    }
+    if (result.image !== 'canvas-unavailable') {
+      expect(result.image).toMatch(/local file paths are blocked/i);
+    }
+    executor.dispose();
+  });
+
+  it('fetches remote audio URLs before creating a voice resource', async () => {
+    const executor = new ScriptExecutor(5000);
+    const mp3Bytes = Buffer.from([
+      0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+    ]);
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(mp3Bytes);
+            controller.close();
+          },
+        }),
+      })),
+    );
+
+    const result = await executor.execute(
+      `
+        try {
+          const voice = require('@discordjs/voice');
+          if (typeof voice.createAudioResource !== 'function') {
+            return { skipped: true };
+          }
+          const resource = await voice.createAudioResource('https://example.com/test.mp3');
+          return {
+            ok: true,
+            resourceType: typeof resource,
+          };
+        } catch (err) {
+          return { ok: false, error: String(err.message) };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { skipped?: boolean; ok?: boolean; error?: string; resourceType?: string };
+
+    vi.unstubAllGlobals();
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.error ?? '').not.toMatch(/could not be cloned/i);
+    expect(result.ok).toBe(true);
+    expect(result.resourceType).toBe('object');
+    executor.dispose();
+  });
+
   it('registers isolate callbacks on voice player event listeners', async () => {
     const executor = new ScriptExecutor(5000);
 

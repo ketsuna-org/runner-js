@@ -247,11 +247,38 @@ const BOOTSTRAP_SCRIPT = `
     }), spec);
   }
 
+  function __looksLikeBlockedLocalPath(value) {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    const trimmed = value.trim();
+    if (/^https?:\\/\\//i.test(trimmed) || /^data:/i.test(trimmed)) {
+      return false;
+    }
+    if (/^file:/i.test(trimmed) || trimmed.charAt(0) === '/' || /^[A-Za-z]:[\\\\/]/.test(trimmed)) {
+      return true;
+    }
+    if (trimmed.startsWith('./') || trimmed.startsWith('../') || trimmed.startsWith('~')) {
+      return true;
+    }
+    if (!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+
   function __buildModule(spec) {
     const mod = Object.assign({}, spec.constants || {});
     const syncFunctions = new Set(Array.isArray(spec.syncFunctions) ? spec.syncFunctions : []);
     for (let i = 0; i < spec.functions.length; i++) {
       const fnName = spec.functions[i];
+      if (fnName === 'createAudioResource' || fnName === 'loadImage') {
+        mod[fnName] = (...args) =>
+          __looksLikeBlockedLocalPath(args[0])
+            ? __hostCallSync(spec.id, fnName, args)
+            : __hostCall(spec.id, fnName, args);
+        continue;
+      }
       mod[fnName] = syncFunctions.has(fnName)
         ? (...args) => __hostCallSync(spec.id, fnName, args)
         : (...args) => __hostCall(spec.id, fnName, args);
