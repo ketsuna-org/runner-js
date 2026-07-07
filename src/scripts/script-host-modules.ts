@@ -169,16 +169,10 @@ function buildCanvasModule(
           type: (value as InstanceType<CanvasModule['Canvas']>).type,
         }),
       ),
-    loadImage: async (source: string | Buffer) =>
-      wrapHostResult(
-        await loadCanvasImage(canvas, source),
-        'canvas-image',
-        CANVAS_IMAGE_METHODS,
-        (value) => ({
-          width: (value as InstanceType<CanvasModule['Image']>).width,
-          height: (value as InstanceType<CanvasModule['Image']>).height,
-        }),
-      ),
+    loadImage: (source: string | Buffer) => {
+      assertAllowedImageSource(source);
+      return loadCanvasImageResult(canvas, wrapHostResult, source);
+    },
     createImageData: (array: Uint8ClampedArray, width: number, height?: number) =>
       wrapHostResult(canvas.createImageData(array, width, height)),
     registerFont: (path: string, options: { family: string }) => {
@@ -197,6 +191,34 @@ function buildCanvasModule(
   };
 }
 
+function assertAllowedImageSource(source: string | Buffer): void {
+  if (Buffer.isBuffer(source)) {
+    return;
+  }
+
+  const url = String(source);
+  if (isBlockedLocalPath(url)) {
+    throw new Error('loadImage: only http(s) or data URLs are allowed — local file paths are blocked.');
+  }
+  assertHttpOrDataUrl(url, 'loadImage');
+}
+
+async function loadCanvasImageResult(
+  canvas: CanvasModule,
+  wrapHostResult: ModuleRegistry['wrapHostResult'],
+  source: string | Buffer,
+): Promise<unknown> {
+  return wrapHostResult(
+    await loadCanvasImage(canvas, source),
+    'canvas-image',
+    CANVAS_IMAGE_METHODS,
+    (value) => ({
+      width: (value as InstanceType<CanvasModule['Image']>).width,
+      height: (value as InstanceType<CanvasModule['Image']>).height,
+    }),
+  );
+}
+
 async function loadCanvasImage(
   canvas: CanvasModule,
   source: string | Buffer,
@@ -205,13 +227,7 @@ async function loadCanvasImage(
     return canvas.loadImage(source);
   }
 
-  const url = String(source);
-  if (isBlockedLocalPath(url)) {
-    throw new Error('loadImage: only http(s) or data URLs are allowed — local file paths are blocked.');
-  }
-  assertHttpOrDataUrl(url, 'loadImage');
-
-  const normalizedUrl = normalizeCanvasImageUrl(url);
+  const normalizedUrl = normalizeCanvasImageUrl(String(source));
   try {
     return await canvas.loadImage(normalizedUrl);
   } catch {
