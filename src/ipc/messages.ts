@@ -24,8 +24,8 @@ export type WorkerToParentMessage =
   | { type: 'pong'; requestId: string; ok: boolean };
 
 export type ParentToWorkerMessage =
-  | { type: 'start' }
-  | { type: 'reload' }
+  | { type: 'start'; config: Record<string, unknown> }
+  | { type: 'reload'; config: Record<string, unknown> }
   | { type: 'stop' }
   | { type: 'ping'; requestId: string }
   | {

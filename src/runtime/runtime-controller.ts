@@ -32,7 +32,7 @@ export class RuntimeController {
   }
 
   constructor(dataDir: string, logStore: LogStore, variableStore: VariableDatabase) {
-    this.botStore = new BotStore(dataDir);
+    this.botStore = new BotStore();
     this.variableStore = variableStore;
     this.processManager = new BotProcessManager({
       dataDir,

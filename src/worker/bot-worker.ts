@@ -1,7 +1,7 @@
 import process from 'node:process';
 
 import { isParentMessage, type ParentToWorkerMessage } from '../ipc/messages.js';
-import { BotStore } from '../runtime/bot-store.js';
+import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig } from '../config/js-bot-config.js';
 import { resolveVariableStore } from '../runtime/resolve-variable-store.js';
 import { JsDiscordRunner } from './js-discord-runner.js';
@@ -20,7 +20,6 @@ export async function runBotWorker(): Promise<void> {
     managedRunnerToken: process.env.BOT_CREATOR_MANAGED_RUNNER_TOKEN ?? '',
   });
 
-  const store = new BotStore(dataDir);
   let runner: JsDiscordRunner | null = null;
   let stopping = false;
 
@@ -34,31 +33,25 @@ export async function runBotWorker(): Promise<void> {
     send({ type: 'log', botId, level, message });
   }
 
-  async function loadConfig() {
-    const entry = await store.load(botId);
-    if (!entry) {
-      throw new Error(`Bot "${botId}" config not found.`);
-    }
-    return parseJsBotConfig(entry.config);
+  function parseWorkerConfig(raw: Record<string, unknown>): JsBotConfig {
+    return parseJsBotConfig(raw);
   }
 
-  async function startRunner(): Promise<void> {
+  async function startRunner(config: JsBotConfig): Promise<void> {
     if (runner) {
       await runner.stop();
       runner = null;
     }
 
-    const config = await loadConfig();
     runner = new JsDiscordRunner(botId, config, variableStore, emitLog);
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
     send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });
   }
 
-  async function reloadRunner(): Promise<void> {
-    const config = await loadConfig();
+  async function reloadRunner(config: JsBotConfig): Promise<void> {
     if (!runner) {
-      await startRunner();
+      await startRunner(config);
       return;
     }
     await runner.reload(config);
@@ -79,10 +72,10 @@ export async function runBotWorker(): Promise<void> {
   async function handleMessage(message: ParentToWorkerMessage): Promise<void> {
     switch (message.type) {
       case 'start':
-        await startRunner();
+        await startRunner(parseWorkerConfig(message.config));
         break;
       case 'reload':
-        await reloadRunner();
+        await reloadRunner(parseWorkerConfig(message.config));
         break;
       case 'stop':
         await stopRunner('ipc-stop');

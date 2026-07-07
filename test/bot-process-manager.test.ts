@@ -6,7 +6,7 @@ import { LogStore } from '../src/runtime/log-store.js';
 
 describe('BotProcessManager', () => {
   it('returns default stopped state for unknown bots', () => {
-    const store = new BotStore('./data/test-bots');
+    const store = new BotStore();
     const logs = new LogStore('./data/test-logs/runner.log');
     const manager = new BotProcessManager({
       dataDir: './data/test-bots',
@@ -21,7 +21,7 @@ describe('BotProcessManager', () => {
   });
 
   it('treats starting state as running for conflict checks', () => {
-    const store = new BotStore('./data/test-bots-starting');
+    const store = new BotStore();
     const logs = new LogStore('./data/test-logs/runner-starting.log');
     const manager = new BotProcessManager({
       dataDir: './data/test-bots-starting',

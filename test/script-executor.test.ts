@@ -15,17 +15,12 @@ describe('ScriptExecutor', () => {
         config: { token: 'x' } as never,
         variables,
       },
-      {
-        log: vi.fn(),
-        info: vi.fn(),
-        warn: vi.fn(),
-        error: vi.fn(),
-        debug: vi.fn(),
-      },
+      createLogger(),
     );
 
     expect(result).toBe(2);
     expect(variables.count).toBe(2);
+    executor.dispose();
   });
 
   it('times out long running scripts', async () => {
@@ -39,15 +34,74 @@ describe('ScriptExecutor', () => {
           config: { token: 'x' } as never,
           variables: {},
         },
-        {
-          log: vi.fn(),
-          info: vi.fn(),
-          warn: vi.fn(),
-          error: vi.fn(),
-          debug: vi.fn(),
-        },
+        createLogger(),
         50,
       ),
     ).rejects.toThrow(/timed out/i);
+
+    executor.dispose();
+  });
+
+  it('does not expose require to user scripts', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    await expect(
+      executor.execute(
+        'require("node:fs");',
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/require is not defined/i);
+
+    executor.dispose();
+  });
+
+  it('does not expose process to user scripts', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    await expect(
+      executor.execute(
+        'process.exit(1);',
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/process is not defined/i);
+
+    executor.dispose();
+  });
+
+  it('does not expose config.token to user scripts', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      'return config.token;',
+      {
+        client: {} as never,
+        config: { token: 'super-secret-token' } as never,
+        variables: {},
+      },
+      createLogger(),
+    );
+
+    expect(result).toBeUndefined();
+    executor.dispose();
   });
 });
+
+function createLogger() {
+  return {
+    log: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  };
+}

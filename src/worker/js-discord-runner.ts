@@ -11,6 +11,7 @@ import type { VariableDatabase } from '../runtime/variable-database.js';
 export class JsDiscordRunner {
   private client: Client | null = null;
   private registry: HandlerRegistry | null = null;
+  private executor: ScriptExecutor | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
 
@@ -31,11 +32,12 @@ export class JsDiscordRunner {
       intents: mapIntents(this.config.intents),
     });
 
+    this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
       this.botId,
-      new ScriptExecutor(this.config.scriptTimeoutMs),
+      this.executor,
       this.variableStore,
       (level, message) => this.onLog(level, message),
     );
@@ -90,6 +92,8 @@ export class JsDiscordRunner {
   async stop(): Promise<void> {
     this.registry?.clear();
     this.registry = null;
+    this.executor?.dispose();
+    this.executor = null;
 
     if (this.client) {
       await this.client.destroy();

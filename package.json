@@ -27,6 +27,7 @@
     "discord.js": "^14.21.0",
     "fastify": "^5.4.0",
     "ffmpeg-static": "^5.2.0",
+    "isolated-vm": "^5.0.4",
     "libsodium-wrappers": "^0.7.15",
     "sodium-native": "^4.3.3",
     "zlib-sync": "^0.1.10",

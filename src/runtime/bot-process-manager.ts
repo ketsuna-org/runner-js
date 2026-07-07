@@ -186,8 +186,10 @@ export class BotProcessManager {
 
     try {
       await this.waitForReady(botId, 30_000);
-      await this.send(botId, { type: 'start' });
-      await this.options.botStore.setRunning(botId, true);
+      await this.send(botId, {
+        type: 'start',
+        config: entry.config as unknown as Record<string, unknown>,
+      });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
       await this.cleanupFailedStart(botId, reason);
@@ -202,7 +204,6 @@ export class BotProcessManager {
       if (current) {
         this.states.set(botId, { ...current, state: 'stopped', pid: null });
       }
-      await this.options.botStore.setRunning(botId, false);
       return;
     }
 
@@ -221,14 +222,22 @@ export class BotProcessManager {
       });
     }
 
-    await this.options.botStore.setRunning(botId, false);
   }
 
   async reloadBot(botId: string): Promise<boolean> {
     if (!this.isRunning(botId)) {
       return false;
     }
-    await this.send(botId, { type: 'reload' });
+
+    const entry = await this.options.botStore.load(botId);
+    if (!entry) {
+      throw new Error(`Bot "${botId}" is not synced.`);
+    }
+
+    await this.send(botId, {
+      type: 'reload',
+      config: entry.config as unknown as Record<string, unknown>,
+    });
     return true;
   }
 
@@ -286,7 +295,6 @@ export class BotProcessManager {
         lastSeenAt: new Date().toISOString(),
       });
     }
-    await this.options.botStore.setRunning(botId, false);
   }
 
   private handleWorkerMessage(botId: string, raw: unknown): void {
