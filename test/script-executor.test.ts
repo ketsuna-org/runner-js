@@ -449,6 +449,31 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('allows passing host proxy objects to host methods', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: unknown) => ({ ok: true, payload }));
+
+    await executor.execute(
+      `
+        console.log(message);
+        await message.reply(message.content);
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: 'hello',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('hello');
+    executor.dispose();
+  });
+
   it('calls host bridged methods such as interaction.reply', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async () => ({ ok: true }));

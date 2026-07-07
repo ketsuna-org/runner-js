@@ -8,6 +8,7 @@ import {
 import {
   HostObjectRegistry,
   type HostProxyDescriptor,
+  isHostArgRef,
   isHostProxyDescriptor,
 } from './script-host-registry.js';
 
@@ -413,15 +414,28 @@ function descriptor(
 ): HostProxyDescriptor {
   return {
     id: registry.register(prefix, target),
-    snapshot,
+    snapshot: copySerializable(snapshot) as Record<string, unknown>,
     methods: [...methods],
   };
 }
 
-function resolveHostArg(registry: HostObjectRegistry, value: unknown): unknown {
-  if (isHostProxyDescriptor(value)) {
-    return registry.resolve(value.id);
+export function resolveHostArg(registry: HostObjectRegistry, value: unknown): unknown {
+  if (isHostProxyDescriptor(value) || isHostArgRef(value)) {
+    return registry.resolve(isHostArgRef(value) ? value.__hostArgRef : value.id);
   }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveHostArg(registry, entry));
+  }
+
+  if (value != null && typeof value === 'object') {
+    const output: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      output[key] = resolveHostArg(registry, entry);
+    }
+    return output;
+  }
+
   return value;
 }
 

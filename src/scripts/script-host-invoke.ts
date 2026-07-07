@@ -1,4 +1,5 @@
 import type { ModuleRegistry } from './script-host-modules.js';
+import { isHostArgRef, isHostProxyDescriptor } from './script-host-registry.js';
 import {
   isBlockedClientProperty,
   wrapDynamicHostRead,
@@ -15,8 +16,12 @@ export async function invokeHostTarget(
 ): Promise<unknown> {
   const { registry, wrapHostResult } = moduleRegistry;
 
+  const resolvedArgs = args.map((arg) =>
+    resolveBridgeArg(moduleRegistry, registry, targets, arg),
+  );
+
   if (method === '__set') {
-    const [property, value] = args;
+    const [property, value] = resolvedArgs;
     const target = resolveInvokeTarget(moduleRegistry, registry, targets, targetId);
     if (clientRoot != null && isBlockedClientProperty(clientRoot, target, String(property))) {
       throw new Error('Cannot set "token" on client.');
@@ -28,7 +33,7 @@ export async function invokeHostTarget(
   const target = resolveInvokeTarget(moduleRegistry, registry, targets, targetId);
 
   if (typeof target === 'function') {
-    return wrapHostResult(await (target as (...fnArgs: unknown[]) => unknown)(...args));
+    return wrapHostResult(await (target as (...fnArgs: unknown[]) => unknown)(...resolvedArgs));
   }
 
   const record = target as Record<string, unknown>;
@@ -37,7 +42,33 @@ export async function invokeHostTarget(
     throw new Error(`Host bridge method "${targetId}.${method}" is not available.`);
   }
 
-  return wrapHostResult(await fn.apply(target, args));
+  return wrapHostResult(await fn.apply(target, resolvedArgs));
+}
+
+function resolveBridgeArg(
+  moduleRegistry: ModuleRegistry,
+  registry: HostObjectRegistry,
+  targets: Map<string, unknown>,
+  value: unknown,
+): unknown {
+  if (isHostProxyDescriptor(value) || isHostArgRef(value)) {
+    const id = isHostArgRef(value) ? value.__hostArgRef : value.id;
+    return resolveInvokeTarget(moduleRegistry, registry, targets, id);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry) => resolveBridgeArg(moduleRegistry, registry, targets, entry));
+  }
+
+  if (value != null && typeof value === 'object') {
+    const output: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      output[key] = resolveBridgeArg(moduleRegistry, registry, targets, entry);
+    }
+    return output;
+  }
+
+  return value;
 }
 
 export function resolveInvokeTarget(

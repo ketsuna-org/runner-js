@@ -15,6 +15,40 @@ const BOOTSTRAP_SCRIPT = `
   let __drainDeadline = 0;
   const __hostSpecs = [];
   const __pendingHostWork = new Set();
+  const __hostProxyTargets = new WeakMap();
+
+  function __markHostProxyTarget(proxy, spec) {
+    __hostProxyTargets.set(proxy, spec.id);
+    return proxy;
+  }
+
+  function __sanitizeHostArg(value) {
+    if (value == null) {
+      return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      return value;
+    }
+    const hostId = __hostProxyTargets.get(value);
+    if (hostId) {
+      return { __hostArgRef: hostId };
+    }
+    if (Array.isArray(value)) {
+      return value.map(__sanitizeHostArg);
+    }
+    if (typeof value === 'object') {
+      const output = {};
+      for (const key of Object.keys(value)) {
+        output[key] = __sanitizeHostArg(value[key]);
+      }
+      return output;
+    }
+    return value;
+  }
+
+  function __sanitizeHostArgs(args) {
+    return args.map(__sanitizeHostArg);
+  }
 
   function __setSession(id) {
     __sessionId = id;
@@ -71,7 +105,13 @@ const BOOTSTRAP_SCRIPT = `
     if (!__bridgeRef) {
       return Promise.reject(new Error('Host bridge is not available.'));
     }
-    const result = __bridgeRef.apply(undefined, [__sessionId, 'invoke', targetId, method, args], {
+    const result = __bridgeRef.apply(undefined, [
+      __sessionId,
+      'invoke',
+      targetId,
+      method,
+      __sanitizeHostArgs(args),
+    ], {
       arguments: { copy: true },
       result: { promise: true, copy: true },
     });
@@ -92,7 +132,7 @@ const BOOTSTRAP_SCRIPT = `
   }
 
   function __makeDynamicHostProxy(spec) {
-    return new Proxy(Object.create(null), {
+    return __markHostProxyTarget(new Proxy(Object.create(null), {
       get(obj, prop) {
         if (typeof prop === 'symbol') {
           return undefined;
@@ -107,7 +147,7 @@ const BOOTSTRAP_SCRIPT = `
         __trackHostPromise(__hostCall(spec.id, '__set', [String(prop), value]));
         return true;
       },
-    });
+    }), spec);
   }
 
   function __makeHostProxy(spec) {
@@ -128,7 +168,7 @@ const BOOTSTRAP_SCRIPT = `
       target[method] = (...args) => __hostCall(spec.id, method, args);
     }
 
-    return new Proxy(target, {
+    return __markHostProxyTarget(new Proxy(target, {
       get(obj, prop) {
         if (typeof prop === 'symbol') {
           return undefined;
@@ -150,7 +190,7 @@ const BOOTSTRAP_SCRIPT = `
         obj[prop] = value;
         return true;
       },
-    });
+    }), spec);
   }
 
   function __buildModule(spec) {

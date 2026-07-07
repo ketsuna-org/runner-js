@@ -5,6 +5,18 @@ export interface HostProxyDescriptor {
   dynamic?: boolean;
 }
 
+export interface HostArgRef {
+  __hostArgRef: string;
+}
+
+export function isHostArgRef(value: unknown): value is HostArgRef {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as HostArgRef).__hostArgRef === 'string'
+  );
+}
+
 export class HostObjectRegistry {
   private readonly objects = new Map<string, unknown>();
   private sequence = 0;
