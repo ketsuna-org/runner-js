@@ -112,7 +112,23 @@ export function createHostBridgeSession(
 
     if (targetId === '__fetch') {
       const response = await fetch(...(args as Parameters<typeof fetch>));
-      return moduleRegistry.wrapHostResult(await responseToPlain(response));
+      const plain = await responseToPlain(response);
+      return moduleRegistry.wrapHostResult(
+        plain,
+        'fetch-response',
+        ['text', 'json'],
+        (target) => {
+          const record = target as Record<string, unknown>;
+          return {
+            ok: record.ok,
+            status: record.status,
+            statusText: record.statusText,
+            url: record.url,
+            headers: record.headers,
+            body: record.body,
+          };
+        },
+      );
     }
 
     return invokeHostTarget(
@@ -263,13 +279,40 @@ function registerDbTargets(
 
 async function responseToPlain(response: Response): Promise<Record<string, unknown>> {
   const bodyText = await response.text();
-  return {
+  return createFetchResponseValue({
     ok: response.ok,
     status: response.status,
     statusText: response.statusText,
     url: response.url,
     headers: Object.fromEntries(response.headers.entries()),
     body: bodyText,
+  });
+}
+
+export function createFetchResponseValue(meta: {
+  ok: boolean;
+  status: number;
+  statusText: string;
+  url: string;
+  headers: Record<string, string>;
+  body: string;
+}): Record<string, unknown> {
+  const { body: bodyText, ...snapshot } = meta;
+
+  return {
+    ...snapshot,
+    body: bodyText,
+    text: async () => bodyText,
+    json: async () => {
+      if (!bodyText.trim()) {
+        return null;
+      }
+      return JSON.parse(bodyText) as unknown;
+    },
+    toJSON: () => ({
+      ...snapshot,
+      body: bodyText,
+    }),
   };
 }
 

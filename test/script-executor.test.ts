@@ -548,6 +548,96 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('exposes synchronous voice player methods', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        let skipped = true;
+        let playerIsPromise = false;
+        let playType = 'missing';
+        try {
+          const voice = require('@discordjs/voice');
+          if (typeof voice.createAudioPlayer !== 'function') {
+            return { skipped: true };
+          }
+          skipped = false;
+          const player = voice.createAudioPlayer();
+          playerIsPromise = player != null && typeof player.then === 'function';
+          playType = typeof player.play;
+        } catch {}
+        return { skipped, playerIsPromise, playType };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { skipped?: boolean; playerIsPromise?: boolean; playType?: string };
+
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.playerIsPromise).toBe(false);
+    expect(result.playType).toBe('function');
+    executor.dispose();
+  });
+
+  it('exposes fetch response body, text(), and json()', async () => {
+    const executor = new ScriptExecutor(5000);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        statusText: 'OK',
+        url: 'https://example.com/data',
+        headers: new Headers({ 'content-type': 'application/json' }),
+        text: async () => '{"hello":"world"}',
+      })),
+    );
+
+    const result = await executor.execute(
+      `
+        const response = await fetch('https://example.com/data');
+        const text = await response.text();
+        const json = await response.json();
+        return JSON.stringify({
+          body: response.body,
+          text,
+          json,
+          ok: response.ok,
+          status: response.status,
+        });
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as string;
+
+    const parsed = JSON.parse(result) as {
+      body?: string;
+      text?: string;
+      json?: { hello?: string };
+      ok?: boolean;
+      status?: number;
+    };
+
+    expect(parsed.ok).toBe(true);
+    expect(parsed.status).toBe(200);
+    expect(parsed.body).toBe('{"hello":"world"}');
+    expect(parsed.text).toBe('{"hello":"world"}');
+    expect(parsed.json).toEqual({ hello: 'world' });
+    vi.unstubAllGlobals();
+    executor.dispose();
+  });
+
   it('serializes client safely via JSON.stringify', async () => {
     const executor = new ScriptExecutor(5000);
     const client = {

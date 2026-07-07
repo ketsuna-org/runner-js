@@ -352,12 +352,23 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       return value;
     }
 
+    if (prefix != null && methods != null && (typeof value === 'object' || typeof value === 'function')) {
+      return asDynamicDescriptor(descriptor(registry, prefix, methods, snapshot?.(value) ?? {}, value));
+    }
+
+    if (Array.isArray(value)) {
+      return value.map((entry) => wrap(entry));
+    }
+
     let canvas: CanvasModule | null = null;
     let voice: VoiceModule | null = null;
     try {
       canvas = getCanvas();
       voice = getVoice();
     } catch {
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        return asDynamicDescriptor(descriptor(registry, 'host', [], {}, value));
+      }
       return copySerializable(value);
     }
 
@@ -426,15 +437,10 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       ));
     }
 
-    if (Array.isArray(value)) {
-      return value.map((entry) => wrap(entry));
-    }
-
-    if (prefix != null && methods != null && (typeof value === 'object' || typeof value === 'function')) {
-      return asDynamicDescriptor(descriptor(registry, prefix, methods, snapshot?.(value) ?? {}, value));
-    }
-
     if (typeof value === 'object' && !Array.isArray(value)) {
+      if (isPlainDataObject(value)) {
+        return copySerializable(value);
+      }
       return asDynamicDescriptor(descriptor(registry, 'host', [], {}, value));
     }
 
@@ -476,6 +482,11 @@ export function resolveHostArg(registry: HostObjectRegistry, value: unknown): un
   }
 
   return value;
+}
+
+function isPlainDataObject(value: object): boolean {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 function copySerializable(value: unknown): unknown {

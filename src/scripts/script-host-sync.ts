@@ -41,6 +41,33 @@ const CANVAS_MODULE_SYNC_FUNCTIONS = new Set([
   'createImageData',
 ]);
 
+const VOICE_CONNECTION_METHODS = new Set([
+  'subscribe',
+  'destroy',
+  'rejoin',
+  'setSpeaking',
+  'on',
+  'off',
+]);
+
+const AUDIO_PLAYER_METHODS = new Set([
+  'play',
+  'pause',
+  'unpause',
+  'stop',
+  'on',
+  'off',
+]);
+
+const VOICE_MODULE_SYNC_FUNCTIONS = new Set([
+  'joinVoiceChannel',
+  'createAudioPlayer',
+  'createAudioResource',
+  'getVoiceConnection',
+  'generateDependencyReport',
+  'validateDiscordOpusHead',
+]);
+
 export function isSyncHostMethod(targetId: string, method: string): boolean {
   if (targetId.startsWith('canvas:')) {
     return CANVAS_METHODS.has(method);
@@ -48,9 +75,21 @@ export function isSyncHostMethod(targetId: string, method: string): boolean {
   if (targetId.startsWith('canvas-context:')) {
     return CONTEXT2D_METHODS.has(method);
   }
+  if (targetId.startsWith('voice-connection:')) {
+    return VOICE_CONNECTION_METHODS.has(method);
+  }
+  if (targetId.startsWith('audio-player:')) {
+    return AUDIO_PLAYER_METHODS.has(method);
+  }
   return false;
 }
 
 export function isSyncModuleFunction(moduleId: string, functionName: string): boolean {
-  return moduleId === 'module:canvas' && CANVAS_MODULE_SYNC_FUNCTIONS.has(functionName);
+  if (moduleId === 'module:canvas') {
+    return CANVAS_MODULE_SYNC_FUNCTIONS.has(functionName);
+  }
+  if (moduleId === 'module:voice') {
+    return VOICE_MODULE_SYNC_FUNCTIONS.has(functionName);
+  }
+  return false;
 }

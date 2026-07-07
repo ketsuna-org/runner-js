@@ -35,6 +35,14 @@ const VOICE_SPEC = {
     'generateDependencyReport',
     'validateDiscordOpusHead',
   ],
+  syncFunctions: [
+    'joinVoiceChannel',
+    'createAudioPlayer',
+    'createAudioResource',
+    'getVoiceConnection',
+    'generateDependencyReport',
+    'validateDiscordOpusHead',
+  ],
 };
 
 export function createScriptModuleRegistry(context: ScriptExecutionContext): {
