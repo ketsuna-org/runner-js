@@ -1,10 +1,10 @@
 import type { ModuleRegistry } from './script-host-modules.js';
-import { isHostArgRef, isHostProxyDescriptor } from './script-host-registry.js';
+import { isBlockedClientProperty } from './script-host-dynamic.js';
 import {
-  isBlockedClientProperty,
-  wrapDynamicHostRead,
-} from './script-host-dynamic.js';
-import { HostObjectRegistry, isHostProxyDescriptor } from './script-host-registry.js';
+  HostObjectRegistry,
+  isHostArgRef,
+  isHostProxyDescriptor,
+} from './script-host-registry.js';
 
 export async function invokeHostTarget(
   moduleRegistry: ModuleRegistry,
