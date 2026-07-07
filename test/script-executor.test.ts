@@ -248,6 +248,29 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('runs setTimeout callbacks before releasing the host bridge', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async () => ({ ok: true }));
+
+    await executor.execute(
+      `
+        setTimeout(async () => {
+          await interaction.reply({ content: 'delayed' });
+        }, 20);
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        interaction: { reply } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith({ content: 'delayed' });
+    executor.dispose();
+  });
+
   it('waits for fire-and-forget host calls before releasing the bridge', async () => {
     const executor = new ScriptExecutor(5000);
     let replyFinished = false;

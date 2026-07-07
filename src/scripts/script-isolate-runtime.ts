@@ -43,7 +43,19 @@ function __hostCall(targetId, method, args) {
     arguments: { copy: true },
     result: { promise: true, copy: true },
   });
-  return Promise.resolve(result).then(__normalizeHostValue);
+  return __trackHostPromise(Promise.resolve(result).then(__normalizeHostValue));
+}
+const __pendingHostWork = new Set();
+function __trackHostPromise(promise) {
+  __pendingHostWork.add(promise);
+  promise.finally(() => __pendingHostWork.delete(promise));
+  return promise;
+}
+async function __drainPendingHostWork() {
+  while (__pendingHostWork.size > 0) {
+    const pending = Array.from(__pendingHostWork);
+    await Promise.allSettled(pending);
+  }
 }
 function __normalizeHostValue(value) {
   if (value && value.type === 'host-method') {
@@ -194,7 +206,7 @@ export class ScriptIsolateRuntime {
           methods: ['__call'],
         }).fetch;
         globalThis.setTimeout = (callback, ms = 0) =>
-          __hostCall('__delay', '__call', [ms]).then(() => callback());
+          __trackHostPromise(__hostCall('__delay', '__call', [ms]).then(() => callback()));
         globalThis.clearTimeout = (handle) => __hostCall('__clearTimeout', '__call', [handle]);
         globalThis.config = ${JSON.stringify(sanitizeConfigForScript(context.config))};
         globalThis.variables = ${JSON.stringify(context.variables)};
@@ -211,7 +223,13 @@ export class ScriptIsolateRuntime {
         delete globalThis.__hostInvoke;
       `);
 
-      const wrappedScript = `(async () => {\n${trimmed}\n})();`;
+      const wrappedScript = `(async () => {
+try {
+${trimmed}
+} finally {
+  await __drainPendingHostWork();
+}
+})();`;
       const compiled = await this.isolate.compileScript(wrappedScript, {
         filename: 'script.js',
       });
