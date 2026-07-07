@@ -37,7 +37,6 @@ const CONTEXT2D_METHODS = new Set([
 
 const CANVAS_MODULE_SYNC_FUNCTIONS = new Set([
   'createCanvas',
-  'registerFont',
   'createImageData',
 ]);
 

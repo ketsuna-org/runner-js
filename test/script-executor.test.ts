@@ -576,14 +576,21 @@ describe('ScriptExecutor', () => {
             checks.font = err.message;
           }
           try {
-            await canvas.loadImage('/etc/passwd');
+            canvas.loadImage('/etc/passwd');
             checks.image = 'allowed';
           } catch (err) {
             checks.image = err.message;
           }
+          try {
+            canvas.loadImage('/app/package.json');
+            checks.appPackage = 'allowed';
+          } catch (err) {
+            checks.appPackage = err.message;
+          }
         } catch {
           checks.font = 'canvas-unavailable';
           checks.image = 'canvas-unavailable';
+          checks.appPackage = 'canvas-unavailable';
         }
 
         return checks;
@@ -594,16 +601,15 @@ describe('ScriptExecutor', () => {
         variables: {},
       },
       createLogger(),
-    ) as { audio?: string; font?: string; image?: string };
+    ) as { audio?: string; font?: string; image?: string; appPackage?: string };
 
     if (result.audio !== 'voice-unavailable') {
       expect(result.audio).toMatch(/local file paths are blocked/i);
     }
     if (result.font !== 'canvas-unavailable') {
       expect(result.font).toMatch(/local file paths are blocked/i);
-    }
-    if (result.image !== 'canvas-unavailable') {
       expect(result.image).toMatch(/local file paths are blocked/i);
+      expect(result.appPackage).toMatch(/local file paths are blocked/i);
     }
     executor.dispose();
   });
@@ -950,6 +956,27 @@ describe('ScriptExecutor', () => {
     );
 
     expect(reply).toHaveBeenCalledWith('hello');
+    executor.dispose();
+  });
+
+  it('blocks local file paths in Discord send attachments', async () => {
+    const executor = new ScriptExecutor(5000);
+    const send = vi.fn(async () => ({ ok: true }));
+
+    await expect(
+      executor.execute(
+        "await channel.send({ files: ['/app/package.json'] });",
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+          channel: { send } as never,
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/local file paths are blocked/i);
+
+    expect(send).not.toHaveBeenCalled();
     executor.dispose();
   });
 

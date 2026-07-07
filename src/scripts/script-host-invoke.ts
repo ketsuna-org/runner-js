@@ -1,4 +1,5 @@
 import type { ModuleRegistry } from './script-host-modules.js';
+import { assertAllowedHostInvokeArgs } from './script-host-args.js';
 import { isBlockedClientProperty } from './script-host-dynamic.js';
 import {
   HostObjectRegistry,
@@ -66,6 +67,7 @@ function invokeHostTargetInternal(
   const resolvedArgs = args.map((arg) =>
     resolveBridgeArg(moduleRegistry, registry, targets, arg, dispatchListener),
   );
+  assertAllowedHostInvokeArgs(resolvedArgs);
 
   if (method === '__set') {
     const [property, value] = resolvedArgs;

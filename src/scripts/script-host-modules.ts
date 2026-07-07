@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import type { ScriptExecutionContext } from './script-context.js';
 import { assertHttpOrDataUrl, isBlockedLocalPath } from './script-host-path.js';
+import { assertAllowedFontSource, registerRemoteFont } from './script-host-remote-font.js';
 import type { VoiceSessionCleanup } from './script-host-voice-session.js';
 import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
 import {
@@ -175,11 +176,9 @@ function buildCanvasModule(
     },
     createImageData: (array: Uint8ClampedArray, width: number, height?: number) =>
       wrapHostResult(canvas.createImageData(array, width, height)),
-    registerFont: (path: string, options: { family: string }) => {
-      if (isBlockedLocalPath(String(path))) {
-        throw new Error('registerFont: local file paths are blocked.');
-      }
-      return canvas.registerFont(path, options);
+    registerFont: (source: string, options: { family: string }) => {
+      assertAllowedFontSource(String(source));
+      return registerRemoteFont(canvas.registerFont.bind(canvas), String(source), options);
     },
     PNG_NO_FILTERS: canvas.Canvas.PNG_NO_FILTERS,
     PNG_ALL_FILTERS: canvas.Canvas.PNG_ALL_FILTERS,

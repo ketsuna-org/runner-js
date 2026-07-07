@@ -272,7 +272,7 @@ const BOOTSTRAP_SCRIPT = `
     const syncFunctions = new Set(Array.isArray(spec.syncFunctions) ? spec.syncFunctions : []);
     for (let i = 0; i < spec.functions.length; i++) {
       const fnName = spec.functions[i];
-      if (fnName === 'createAudioResource' || fnName === 'loadImage') {
+      if (fnName === 'createAudioResource' || fnName === 'loadImage' || fnName === 'registerFont') {
         mod[fnName] = (...args) =>
           __looksLikeBlockedLocalPath(args[0])
             ? __hostCallSync(spec.id, fnName, args)
