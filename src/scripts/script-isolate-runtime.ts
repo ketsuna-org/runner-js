@@ -26,13 +26,13 @@ function __makeHostProxy(spec, bridge) {
   for (let i = 0; i < spec.methods.length; i++) {
     const method = spec.methods[i];
     if (method === '__call') {
-      obj.fetch = (...args) => bridge.apply(undefined, ['invoke', spec.id, '__call', args], {
+      obj.fetch = (...args) => bridge.apply(undefined, [spec.id, '__call', args], {
         arguments: { copy: true },
         result: { promise: true, copy: true },
       });
       continue;
     }
-    obj[method] = (...args) => bridge.apply(undefined, ['invoke', spec.id, method, args], {
+    obj[method] = (...args) => bridge.apply(undefined, [spec.id, method, args], {
       arguments: { copy: true },
       result: { promise: true, copy: true },
     });
@@ -74,7 +74,7 @@ export class ScriptIsolateRuntime {
       await jail.set('global', jail.derefInto());
       this.bootstrap.runSync(ivmContext);
 
-      jail.setSync('__hostBridge', bridgeBundle.bridgeRef);
+      jail.setSync('__hostInvoke', bridgeBundle.invokeRef);
 
       const specs = bridgeBundle.objectSpecs.map((spec) => ({
         id: spec.id,
@@ -85,7 +85,7 @@ export class ScriptIsolateRuntime {
       await ivmContext.evalSync(`
         const __specs = ${JSON.stringify(specs)};
         const __find = (id) => __specs.find((entry) => entry.id === id) ?? null;
-        const __bridge = __hostBridge;
+        const __bridge = __hostInvoke;
         globalThis.client = __makeHostProxy(__find('client'), __bridge);
         globalThis.interaction = __makeHostProxy(__find('interaction'), __bridge);
         globalThis.message = __makeHostProxy(__find('message'), __bridge);
@@ -106,18 +106,19 @@ export class ScriptIsolateRuntime {
           snapshot: {},
           methods: ['__call'],
         }, __bridge).fetch;
-        globalThis.setTimeout = (callback, ms) => __bridge.apply(undefined, ['invoke', '__setTimeout', '__call', [callback, ms]], {
-          arguments: { reference: true },
-          result: { promise: true, copy: true },
-        });
-        globalThis.clearTimeout = (handle) => __bridge.apply(undefined, ['invoke', '__clearTimeout', '__call', [handle]], {
+        globalThis.setTimeout = (callback, ms = 0) =>
+          __bridge.apply(undefined, ['__delay', '__call', [ms]], {
+            arguments: { copy: true },
+            result: { promise: true, copy: true },
+          }).then(() => callback());
+        globalThis.clearTimeout = (handle) => __bridge.apply(undefined, ['__clearTimeout', '__call', [handle]], {
           arguments: { copy: true },
           result: { copy: true },
         });
         globalThis.config = ${JSON.stringify(sanitizeConfigForScript(context.config))};
         globalThis.variables = ${JSON.stringify(context.variables)};
         globalThis.webhook = ${JSON.stringify(context.webhook ?? null)};
-        delete globalThis.__hostBridge;
+        delete globalThis.__hostInvoke;
       `);
 
       const wrappedScript = `(async () => {\n${trimmed}\n})();`;

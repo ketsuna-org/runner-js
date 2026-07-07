@@ -12,9 +12,9 @@ export interface HostObjectSpec {
 }
 
 export interface HostBridgeBundle {
-  bridgeRef: ivm.Reference<{
-    invoke: (targetId: string, method: string, args: unknown[]) => Promise<unknown>;
-  }>;
+  invokeRef: ivm.Reference<
+    (targetId: string, method: string, args: unknown[]) => Promise<unknown>
+  >;
   objectSpecs: HostObjectSpec[];
   release: () => void;
   clearTimers: () => void;
@@ -193,58 +193,60 @@ export function buildHostBridge(
   });
 
   targets.set('__fetch', fetch);
-  targets.set('__setTimeout', (callback: ivm.Reference<(...args: unknown[]) => unknown>, ms = 0) => {
-    return new Promise<void>((resolve) => {
-      const handle = setTimeout(() => {
-        void callback
-          .apply(undefined, [], { result: { promise: true } })
-          .catch(() => undefined)
-          .finally(() => resolve());
-      }, Number(ms) || 0);
+  targets.set('__delay', (ms = 0) =>
+    new Promise<void>((resolve) => {
+      const handle = setTimeout(() => resolve(), Number(ms) || 0);
       timers.add(handle);
-    });
-  });
+    }),
+  );
   targets.set('__clearTimeout', (handle: NodeJS.Timeout) => {
     clearTimeout(handle);
     timers.delete(handle);
   });
 
-  const bridgeRef = new ivm.Reference({
-    invoke: async (targetId: string, method: string, args: unknown[]) => {
-      const target = targets.get(targetId);
-      if (target == null) {
-        throw new Error(`Host bridge target "${targetId}" is not available.`);
-      }
+  let released = false;
 
-      if (targetId === '__fetch') {
-        const response = await fetch(...(args as Parameters<typeof fetch>));
-        return copyHostValue(await responseToPlain(response));
-      }
+  const invoke = async (targetId: string, method: string, args: unknown[]) => {
+    if (released) {
+      return undefined;
+    }
 
-      if (typeof target === 'function') {
-        return copyHostValue(await (target as (...fnArgs: unknown[]) => unknown)(...args));
-      }
+    const target = targets.get(targetId);
+    if (target == null) {
+      throw new Error(`Host bridge target "${targetId}" is not available.`);
+    }
 
-      const record = target as Record<string, unknown>;
-      const fn = record[method];
-      if (typeof fn !== 'function') {
-        throw new Error(`Host bridge method "${targetId}.${method}" is not available.`);
-      }
+    if (targetId === '__fetch') {
+      const response = await fetch(...(args as Parameters<typeof fetch>));
+      return copyHostValue(await responseToPlain(response));
+    }
 
-      return copyHostValue(await fn.apply(target, args));
-    },
-  });
+    if (typeof target === 'function') {
+      return copyHostValue(await (target as (...fnArgs: unknown[]) => unknown)(...args));
+    }
+
+    const record = target as Record<string, unknown>;
+    const fn = record[method];
+    if (typeof fn !== 'function') {
+      throw new Error(`Host bridge method "${targetId}.${method}" is not available.`);
+    }
+
+    return copyHostValue(await fn.apply(target, args));
+  };
+
+  const invokeRef = new ivm.Reference(invoke);
 
   return {
-    bridgeRef,
+    invokeRef,
     objectSpecs,
     release: () => {
+      released = true;
       for (const handle of timers) {
         clearTimeout(handle);
       }
       timers.clear();
       targets.clear();
-      bridgeRef.release();
+      invokeRef.release();
     },
     clearTimers: () => {
       for (const handle of timers) {

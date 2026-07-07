@@ -94,6 +94,25 @@ describe('ScriptExecutor', () => {
     expect(result).toBeUndefined();
     executor.dispose();
   });
+
+  it('calls host bridged methods such as interaction.reply', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async () => ({ ok: true }));
+
+    await executor.execute(
+      "await interaction.reply({ content: 'pong' });",
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        interaction: { reply } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith({ content: 'pong' });
+    executor.dispose();
+  });
 });
 
 function createLogger() {
