@@ -115,7 +115,10 @@ export class BotProcessManager {
     });
 
     child.stdout?.on('data', (chunk: Buffer) => {
-      this.options.logStore.append('debug', chunk.toString().trim(), botId);
+      const text = chunk.toString().trim();
+      if (text.length > 0) {
+        this.options.logStore.append('info', text, botId);
+      }
     });
 
     child.stderr?.on('data', (chunk: Buffer) => {

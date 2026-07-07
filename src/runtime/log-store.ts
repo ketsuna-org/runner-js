@@ -21,6 +21,23 @@ export class LogStore {
 
   async init(): Promise<void> {
     await mkdir(path.dirname(this.logFile), { recursive: true });
+    await this.hydrateFromFile();
+  }
+
+  private async hydrateFromFile(): Promise<void> {
+    try {
+      const raw = await readFile(this.logFile, 'utf8');
+      const lines = raw.split('\n').filter((line) => line.trim().length > 0);
+      const slice = lines.slice(-this.maxLines);
+      for (const line of slice) {
+        const parsed = parseStoredLogLine(line);
+        if (parsed) {
+          this.lines.push(parsed);
+        }
+      }
+    } catch {
+      // fresh log file
+    }
   }
 
   append(level: LogLine['level'], message: string, botId?: string): void {
@@ -61,4 +78,26 @@ export class LogStore {
       (line) => `[${line.ts}] [${line.level.toUpperCase()}] ${line.message}`,
     );
   }
+}
+
+const storedLogLine =
+  /^\[([^\]]+)\] \[([A-Z]+)\](?: \[bot:([^\]]+)\])? (.*)$/;
+
+function parseStoredLogLine(line: string): LogLine | null {
+  const match = storedLogLine.exec(line.trim());
+  if (!match) {
+    return null;
+  }
+
+  const level = match[2].toLowerCase();
+  if (level !== 'info' && level !== 'warn' && level !== 'error' && level !== 'debug') {
+    return null;
+  }
+
+  return {
+    ts: match[1],
+    level,
+    botId: match[3] || undefined,
+    message: match[4],
+  };
 }

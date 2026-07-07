@@ -42,6 +42,10 @@ export class JsDiscordRunner {
 
     this.client.once(Events.ClientReady, (client) => {
       applyPresence(client, this.config);
+      this.onLog(
+        'info',
+        `Discord client ready as ${client.user?.tag ?? client.user?.username ?? 'unknown'}`,
+      );
       void registerSlashCommands(client, this.config.token, this.config.commands ?? []).catch(
         (error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
