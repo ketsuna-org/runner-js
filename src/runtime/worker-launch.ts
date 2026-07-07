@@ -27,12 +27,13 @@ export function resolveWorkerLaunch(): { executable: string; args: string[] } {
     };
   }
 
+  // Fork the main entrypoint in worker mode (BOT_CREATOR_WORKER_MODE=1 in child env).
+  // bot-worker.js only exports runBotWorker() and never auto-starts when forked directly.
   return {
     executable: path.join(
       path.dirname(fileURLToPath(import.meta.url)),
       '..',
-      'worker',
-      'bot-worker.js',
+      'index.js',
     ),
     args: [],
   };

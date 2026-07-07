@@ -146,6 +146,10 @@ export class BotProcessManager {
         ? `Worker exited (code=${code}, signal=${signal}): ${stderr}`
         : `Worker exited (code=${code}, signal=${signal})`;
 
+      if (!intentionalStop && current.state === 'starting') {
+        this.options.logStore.append('info', exitDetail, botId);
+      }
+
       if (intentionalStop) {
         this.states.set(botId, {
           ...current,
@@ -185,7 +189,8 @@ export class BotProcessManager {
       await this.send(botId, { type: 'start' });
       await this.options.botStore.setRunning(botId, true);
     } catch (error) {
-      await this.cleanupFailedStart(botId);
+      const reason = error instanceof Error ? error.message : String(error);
+      await this.cleanupFailedStart(botId, reason);
       throw error;
     }
   }
@@ -257,7 +262,12 @@ export class BotProcessManager {
     await this.drainAll();
   }
 
-  private async cleanupFailedStart(botId: string): Promise<void> {
+  private async cleanupFailedStart(botId: string, reason?: string): Promise<void> {
+    const stderr = (this.workerStderr.get(botId) ?? '').trim();
+    const detail = reason ?? 'Worker start failed';
+    const message = stderr.length > 0 ? `${detail}: ${stderr}` : detail;
+    this.options.logStore.append('info', message, botId);
+
     const child = this.workers.get(botId);
     if (child) {
       this.stoppingBots.add(botId);
