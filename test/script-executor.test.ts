@@ -656,12 +656,10 @@ describe('ScriptExecutor', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(mp3Bytes);
-            controller.close();
-          },
-        }),
+        arrayBuffer: async () => mp3Bytes.buffer.slice(
+          mp3Bytes.byteOffset,
+          mp3Bytes.byteOffset + mp3Bytes.byteLength,
+        ),
       })),
     );
 
@@ -701,6 +699,38 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('exposes playAudio on the voice module', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        try {
+          const voice = require('@discordjs/voice');
+          return {
+            skipped: typeof voice.joinVoiceChannel !== 'function',
+            playAudio: typeof voice.playAudio,
+          };
+        } catch {
+          return { skipped: true };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { skipped?: boolean; playAudio?: string };
+
+    if (result.skipped) {
+      executor.dispose();
+      return;
+    }
+
+    expect(result.playAudio).toBe('function');
+    executor.dispose();
+  });
+
   it('rejects player.play when createAudioResource was not awaited', async () => {
     const executor = new ScriptExecutor(5000);
     const mp3Bytes = Buffer.from([
@@ -713,12 +743,10 @@ describe('ScriptExecutor', () => {
         ok: true,
         status: 200,
         statusText: 'OK',
-        body: new ReadableStream({
-          start(controller) {
-            controller.enqueue(mp3Bytes);
-            controller.close();
-          },
-        }),
+        arrayBuffer: async () => mp3Bytes.buffer.slice(
+          mp3Bytes.byteOffset,
+          mp3Bytes.byteOffset + mp3Bytes.byteLength,
+        ),
       })),
     );
 

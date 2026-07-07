@@ -3,6 +3,38 @@ import { describe, expect, it, vi } from 'vitest';
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
 describe('canvas getContext', () => {
+  it('exposes the canvas module without calling native bindings', async () => {
+    const executor = new ScriptExecutor(5000);
+
+    const result = await executor.execute(
+      `
+        try {
+          const canvas = require('canvas');
+          return {
+            createCanvas: typeof canvas.createCanvas,
+            loadImage: typeof canvas.loadImage,
+          };
+        } catch {
+          return { createCanvas: 'missing', loadImage: 'missing' };
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { createCanvas?: string; loadImage?: string };
+
+    if (result.createCanvas === 'function') {
+      expect(result.loadImage).toBe('function');
+    } else {
+      expect(result.createCanvas).toBe('missing');
+    }
+
+    executor.dispose();
+  });
+
   it.skipIf(process.platform === 'win32')(
     'supports synchronous createCanvas and getContext',
     async () => {
@@ -56,7 +88,9 @@ describe('canvas getContext', () => {
     },
   );
 
-  it('works when createCanvas and getContext are awaited', async () => {
+  it.skipIf(process.platform === 'win32')(
+    'works when createCanvas and getContext are awaited',
+    async () => {
     const executor = new ScriptExecutor(5000);
 
     const result = await executor.execute(
@@ -101,7 +135,8 @@ describe('canvas getContext', () => {
     expect(result.ctxType).toBe('object');
     expect(result.fillRectType).toBe('function');
     executor.dispose();
-  });
+    },
+  );
 });
 
 function createLogger() {

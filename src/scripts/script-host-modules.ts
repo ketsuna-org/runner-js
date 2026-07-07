@@ -290,13 +290,14 @@ function wrapVoiceConnection(
   );
 }
 
-async function createRemoteAudioResource(
+const MAX_REMOTE_AUDIO_BYTES = 50 * 1024 * 1024;
+
+async function createRemoteAudioResourceRaw(
   voice: VoiceModule,
-  wrapHostResult: ModuleRegistry['wrapHostResult'],
   url: string,
-  options?: Record<string, unknown>,
+  options: Record<string, unknown> | undefined,
   voiceSession?: VoiceSessionCleanup,
-): Promise<unknown> {
+): Promise<InstanceType<VoiceModule['AudioResource']>> {
   const ffmpeg = ensureFfmpegAvailable();
   if (!ffmpeg.available) {
     throw new Error(
@@ -308,25 +309,77 @@ async function createRemoteAudioResource(
   if (!response.ok) {
     throw new Error(`Failed to fetch audio URL (${response.status} ${response.statusText}).`);
   }
-  if (response.body == null) {
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  if (buffer.byteLength === 0) {
     throw new Error('Audio URL returned an empty body.');
   }
-
-  const stream = Readable.fromWeb(response.body as import('stream/web').ReadableStream);
-  voiceSession?.trackStream(stream);
-  const probed = await voice.demuxProbe(stream);
-  if (probed.stream != null && typeof (probed.stream as Readable).destroy === 'function') {
-    voiceSession?.trackStream(probed.stream as Readable);
+  if (buffer.byteLength > MAX_REMOTE_AUDIO_BYTES) {
+    throw new Error(
+      `Audio file is too large (${buffer.byteLength} bytes). Maximum allowed is ${MAX_REMOTE_AUDIO_BYTES} bytes.`,
+    );
   }
-  return wrapHostResult(
-    voice.createAudioResource(probed.stream, {
-      ...(options as Record<string, unknown>),
+
+  const sourceStream = Readable.from(buffer, { objectMode: false });
+
+  try {
+    const probed = await voice.demuxProbe(sourceStream);
+    if (probed.stream != null && typeof (probed.stream as Readable).destroy === 'function') {
+      voiceSession?.trackStream(probed.stream as Readable);
+    }
+
+    const { inputType: _ignoredInputType, ...safeOptions } = options ?? {};
+    return voice.createAudioResource(probed.stream, {
+      ...safeOptions,
       inputType: probed.type,
-    } as never),
+    } as never);
+  } catch {
+    const fallbackStream = Readable.from(buffer, { objectMode: false });
+    voiceSession?.trackStream(fallbackStream);
+    const { inputType: _ignoredInputType, ...safeOptions } = options ?? {};
+    return voice.createAudioResource(fallbackStream, {
+      ...safeOptions,
+      inputType: voice.StreamType.Arbitrary,
+    } as never);
+  }
+}
+
+async function createRemoteAudioResource(
+  voice: VoiceModule,
+  wrapHostResult: ModuleRegistry['wrapHostResult'],
+  url: string,
+  options?: Record<string, unknown>,
+  voiceSession?: VoiceSessionCleanup,
+): Promise<unknown> {
+  return wrapHostResult(
+    await createRemoteAudioResourceRaw(voice, url, options, voiceSession),
     'audio-resource',
     AUDIO_RESOURCE_METHODS,
     () => ({}),
   );
+}
+
+async function createAudioResourceRaw(
+  voice: VoiceModule,
+  input: unknown,
+  options?: Record<string, unknown>,
+  voiceSession?: VoiceSessionCleanup,
+): Promise<InstanceType<VoiceModule['AudioResource']>> {
+  if (typeof input === 'string') {
+    if (isBlockedLocalPath(input)) {
+      throw new Error(
+        'createAudioResource: only http(s) URLs are allowed — local file paths are blocked.',
+      );
+    }
+    if (/^https?:\/\//i.test(input)) {
+      return createRemoteAudioResourceRaw(voice, input, options, voiceSession);
+    }
+    throw new Error(
+      'createAudioResource: unsupported string input — use an http(s) audio URL.',
+    );
+  }
+
+  return voice.createAudioResource(input as never, options as never);
 }
 
 function buildVoiceModule(
@@ -353,7 +406,12 @@ function buildVoiceModule(
       return wrapVoiceConnection(voice, wrapHostResult, connection, voiceSession);
     },
     createAudioPlayer: (options?: Record<string, unknown>) => {
-      const player = voice.createAudioPlayer(options as never);
+      const player = voice.createAudioPlayer({
+        behaviors: {
+          noSubscriber: voice.NoSubscriberBehavior.Play,
+        },
+        ...(options as Record<string, unknown>),
+      } as never);
       voiceSession?.trackPlayer(player);
       return wrapHostResult(
         player,
@@ -361,6 +419,30 @@ function buildVoiceModule(
         AUDIO_PLAYER_METHODS,
         () => ({}),
       );
+    },
+    playAudio: async (
+      connectionInput: unknown,
+      playerInput: unknown,
+      source: unknown,
+      options?: Record<string, unknown>,
+    ) => {
+      const connection = resolveHostArg(
+        moduleRegistry.registry,
+        connectionInput,
+      ) as InstanceType<VoiceModule['VoiceConnection']>;
+      const player = resolveHostArg(
+        moduleRegistry.registry,
+        playerInput,
+      ) as InstanceType<VoiceModule['AudioPlayer']>;
+      const resource = await createAudioResourceRaw(voice, source, options, voiceSession);
+
+      connection.subscribe(player);
+      voiceSession?.markPlayerPlayed(player);
+      player.play(resource);
+
+      return wrapHostResult({
+        status: player.state.status,
+      });
     },
     createAudioResource: (input: unknown, options?: Record<string, unknown>) => {
       if (typeof input === 'string') {

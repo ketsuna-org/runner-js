@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+
 import prism from 'prism-media';
 
 export interface FfmpegStatus {
@@ -9,8 +12,29 @@ export interface FfmpegStatus {
 }
 
 let cachedStatus: FfmpegStatus | null = null;
+let configuredPath = false;
+
+export function configureFfmpegPath(): void {
+  if (configuredPath || process.env.FFMPEG_PATH) {
+    configuredPath = true;
+    return;
+  }
+
+  configuredPath = true;
+  try {
+    const moduleRequire = createRequire(fileURLToPath(import.meta.url));
+    const ffmpegPath = moduleRequire('ffmpeg-static') as string | null;
+    if (typeof ffmpegPath === 'string' && ffmpegPath.length > 0) {
+      process.env.FFMPEG_PATH = ffmpegPath;
+    }
+  } catch {
+    // Ignore missing ffmpeg-static in this environment.
+  }
+}
 
 export function ensureFfmpegAvailable(): FfmpegStatus {
+  configureFfmpegPath();
+
   if (cachedStatus) {
     return cachedStatus;
   }
@@ -49,4 +73,8 @@ export function logFfmpegStatus(
     );
   }
   return status;
+}
+
+export function resetFfmpegStatusCacheForTests(): void {
+  cachedStatus = null;
 }

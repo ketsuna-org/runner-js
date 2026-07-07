@@ -31,6 +31,7 @@ const VOICE_SPEC = {
     'joinVoiceChannelReady',
     'createAudioPlayer',
     'createAudioResource',
+    'playAudio',
     'getVoiceConnection',
     'entersState',
     'demuxProbe',
