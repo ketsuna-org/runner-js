@@ -1,147 +1,205 @@
 import ivm from 'isolated-vm';
 
-import { buildHostBridge, sanitizeConfigForScript } from './script-host-bridge.js';
+import { ScriptBridgeHost } from './script-bridge-host.js';
+import { sanitizeConfigForScript } from './script-host-bridge.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 
 const DEFAULT_MEMORY_LIMIT_MB = 128;
 
 const BOOTSTRAP_SCRIPT = `
-"use strict";
-const __hostBridgeHolder = { ref: null };
-const __hostSpecs = [];
-function __setHostBridge(ref) {
-  __hostBridgeHolder.ref = ref;
-}
-function __setHostSpecs(specs) {
-  __hostSpecs.length = 0;
-  for (let i = 0; i < specs.length; i++) {
-    __hostSpecs.push(specs[i]);
+(function() {
+  "use strict";
+
+  let __sessionId = 0;
+  let __bridgeRef = null;
+  let __drainDeadline = 0;
+  const __hostSpecs = [];
+  const __pendingHostWork = new Set();
+
+  function __setSession(id) {
+    __sessionId = id;
   }
-}
-function __findHostSpec(id) {
-  for (let i = 0; i < __hostSpecs.length; i++) {
-    if (__hostSpecs[i].id === id) {
-      return __hostSpecs[i];
+
+  function __setBridgeRef(ref) {
+    __bridgeRef = ref;
+  }
+
+  function __setDrainDeadline(ms) {
+    __drainDeadline = Date.now() + ms;
+  }
+
+  function __setHostSpecs(specs) {
+    __hostSpecs.length = 0;
+    for (let i = 0; i < specs.length; i++) {
+      __hostSpecs.push(specs[i]);
     }
   }
-  return null;
-}
-function __hostRead(targetId, prop) {
-  if (!__hostBridgeHolder.ref) {
-    throw new Error('Host bridge is not available.');
-  }
-  return __hostBridgeHolder.ref.applySync(undefined, ['read', targetId, prop], {
-    arguments: { copy: true },
-    result: { copy: true },
-  });
-}
-function __hostCall(targetId, method, args) {
-  if (!__hostBridgeHolder.ref) {
-    return Promise.reject(new Error('Host bridge is not available.'));
-  }
-  const result = __hostBridgeHolder.ref.apply(undefined, ['invoke', targetId, method, args], {
-    arguments: { copy: true },
-    result: { promise: true, copy: true },
-  });
-  return __trackHostPromise(Promise.resolve(result).then(__normalizeHostValue));
-}
-const __pendingHostWork = new Set();
-function __trackHostPromise(promise) {
-  __pendingHostWork.add(promise);
-  promise.finally(() => __pendingHostWork.delete(promise));
-  return promise;
-}
-async function __drainPendingHostWork() {
-  while (__pendingHostWork.size > 0) {
-    const pending = Array.from(__pendingHostWork);
-    await Promise.allSettled(pending);
-  }
-}
-function __normalizeHostValue(value) {
-  if (value && value.type === 'host-method') {
-    return (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
-  }
-  if (value && typeof value.id === 'string' && value.dynamic) {
-    return __makeDynamicHostProxy(value);
-  }
-  if (value && typeof value.id === 'string' && Array.isArray(value.methods)) {
-    return __makeHostProxy(value);
-  }
-  return value;
-}
-function __makeDynamicHostProxy(spec) {
-  return new Proxy(Object.create(null), {
-    get(obj, prop) {
-      if (typeof prop === 'symbol') {
-        return undefined;
+
+  function __findHostSpec(id) {
+    for (let i = 0; i < __hostSpecs.length; i++) {
+      if (__hostSpecs[i].id === id) {
+        return __hostSpecs[i];
       }
-      const key = String(prop);
-      if (key === 'then' || key === 'catch' || key === 'finally') {
-        return undefined;
-      }
-      return __normalizeHostValue(__hostRead(spec.id, key));
-    },
-    set(obj, prop, value) {
-      __hostCall(spec.id, '__set', [String(prop), value]);
-      return true;
-    },
-  });
-}
-function __makeHostProxy(spec, bridge) {
-  if (!spec) {
+    }
     return null;
   }
-  if (spec.dynamic) {
-    return __makeDynamicHostProxy(spec);
-  }
-  const methods = new Set(Array.isArray(spec.methods) ? spec.methods : []);
-  const target = Object.assign({}, spec.snapshot || {});
 
-  for (const method of methods) {
-    if (method === '__call') {
-      target.fetch = (...args) => __hostCall(spec.id, '__call', args);
-      continue;
+  function __trackHostPromise(promise) {
+    __pendingHostWork.add(promise);
+    promise.finally(() => __pendingHostWork.delete(promise));
+    return promise;
+  }
+
+  async function __drainPendingHostWork() {
+    while (__pendingHostWork.size > 0 && Date.now() < __drainDeadline) {
+      const pending = Array.from(__pendingHostWork);
+      await Promise.allSettled(pending);
     }
-    target[method] = (...args) => __hostCall(spec.id, method, args);
   }
 
-  return new Proxy(target, {
-    get(obj, prop) {
-      if (typeof prop === 'symbol') {
-        return undefined;
-      }
-      const key = String(prop);
-      if (key === 'then' || key === 'catch' || key === 'finally') {
-        return undefined;
-      }
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        return obj[key];
-      }
-      return __normalizeHostValue(__hostRead(spec.id, key));
-    },
-    set(obj, prop, value) {
-      if (methods.has(String(prop))) {
-        return false;
-      }
-      __hostCall(spec.id, '__set', [String(prop), value]);
-      obj[prop] = value;
-      return true;
-    },
-  });
-}
-function __buildModule(spec) {
-  const mod = Object.assign({}, spec.constants || {});
-  for (let i = 0; i < spec.functions.length; i++) {
-    const fnName = spec.functions[i];
-    mod[fnName] = (...args) => __hostCall(spec.id, fnName, args);
+  function __hostRead(targetId, prop) {
+    if (!__bridgeRef) {
+      throw new Error('Host bridge is not available.');
+    }
+    return __bridgeRef.applySync(undefined, [__sessionId, 'read', targetId, prop], {
+      arguments: { copy: true },
+      result: { copy: true },
+    });
   }
-  return mod;
-}
+
+  function __hostCall(targetId, method, args) {
+    if (!__bridgeRef) {
+      return Promise.reject(new Error('Host bridge is not available.'));
+    }
+    const result = __bridgeRef.apply(undefined, [__sessionId, 'invoke', targetId, method, args], {
+      arguments: { copy: true },
+      result: { promise: true, copy: true },
+    });
+    return __trackHostPromise(Promise.resolve(result).then(__normalizeHostValue));
+  }
+
+  function __normalizeHostValue(value) {
+    if (value && value.type === 'host-method') {
+      return (...args) => __trackHostPromise(__hostCall(value.id, value.method, args));
+    }
+    if (value && typeof value.id === 'string' && value.dynamic) {
+      return __makeDynamicHostProxy(value);
+    }
+    if (value && typeof value.id === 'string' && Array.isArray(value.methods)) {
+      return __makeHostProxy(value);
+    }
+    return value;
+  }
+
+  function __makeDynamicHostProxy(spec) {
+    return new Proxy(Object.create(null), {
+      get(obj, prop) {
+        if (typeof prop === 'symbol') {
+          return undefined;
+        }
+        const key = String(prop);
+        if (key === 'then' || key === 'catch' || key === 'finally') {
+          return undefined;
+        }
+        return __normalizeHostValue(__hostRead(spec.id, key));
+      },
+      set(obj, prop, value) {
+        __trackHostPromise(__hostCall(spec.id, '__set', [String(prop), value]));
+        return true;
+      },
+    });
+  }
+
+  function __makeHostProxy(spec) {
+    if (!spec) {
+      return null;
+    }
+    if (spec.dynamic) {
+      return __makeDynamicHostProxy(spec);
+    }
+    const methods = new Set(Array.isArray(spec.methods) ? spec.methods : []);
+    const target = Object.assign({}, spec.snapshot || {});
+
+    for (const method of methods) {
+      if (method === '__call') {
+        target.fetch = (...args) => __hostCall(spec.id, '__call', args);
+        continue;
+      }
+      target[method] = (...args) => __hostCall(spec.id, method, args);
+    }
+
+    return new Proxy(target, {
+      get(obj, prop) {
+        if (typeof prop === 'symbol') {
+          return undefined;
+        }
+        const key = String(prop);
+        if (key === 'then' || key === 'catch' || key === 'finally') {
+          return undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(obj, key)) {
+          return obj[key];
+        }
+        return __normalizeHostValue(__hostRead(spec.id, key));
+      },
+      set(obj, prop, value) {
+        if (methods.has(String(prop))) {
+          return false;
+        }
+        __trackHostPromise(__hostCall(spec.id, '__set', [String(prop), value]));
+        obj[prop] = value;
+        return true;
+      },
+    });
+  }
+
+  function __buildModule(spec) {
+    const mod = Object.assign({}, spec.constants || {});
+    for (let i = 0; i < spec.functions.length; i++) {
+      const fnName = spec.functions[i];
+      mod[fnName] = (...args) => __hostCall(spec.id, fnName, args);
+    }
+    return mod;
+  }
+
+  globalThis.__sandboxSetup = {
+    setSession: __setSession,
+    setBridgeRef: __setBridgeRef,
+    setDrainDeadline: __setDrainDeadline,
+    setHostSpecs: __setHostSpecs,
+    makeHostProxy: __makeHostProxy,
+    buildModule: __buildModule,
+  };
+  globalThis.__drainPendingHostWork = __drainPendingHostWork;
+  globalThis.setTimeout = (callback, ms = 0) =>
+    __trackHostPromise(__hostCall('__delay', '__call', [ms]).then(() => callback()));
+  globalThis.clearTimeout = (handle) =>
+    __trackHostPromise(__hostCall('__clearTimeout', '__call', [handle]));
+
+  const __globalEval = eval;
+  globalThis.eval = (code) => {
+    const result = __globalEval(code);
+    if (result != null && typeof result.then === 'function') {
+      return __trackHostPromise(Promise.resolve(result));
+    }
+    return result;
+  };
+
+  if (typeof queueMicrotask === 'function') {
+    const __nativeQueueMicrotask = queueMicrotask;
+    globalThis.queueMicrotask = (callback) => {
+      __nativeQueueMicrotask(() => {
+        __trackHostPromise(Promise.resolve().then(() => callback()));
+      });
+    };
+  }
+})();
 `;
 
 export class ScriptIsolateRuntime {
   private readonly isolate: ivm.Isolate;
   private readonly bootstrap: ivm.Script;
+  private readonly bridgeHost: ScriptBridgeHost;
   private disposed = false;
   private executionChain: Promise<void> = Promise.resolve();
 
@@ -150,6 +208,7 @@ export class ScriptIsolateRuntime {
     this.bootstrap = this.isolate.compileScriptSync(BOOTSTRAP_SCRIPT, {
       filename: 'bootstrap.js',
     });
+    this.bridgeHost = new ScriptBridgeHost();
   }
 
   async execute(
@@ -181,7 +240,8 @@ export class ScriptIsolateRuntime {
       return undefined;
     }
 
-    const bridgeBundle = buildHostBridge(context, logger);
+    const sessionId = this.bridgeHost.createSession(context, logger);
+    const { objectSpecs, moduleSpecs } = this.bridgeHost.getSessionSpecs(sessionId);
     const ivmContext = await this.isolate.createContext();
     const jail = ivmContext.global;
 
@@ -189,9 +249,9 @@ export class ScriptIsolateRuntime {
       await jail.set('global', jail.derefInto());
       this.bootstrap.runSync(ivmContext);
 
-      jail.setSync('__hostInvoke', bridgeBundle.bridgeRef);
+      jail.setSync('__hostBridge', this.bridgeHost.bridgeRef);
 
-      const specs = bridgeBundle.objectSpecs.map((spec) => ({
+      const specs = objectSpecs.map((spec) => ({
         id: spec.id,
         snapshot: spec.snapshot,
         methods: spec.methods,
@@ -199,32 +259,34 @@ export class ScriptIsolateRuntime {
       }));
 
       await ivmContext.evalSync(`
+        const setup = globalThis.__sandboxSetup;
+        setup.setSession(${sessionId});
+        setup.setBridgeRef(__hostBridge);
+        setup.setDrainDeadline(${timeoutMs});
+        setup.setHostSpecs(${JSON.stringify(specs)});
         const __specs = ${JSON.stringify(specs)};
-        const __moduleSpecs = ${JSON.stringify(bridgeBundle.moduleSpecs)};
+        const __moduleSpecs = ${JSON.stringify(moduleSpecs)};
         const __find = (id) => __specs.find((entry) => entry.id === id) ?? null;
-        globalThis.client = __makeHostProxy(__find('client'));
-        globalThis.interaction = __makeHostProxy(__find('interaction'));
-        globalThis.message = __makeHostProxy(__find('message'));
-        globalThis.member = __makeHostProxy(__find('member'));
-        globalThis.guild = __makeHostProxy(__find('guild'));
-        globalThis.channel = __makeHostProxy(__find('channel'));
-        globalThis.db = __makeHostProxy(__find('db'));
+        globalThis.client = setup.makeHostProxy(__find('client'));
+        globalThis.interaction = setup.makeHostProxy(__find('interaction'));
+        globalThis.message = setup.makeHostProxy(__find('message'));
+        globalThis.member = setup.makeHostProxy(__find('member'));
+        globalThis.guild = setup.makeHostProxy(__find('guild'));
+        globalThis.channel = setup.makeHostProxy(__find('channel'));
+        globalThis.db = setup.makeHostProxy(__find('db'));
         if (globalThis.db) {
-          globalThis.db.global = __makeHostProxy(__find('db.global'));
+          globalThis.db.global = setup.makeHostProxy(__find('db.global'));
         }
-        globalThis.console = __makeHostProxy({
+        globalThis.console = setup.makeHostProxy({
           id: 'console',
           snapshot: {},
           methods: ['log', 'info', 'warn', 'error', 'debug'],
         });
-        globalThis.fetch = __makeHostProxy({
+        globalThis.fetch = setup.makeHostProxy({
           id: '__fetch',
           snapshot: {},
           methods: ['__call'],
         }).fetch;
-        globalThis.setTimeout = (callback, ms = 0) =>
-          __trackHostPromise(__hostCall('__delay', '__call', [ms]).then(() => callback()));
-        globalThis.clearTimeout = (handle) => __hostCall('__clearTimeout', '__call', [handle]);
         globalThis.config = ${JSON.stringify(sanitizeConfigForScript(context.config))};
         globalThis.variables = ${JSON.stringify(context.variables)};
         globalThis.webhook = ${JSON.stringify(context.webhook ?? null)};
@@ -233,19 +295,10 @@ export class ScriptIsolateRuntime {
           if (!spec) {
             throw new Error('Module "' + name + '" is not allowed.');
           }
-          return __buildModule(spec);
+          return setup.buildModule(spec);
         };
-        __setHostSpecs(__specs);
-        __setHostBridge(__hostInvoke);
-        delete globalThis.__hostInvoke;
-        const __globalEval = eval;
-        globalThis.eval = (code) => {
-          const result = __globalEval(code);
-          if (result != null && typeof result.then === 'function') {
-            return __trackHostPromise(Promise.resolve(result));
-          }
-          return result;
-        };
+        delete globalThis.__sandboxSetup;
+        delete globalThis.__hostBridge;
       `);
 
       const wrappedScript = `(async () => {
@@ -260,26 +313,25 @@ ${trimmed}
       });
 
       try {
-        let watchdog: NodeJS.Timeout | undefined;
         const execution = compiled.run(ivmContext, {
           timeout: timeoutMs,
           promise: true,
           copy: true,
         });
 
-        const result = await Promise.race([
-          execution,
-          new Promise<never>((_, reject) => {
-            watchdog = setTimeout(() => {
-              bridgeBundle.clearTimers();
-              reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
-            }, timeoutMs);
-          }),
-        ]).finally(() => {
-          if (watchdog) {
-            clearTimeout(watchdog);
-          }
-        });
+        let result: unknown;
+        try {
+          result = await Promise.race([
+            execution,
+            new Promise<never>((_, reject) => {
+              setTimeout(() => {
+                reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
+              }, timeoutMs);
+            }),
+          ]);
+        } finally {
+          await execution.catch(() => undefined);
+        }
 
         const updatedVariables = await jail.get('variables', { copy: true }) as Record<string, unknown>;
         if (updatedVariables && typeof updatedVariables === 'object') {
@@ -293,10 +345,8 @@ ${trimmed}
         compiled.release();
       }
     } finally {
-      await bridgeBundle.drain(timeoutMs);
-      bridgeBundle.clearTimers();
+      await this.bridgeHost.closeSession(sessionId, timeoutMs);
       ivmContext.release();
-      bridgeBundle.release();
     }
   }
 
@@ -305,6 +355,7 @@ ${trimmed}
       return;
     }
     this.disposed = true;
+    this.bridgeHost.dispose();
     this.bootstrap.release();
     this.isolate.dispose();
   }

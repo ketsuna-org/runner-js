@@ -1,5 +1,3 @@
-import ivm from 'isolated-vm';
-
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { invokeHostTarget, resolveInvokeTarget } from './script-host-invoke.js';
 import { isBlockedClientProperty, wrapDynamicHostRead } from './script-host-dynamic.js';
@@ -16,16 +14,14 @@ export interface HostObjectSpec {
   dynamic?: boolean;
 }
 
-export interface HostBridgeBundle {
-  bridgeRef: ivm.Reference<
-    (kind: string, arg1: string, arg2: unknown, arg3?: unknown) => unknown
-  >;
+export interface HostBridgeSession {
   objectSpecs: HostObjectSpec[];
   moduleSpecs: ModuleSpec[];
-  moduleRegistry: ModuleRegistry;
-  release: () => void;
-  clearTimers: () => void;
+  dispatch: (kind: string, arg1: string, arg2: unknown, arg3?: unknown) => unknown;
   drain: (timeoutMs: number) => Promise<void>;
+  clearTimers: () => void;
+  close: () => void;
+  isClosed: () => boolean;
 }
 
 const DB_METHODS = ['get', 'set', 'delete', 'has', 'list', 'reset'] as const;
@@ -46,15 +42,15 @@ function registerDynamicHost(
   });
 }
 
-export function buildHostBridge(
+export function createHostBridgeSession(
   context: ScriptExecutionContext,
   logger: ScriptLogger,
-): HostBridgeBundle {
+): HostBridgeSession {
   const targets = new Map<string, unknown>();
   const objectSpecs: HostObjectSpec[] = [];
   const timers = new Set<NodeJS.Timeout>();
   const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context);
-  let released = false;
+  let closed = false;
   let bridgeInFlight = 0;
 
   const register = (spec: HostObjectSpec) => {
@@ -110,8 +106,8 @@ export function buildHostBridge(
   });
 
   const invoke = async (targetId: string, method: string, args: unknown[]) => {
-    if (released) {
-      return undefined;
+    if (closed) {
+      throw new Error('Host bridge is not available.');
     }
 
     if (targetId === '__fetch') {
@@ -130,6 +126,10 @@ export function buildHostBridge(
   };
 
   const readPropertySync = (targetId: string, property: string): unknown => {
+    if (closed) {
+      throw new Error('Host bridge is not available.');
+    }
+
     const target = resolveInvokeTarget(
       moduleRegistry,
       moduleRegistry.registry,
@@ -154,14 +154,14 @@ export function buildHostBridge(
     return copyHostValue(value);
   };
 
-  const bridgeDispatch = (
+  const dispatch = (
     kind: string,
     arg1: string,
     arg2: unknown,
     arg3?: unknown,
   ): unknown => {
-    if (released) {
-      return undefined;
+    if (closed) {
+      throw new Error('Host bridge is not available.');
     }
 
     if (kind === 'read') {
@@ -181,30 +181,23 @@ export function buildHostBridge(
     }
   };
 
-  const bridgeRef = new ivm.Reference(bridgeDispatch);
-
   return {
-    bridgeRef,
     objectSpecs,
     moduleSpecs,
-    moduleRegistry,
-    release: () => {
-      released = true;
-      for (const handle of timers) {
-        clearTimeout(handle);
-      }
-      timers.clear();
-      targets.clear();
-      moduleRegistry.registry.clear();
-      bridgeRef.release();
-    },
+    dispatch,
+    drain,
     clearTimers: () => {
       for (const handle of timers) {
         clearTimeout(handle);
       }
       timers.clear();
     },
-    drain,
+    close: () => {
+      closed = true;
+      targets.clear();
+      moduleRegistry.registry.clear();
+    },
+    isClosed: () => closed,
   };
 }
 

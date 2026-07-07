@@ -366,6 +366,89 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('supports eval prefix scripts with async host replies', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string | { content: string }) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return typeof payload === 'string' ? { content: payload } : payload;
+    });
+
+    await executor.execute(
+      `
+        let args = message.content.split(" ");
+        let content = args.slice(1).join(" ");
+        try {
+          await message.reply(String(eval(content)));
+        } catch (err) {
+          await message.reply("error: " + String(err.message));
+        }
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: {
+          content: '!eval 2 + 2',
+          reply,
+        } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('4');
+    executor.dispose();
+  });
+
+  it('does not expose host bridge internals to eval', async () => {
+    const executor = new ScriptExecutor(5000);
+    const reply = vi.fn(async (payload: string) => ({ content: payload }));
+
+    await executor.execute(
+      `
+        let result = 'ok';
+        try {
+          eval('typeof __setHostBridge');
+          if (typeof __setHostBridge !== 'undefined') {
+            result = 'exposed';
+          }
+          if (typeof globalThis.__hostBridgeHolder !== 'undefined') {
+            result = 'exposed';
+          }
+        } catch {}
+        await message.reply(result);
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: { content: '!test', reply } as never,
+      },
+      createLogger(),
+    );
+
+    expect(reply).toHaveBeenCalledWith('ok');
+    executor.dispose();
+  });
+
+  it('times out without host bridge errors', async () => {
+    const executor = new ScriptExecutor(50);
+
+    await expect(
+      executor.execute(
+        'await new Promise((resolve) => setTimeout(resolve, 200));',
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+        },
+        createLogger(),
+        50,
+      ),
+    ).rejects.toThrow(/timed out/i);
+
+    executor.dispose();
+  });
+
   it('calls host bridged methods such as interaction.reply', async () => {
     const executor = new ScriptExecutor(5000);
     const reply = vi.fn(async () => ({ ok: true }));
