@@ -19,4 +19,22 @@ describe('BotProcessManager', () => {
     expect(state.botId).toBe('missing-bot');
     expect(manager.runningCount).toBe(0);
   });
+
+  it('treats starting state as running for conflict checks', () => {
+    const store = new BotStore('./data/test-bots-starting');
+    const logs = new LogStore('./data/test-logs/runner-starting.log');
+    const manager = new BotProcessManager({
+      dataDir: './data/test-bots-starting',
+      botStore: store,
+      logStore: logs,
+    });
+
+  const internal = manager as unknown as {
+    states: Map<string, { botId: string; state: string }>;
+  };
+    internal.states.set('bot-1', { botId: 'bot-1', state: 'starting' });
+
+    expect(manager.isRunning('bot-1')).toBe(true);
+    expect(manager.runningCount).toBe(1);
+  });
 });

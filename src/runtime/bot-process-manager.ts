@@ -180,9 +180,14 @@ export class BotProcessManager {
       this.options.onWorkerExit?.(botId, code, signal);
     });
 
-    await this.waitForReady(botId, 30_000);
-    await this.send(botId, { type: 'start' });
-    await this.options.botStore.setRunning(botId, true);
+    try {
+      await this.waitForReady(botId, 30_000);
+      await this.send(botId, { type: 'start' });
+      await this.options.botStore.setRunning(botId, true);
+    } catch (error) {
+      await this.cleanupFailedStart(botId);
+      throw error;
+    }
   }
 
   async stopBot(botId: string): Promise<void> {
@@ -250,6 +255,28 @@ export class BotProcessManager {
 
   async dispose(): Promise<void> {
     await this.drainAll();
+  }
+
+  private async cleanupFailedStart(botId: string): Promise<void> {
+    const child = this.workers.get(botId);
+    if (child) {
+      this.stoppingBots.add(botId);
+      child.kill('SIGTERM');
+      await waitForExit(child, 5_000);
+      this.workers.delete(botId);
+      this.stoppingBots.delete(botId);
+    }
+    this.workerStderr.delete(botId);
+    const current = this.states.get(botId);
+    if (current) {
+      this.states.set(botId, {
+        ...current,
+        state: 'stopped',
+        pid: null,
+        lastSeenAt: new Date().toISOString(),
+      });
+    }
+    await this.options.botStore.setRunning(botId, false);
   }
 
   private handleWorkerMessage(botId: string, raw: unknown): void {
