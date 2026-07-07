@@ -391,7 +391,6 @@ export class ScriptIsolateRuntime {
   private readonly bootstrap: ivm.Script;
   private readonly bridgeHost: ScriptBridgeHost;
   private disposed = false;
-  private executionChain: Promise<void> = Promise.resolve();
 
   constructor(memoryLimitMb = DEFAULT_MEMORY_LIMIT_MB) {
     this.isolate = new ivm.Isolate({ memoryLimit: memoryLimitMb });
@@ -407,14 +406,7 @@ export class ScriptIsolateRuntime {
     logger: ScriptLogger,
     timeoutMs: number,
   ): Promise<unknown> {
-    let run!: () => Promise<unknown>;
-    run = () => this.executeInIsolate(script, context, logger, timeoutMs);
-    const result = this.executionChain.then(run);
-    this.executionChain = result.then(
-      () => undefined,
-      () => undefined,
-    );
-    return result;
+    return this.executeInIsolate(script, context, logger, timeoutMs);
   }
 
   private async executeInIsolate(

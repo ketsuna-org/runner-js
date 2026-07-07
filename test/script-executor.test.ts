@@ -278,7 +278,7 @@ describe('ScriptExecutor', () => {
     executor.dispose();
   });
 
-  it('serializes concurrent script executions on the same isolate', async () => {
+  it('runs concurrent script executions on the same isolate in parallel', async () => {
     const executor = new ScriptExecutor(5000);
     const order: string[] = [];
     const reply = vi.fn(async (payload: { content: string }) => {
@@ -314,7 +314,7 @@ describe('ScriptExecutor', () => {
     );
 
     await Promise.all([first, second]);
-    expect(order).toEqual(['first', 'second']);
+    expect(order).toEqual(['second', 'first']);
     executor.dispose();
   });
 
