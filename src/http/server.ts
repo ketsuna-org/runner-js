@@ -96,6 +96,17 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     };
   });
 
+  app.get('/bots/running-status', async () => {
+    const bots: Record<string, { connected: boolean; state: string }> = {};
+    for (const state of deps.runtime.listRuntimeStates()) {
+      bots[state.botId] = {
+        connected: state.state === 'running',
+        state: state.state,
+      };
+    }
+    return { bots };
+  });
+
   app.post('/bots/sync', async (request) => {
     const body = request.body as {
       botId?: string;

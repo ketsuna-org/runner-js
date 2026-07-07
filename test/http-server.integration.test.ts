@@ -75,6 +75,14 @@ describe('HTTP server integration', () => {
     const botStatusBody = (await botStatus.json()) as { bot: { botId: string } };
     expect(botStatusBody.bot.botId).toBe('http-bot');
 
+    const runningStatus = await fetch(`${baseUrl}/bots/running-status`);
+    expect(runningStatus.status).toBe(200);
+    const runningStatusBody = (await runningStatus.json()) as {
+      bots: Record<string, { connected: boolean; state: string }>;
+    };
+    expect(runningStatusBody.bots).toEqual({});
+    expect(runningStatusBody.bots['http-bot']).toBeUndefined();
+
     await app.close();
     await runtime.dispose();
   });
