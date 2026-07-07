@@ -26,4 +26,15 @@ describe('script-host-args', () => {
       ]),
     ).not.toThrow();
   });
+
+  it('does not recurse infinitely on circular host objects such as AudioResource', () => {
+    const playStream: Record<string, unknown> = { destroy: () => {} };
+    const resource: Record<string, unknown> = {
+      playStream,
+      volume: { volume: 1 },
+    };
+    playStream.resource = resource;
+
+    expect(() => assertAllowedHostInvokeArgs([resource])).not.toThrow();
+  });
 });

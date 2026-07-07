@@ -122,6 +122,7 @@ export function createVoiceSessionCleanup(): VoiceSessionCleanup {
       for (const player of keepAlivePlayers) {
         if (typeof player.once === 'function') {
           player.once('idle', destroyConnections);
+          player.once('error', destroyConnections);
         } else {
           destroyConnections();
         }

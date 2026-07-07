@@ -2,7 +2,7 @@ import { createRequire } from 'node:module';
 import { Readable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 
-import type { ScriptExecutionContext } from './script-context.js';
+import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import { assertHttpOrDataUrl, isBlockedLocalPath } from './script-host-path.js';
 import { assertAllowedFontSource, registerRemoteFont } from './script-host-remote-font.js';
 import type { VoiceSessionCleanup } from './script-host-voice-session.js';
@@ -126,6 +126,7 @@ export function registerAllowedModuleTargets(
   context: ScriptExecutionContext,
   moduleRegistry: ModuleRegistry,
   voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
 ): string[] {
   const registered: string[] = [];
   const { wrapHostResult } = moduleRegistry;
@@ -142,7 +143,14 @@ export function registerAllowedModuleTargets(
 
   try {
     const voice = getVoice();
-    const voiceModule = buildVoiceModule(context, voice, moduleRegistry, wrapHostResult, voiceSession);
+    const voiceModule = buildVoiceModule(
+      context,
+      voice,
+      moduleRegistry,
+      wrapHostResult,
+      voiceSession,
+      voiceLog,
+    );
     moduleRegistry.registerModule('@discordjs/voice', voiceModule);
     moduleRegistry.registerInvokeTarget('module:voice', voiceModule);
     registered.push('@discordjs/voice');
@@ -292,11 +300,30 @@ function wrapVoiceConnection(
 
 const MAX_REMOTE_AUDIO_BYTES = 50 * 1024 * 1024;
 
+type DestroyableStream = {
+  destroy: () => void;
+};
+
+function trackResourceStream(
+  voiceSession: VoiceSessionCleanup | undefined,
+  resource: { playStream?: unknown },
+): void {
+  const playStream = resource.playStream;
+  if (
+    playStream != null &&
+    typeof playStream === 'object' &&
+    typeof (playStream as DestroyableStream).destroy === 'function'
+  ) {
+    voiceSession?.trackStream(playStream as DestroyableStream);
+  }
+}
+
 async function createRemoteAudioResourceRaw(
   voice: VoiceModule,
   url: string,
   options: Record<string, unknown> | undefined,
   voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
 ): Promise<InstanceType<VoiceModule['AudioResource']>> {
   const ffmpeg = ensureFfmpegAvailable();
   if (!ffmpeg.available) {
@@ -305,9 +332,18 @@ async function createRemoteAudioResourceRaw(
     );
   }
 
+  voiceLog?.info(`Fetching audio URL: ${url}`);
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch audio URL (${response.status} ${response.statusText}).`);
+  }
+
+  const contentLengthHeader = response.headers?.get?.('content-length');
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : 0;
+  if (contentLength > MAX_REMOTE_AUDIO_BYTES) {
+    throw new Error(
+      `Audio file is too large (${contentLength} bytes). Maximum allowed is ${MAX_REMOTE_AUDIO_BYTES} bytes.`,
+    );
   }
 
   const buffer = Buffer.from(await response.arrayBuffer());
@@ -320,27 +356,34 @@ async function createRemoteAudioResourceRaw(
     );
   }
 
+  voiceLog?.info(`Audio URL fetched (${buffer.byteLength} bytes)`);
+
   const sourceStream = Readable.from(buffer, { objectMode: false });
 
   try {
     const probed = await voice.demuxProbe(sourceStream);
-    if (probed.stream != null && typeof (probed.stream as Readable).destroy === 'function') {
-      voiceSession?.trackStream(probed.stream as Readable);
-    }
-
     const { inputType: _ignoredInputType, ...safeOptions } = options ?? {};
-    return voice.createAudioResource(probed.stream, {
+    const resource = voice.createAudioResource(probed.stream, {
       ...safeOptions,
       inputType: probed.type,
     } as never);
-  } catch {
+    trackResourceStream(voiceSession, resource);
+    voiceLog?.info(`Audio resource ready (inputType=${String(probed.type)})`);
+    return resource;
+  } catch (error) {
+    voiceLog?.warn(
+      `Audio demux probe failed, using StreamType.Arbitrary: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
     const fallbackStream = Readable.from(buffer, { objectMode: false });
-    voiceSession?.trackStream(fallbackStream);
     const { inputType: _ignoredInputType, ...safeOptions } = options ?? {};
-    return voice.createAudioResource(fallbackStream, {
+    const resource = voice.createAudioResource(fallbackStream, {
       ...safeOptions,
       inputType: voice.StreamType.Arbitrary,
     } as never);
+    trackResourceStream(voiceSession, resource);
+    return resource;
   }
 }
 
@@ -350,9 +393,10 @@ async function createRemoteAudioResource(
   url: string,
   options?: Record<string, unknown>,
   voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
 ): Promise<unknown> {
   return wrapHostResult(
-    await createRemoteAudioResourceRaw(voice, url, options, voiceSession),
+    await createRemoteAudioResourceRaw(voice, url, options, voiceSession, voiceLog),
     'audio-resource',
     AUDIO_RESOURCE_METHODS,
     () => ({}),
@@ -364,6 +408,7 @@ async function createAudioResourceRaw(
   input: unknown,
   options?: Record<string, unknown>,
   voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
 ): Promise<InstanceType<VoiceModule['AudioResource']>> {
   if (typeof input === 'string') {
     if (isBlockedLocalPath(input)) {
@@ -372,7 +417,7 @@ async function createAudioResourceRaw(
       );
     }
     if (/^https?:\/\//i.test(input)) {
-      return createRemoteAudioResourceRaw(voice, input, options, voiceSession);
+      return createRemoteAudioResourceRaw(voice, input, options, voiceSession, voiceLog);
     }
     throw new Error(
       'createAudioResource: unsupported string input — use an http(s) audio URL.',
@@ -388,6 +433,7 @@ function buildVoiceModule(
   moduleRegistry: ModuleRegistry,
   wrapHostResult: ModuleRegistry['wrapHostResult'],
   voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
 ) {
   return {
     joinVoiceChannel: (options: Record<string, unknown>) =>
@@ -434,7 +480,7 @@ function buildVoiceModule(
         moduleRegistry.registry,
         playerInput,
       ) as InstanceType<VoiceModule['AudioPlayer']>;
-      const resource = await createAudioResourceRaw(voice, source, options, voiceSession);
+      const resource = await createAudioResourceRaw(voice, source, options, voiceSession, voiceLog);
 
       connection.subscribe(player);
       voiceSession?.markPlayerPlayed(player);
@@ -452,7 +498,7 @@ function buildVoiceModule(
           );
         }
         if (/^https?:\/\//i.test(input)) {
-          return createRemoteAudioResource(voice, wrapHostResult, input, options, voiceSession);
+          return createRemoteAudioResource(voice, wrapHostResult, input, options, voiceSession, voiceLog);
         }
         throw new Error(
           'createAudioResource: unsupported string input — use an http(s) audio URL.',

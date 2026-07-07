@@ -52,7 +52,7 @@ export function createHostBridgeSession(
   const objectSpecs: HostObjectSpec[] = [];
   const timers = new Set<NodeJS.Timeout>();
   const voiceSession = createVoiceSessionCleanup();
-  const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context, voiceSession);
+  const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context, voiceSession, logger);
   let closed = false;
   let bridgeInFlight = 0;
 

@@ -120,4 +120,27 @@ describe('voice session cleanup', () => {
 
     expect(destroy).toHaveBeenCalledTimes(1);
   });
+
+  it('cleans up after player errors during deferred playback teardown', () => {
+    const destroy = vi.fn();
+    const once = vi.fn((event: string, listener: () => void) => {
+      if (event === 'error') {
+        listener();
+      }
+    });
+    const session = createVoiceSessionCleanup();
+    session.trackConnection({ destroy });
+    const player = {
+      state: { status: 'idle' },
+      stop: vi.fn(),
+      once,
+    };
+    session.trackPlayer(player);
+    session.markPlayerPlayed(player);
+
+    session.dispose();
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(once).toHaveBeenCalledWith('error', expect.any(Function));
+  });
 });
