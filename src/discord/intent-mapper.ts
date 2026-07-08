@@ -1,10 +1,11 @@
 import { GatewayIntentBits, type GatewayIntentBits as GatewayIntentBitsType } from 'discord.js';
 
 const INTENT_MAP: Record<string, GatewayIntentBitsType> = {
-  'Guilds': GatewayIntentBits.Guilds,
+  Guilds: GatewayIntentBits.Guilds,
   'Guild Members': GatewayIntentBits.GuildMembers,
   'Guild Moderation': GatewayIntentBits.GuildModeration,
   'Guild Emojis and Stickers': GatewayIntentBits.GuildEmojisAndStickers,
+  'Guild Expressions': GatewayIntentBits.GuildEmojisAndStickers,
   'Guild Integrations': GatewayIntentBits.GuildIntegrations,
   'Guild Webhooks': GatewayIntentBits.GuildWebhooks,
   'Guild Invites': GatewayIntentBits.GuildInvites,

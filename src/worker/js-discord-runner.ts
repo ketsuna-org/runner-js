@@ -1,6 +1,12 @@
 import { Client, Events } from 'discord.js';
 
 import type { JsBotConfig } from '../config/js-bot-config.js';
+import {
+  buildEffectiveIntentsMap,
+  buildSafeFallbackIntentsMap,
+  fetchPortalEnabledPrivilegedIntents,
+  intentsMapsEqual,
+} from '../discord/application-intent-sync.js';
 import { registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { mapIntents } from '../discord/intent-mapper.js';
@@ -14,6 +20,7 @@ export class JsDiscordRunner {
   private executor: ScriptExecutor | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
+  private effectiveIntents: Record<string, boolean> = {};
 
   constructor(
     private readonly botId: string,
@@ -25,11 +32,31 @@ export class JsDiscordRunner {
     ) => void,
   ) {}
 
+  private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
+    const warnings: string[] = [];
+    try {
+      const portalEnabled = await fetchPortalEnabledPrivilegedIntents(this.config.token);
+      const effective = buildEffectiveIntentsMap(this.config, portalEnabled, warnings);
+      for (const warning of warnings) {
+        this.onLog('warn', `Intent warning: ${warning}`);
+      }
+      return effective;
+    } catch {
+      const effective = buildSafeFallbackIntentsMap(this.config, warnings);
+      for (const warning of warnings) {
+        this.onLog('warn', `Intent warning: ${warning}`);
+      }
+      return effective;
+    }
+  }
+
   async start(): Promise<void> {
     await this.stop();
 
+    this.effectiveIntents = await this.resolveEffectiveIntents();
+
     this.client = new Client({
-      intents: mapIntents(this.config.intents),
+      intents: mapIntents(this.effectiveIntents),
     });
 
     this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
@@ -68,7 +95,18 @@ export class JsDiscordRunner {
   }
 
   async reload(config: JsBotConfig): Promise<void> {
+    const nextEffective = await this.resolveEffectiveIntents();
+    const intentsChanged = !intentsMapsEqual(this.effectiveIntents, nextEffective);
+    const tokenChanged = this.config.token.trim() !== config.token.trim();
+
     this.config = config;
+
+    if (intentsChanged || tokenChanged) {
+      this.onLog('info', 'Intents or token changed — reconnecting Discord client...');
+      await this.start();
+      return;
+    }
+
     if (!this.client || !this.registry) {
       return;
     }
