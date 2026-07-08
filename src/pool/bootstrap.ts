@@ -1,5 +1,6 @@
 import type { RuntimeController } from '../runtime/runtime-controller.js';
 import type { LogStore } from '../runtime/log-store.js';
+import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
 import type { RunnerEnv } from '../config/env.js';
 
 interface PoolBootstrapBot {
@@ -89,7 +90,18 @@ async function syncAndStartPoolBot(
   await runtime.syncBot(botId, botName || botId, payload.config);
 
   if (desiredState === 'running' && !runtime.isBotRunning(botId)) {
-    await runtime.startBot(botId, botName);
-    logStore.append('info', `[Pool] Bot "${botName || botId}" (${botId}) started.`);
+    try {
+      await runtime.startBot(botId, botName);
+      logStore.append('info', `[Pool] Bot "${botName || botId}" (${botId}) started.`);
+    } catch (error) {
+      if (isDiscordTokenUnauthorized(error)) {
+        logStore.append(
+          'warn',
+          `[Pool] Bot "${botName || botId}" (${botId}) has invalid token; skipping start.`,
+        );
+        return;
+      }
+      throw error;
+    }
   }
 }

@@ -9,6 +9,7 @@ import { resolveWorkerLaunch, shouldSpawnWorkerProcess } from './worker-launch.j
 import { buildWorkerProcessEnv } from './worker-env.js';
 import type { LogStore } from '../runtime/log-store.js';
 import type { BotStore } from '../runtime/bot-store.js';
+import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
 
 export interface ManagedWorkerState {
   botId: string;
@@ -38,8 +39,17 @@ export class BotProcessManager {
     { resolve: (ok: boolean) => void; timer: NodeJS.Timeout }
   >();
   private readonly workerStderr = new Map<string, string>();
+  private readonly tokenInvalidBots = new Set<string>();
 
   constructor(private readonly options: BotProcessManagerOptions) {}
+
+  clearTokenInvalid(botId: string): void {
+    this.tokenInvalidBots.delete(botId);
+  }
+
+  isTokenInvalid(botId: string): boolean {
+    return this.tokenInvalidBots.has(botId);
+  }
 
   listStates(): ManagedWorkerState[] {
     return [...this.states.values()];
@@ -162,15 +172,22 @@ export class BotProcessManager {
       }
 
       if (current.state !== 'stopped') {
+        const lastError = current.lastError ?? exitDetail;
+        const tokenInvalid = isDiscordTokenUnauthorized(lastError);
+        if (tokenInvalid) {
+          this.tokenInvalidBots.add(botId);
+        }
+
         this.states.set(botId, {
           ...current,
           state: 'error',
           pid: null,
-          lastError: current.lastError ?? exitDetail,
+          lastError,
           lastSeenAt: new Date().toISOString(),
+          autoRestart: tokenInvalid ? false : current.autoRestart,
         });
 
-        if (current.autoRestart) {
+        if (current.autoRestart && !tokenInvalid && !this.tokenInvalidBots.has(botId)) {
           this.options.logStore.append('warn', `Auto-restarting bot after exit`, botId);
           setTimeout(() => {
             void this.startBot(botId, current.botName).catch((error) => {
@@ -192,6 +209,9 @@ export class BotProcessManager {
       });
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error);
+      if (isDiscordTokenUnauthorized(error)) {
+        this.tokenInvalidBots.add(botId);
+      }
       await this.cleanupFailedStart(botId, reason);
       throw error;
     }
@@ -288,11 +308,17 @@ export class BotProcessManager {
     this.workerStderr.delete(botId);
     const current = this.states.get(botId);
     if (current) {
+      const tokenInvalid = isDiscordTokenUnauthorized(message);
+      if (tokenInvalid) {
+        this.tokenInvalidBots.add(botId);
+      }
       this.states.set(botId, {
         ...current,
         state: 'stopped',
         pid: null,
         lastSeenAt: new Date().toISOString(),
+        lastError: message,
+        autoRestart: tokenInvalid ? false : current.autoRestart,
       });
     }
   }
@@ -318,15 +344,25 @@ export class BotProcessManager {
           lastSeenAt: now,
         });
         break;
-      case 'status':
+      case 'status': {
+        const lastError = message.lastError ?? current.lastError;
+        const tokenInvalid =
+          message.state === 'error' && lastError != null
+            ? isDiscordTokenUnauthorized(lastError)
+            : false;
+        if (tokenInvalid) {
+          this.tokenInvalidBots.add(botId);
+        }
         this.states.set(botId, {
           ...current,
           state: message.state,
           startedAt: message.startedAt ?? current.startedAt,
-          lastError: message.lastError ?? current.lastError,
+          lastError,
           lastSeenAt: now,
+          autoRestart: tokenInvalid ? false : current.autoRestart,
         });
         break;
+      }
       case 'metrics':
         this.states.set(botId, {
           ...current,

@@ -1,4 +1,5 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
+import { DiscordTokenUnauthorizedError } from './discord-auth-errors.js';
 import { PRIVILEGED_INTENT_KEYS, resolveRequiredIntentKeys } from './intent-resolver.js';
 
 const APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED = 1 << 12;
@@ -46,6 +47,11 @@ export async function fetchPortalEnabledPrivilegedIntents(
   });
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      throw new DiscordTokenUnauthorizedError(
+        `Failed to fetch application flags (${response.status})`,
+      );
+    }
     throw new Error(`Failed to fetch application flags (${response.status})`);
   }
 

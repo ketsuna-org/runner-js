@@ -57,6 +57,7 @@ export class RuntimeController {
     const config = parseJsBotConfig(rawConfig);
     validateJsBotConfig(config);
     await this.botStore.save(botId, botName, config);
+    this.processManager.clearTokenInvalid(botId);
   }
 
   async startBot(botId: string, botName = ''): Promise<void> {

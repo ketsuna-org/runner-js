@@ -10,6 +10,7 @@ import {
   normalizeScopedStorageKey,
   toScopedReferenceKey,
 } from '../runtime/variable-keys.js';
+import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
 
 export interface HttpServerDeps {
   env: RunnerEnv;
@@ -144,6 +145,9 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     } catch (error) {
       if (error instanceof Error && error.message.includes('already running')) {
         throw conflict(error.message);
+      }
+      if (isDiscordTokenUnauthorized(error)) {
+        throw unauthorized('discord_token_invalid');
       }
       throw error;
     }

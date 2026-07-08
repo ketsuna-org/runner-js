@@ -7,6 +7,10 @@ import {
   fetchPortalEnabledPrivilegedIntents,
   intentsMapsEqual,
 } from '../discord/application-intent-sync.js';
+import {
+  DiscordTokenUnauthorizedError,
+  isDiscordTokenUnauthorized,
+} from '../discord/discord-auth-errors.js';
 import { registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { mapIntents } from '../discord/intent-mapper.js';
@@ -41,7 +45,15 @@ export class JsDiscordRunner {
         this.onLog('warn', `Intent warning: ${warning}`);
       }
       return effective;
-    } catch {
+    } catch (error) {
+      if (isDiscordTokenUnauthorized(error)) {
+        throw error instanceof DiscordTokenUnauthorizedError
+          ? error
+          : new DiscordTokenUnauthorizedError(
+              'Discord bot token is invalid or unauthorized while resolving intents',
+              { cause: error },
+            );
+      }
       const effective = buildSafeFallbackIntentsMap(this.config, warnings);
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
