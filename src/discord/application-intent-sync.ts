@@ -59,6 +59,8 @@ export async function fetchPortalEnabledPrivilegedIntents(
   const flags = app.flags ?? 0;
   const enabled = new Set<string>();
 
+  //  Let's first check if they are all Presents.
+
   if (
     (flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS) !== 0 ||
     (flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED) !== 0
@@ -78,6 +80,27 @@ export async function fetchPortalEnabledPrivilegedIntents(
     enabled.add('Message Content');
   }
 
+  if (enabled.size < 3) {
+    // Some of the privileged intents are not enabled, so we will enable them ourselves. (We can only enable LIMITEDS (If bot is unverified))
+    await fetch('https://discord.com/api/v10/applications/@me', {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bot ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        flags:
+          flags | APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED |
+          APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED |
+          APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED,
+      }),
+    });
+
+    // Now we can say that they are all enabled, since we just enabled them ourselves.
+    enabled.add('Guild Members');
+    enabled.add('Guild Presence');
+    enabled.add('Message Content');
+  }
   return enabled;
 }
 
@@ -123,7 +146,7 @@ export function buildSafeFallbackIntentsMap(
 ): Record<string, boolean> {
   warnings?.push(
     'Could not sync intents from Discord Developer Portal — ' +
-      'privileged intents disabled for this connection.',
+    'privileged intents disabled for this connection.',
   );
   return buildEffectiveIntentsMap(config, new Set(), warnings);
 }
