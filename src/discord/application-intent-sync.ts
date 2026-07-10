@@ -40,94 +40,83 @@ type DiscordApplication = {
 export async function fetchPortalEnabledPrivilegedIntents(
   token: string,
 ): Promise<Set<string>> {
-  const response = await fetch('https://discord.com/api/v10/applications/@me', {
-    headers: {
-      Authorization: `Bot ${token}`,
-    },
+  // 1. Récupérer l'application actuelle
+  const appResponse = await fetch('https://discord.com/api/v10/applications/@me', {
+    headers: { Authorization: `Bot ${token}` },
   });
 
-  if (!response.ok) {
-    if (response.status === 401 || response.status === 403) {
-      throw new DiscordTokenUnauthorizedError(
-        `Failed to fetch application flags (${response.status})`,
-      );
+  if (!appResponse.ok) {
+    if (appResponse.status === 401 || appResponse.status === 403) {
+      throw new DiscordTokenUnauthorizedError(`Failed to fetch application flags (${appResponse.status})`);
     }
-    throw new Error(`Failed to fetch application flags (${response.status})`);
+    throw new Error(`Failed to fetch application flags (${appResponse.status})`);
   }
 
-  const app = (await response.json()) as DiscordApplication;
-  const flags = app.flags ?? 0;
+  let app = (await appResponse.json()) as DiscordApplication;
+  let flags = app.flags ?? 0;
   const enabled = new Set<string>();
 
-  //  Let's first check if they are all Presents.
-
-  if (
-    (flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS) !== 0 ||
-    (flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED) !== 0
-  ) {
+  // Vérification des intents actifs (majeurs ou limités)
+  if ((flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS) !== 0 || (flags & APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED) !== 0) {
     enabled.add('Guild Members');
   }
-  if (
-    (flags & APPLICATION_FLAG_GATEWAY_PRESENCE) !== 0 ||
-    (flags & APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED) !== 0
-  ) {
+  if ((flags & APPLICATION_FLAG_GATEWAY_PRESENCE) !== 0 || (flags & APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED) !== 0) {
     enabled.add('Guild Presence');
   }
-  if (
-    (flags & APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT) !== 0 ||
-    (flags & APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED) !== 0
-  ) {
+  if ((flags & APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT) !== 0 || (flags & APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED) !== 0) {
     enabled.add('Message Content');
   }
 
+  // Si au moins un intent est manquant
   if (enabled.size < 3) {
-    // Some of the privileged intents are not enabled, so we will enable them ourselves. (We can only enable LIMITEDS (If bot is unverified))
-
-    const response = await fetch('https://discord.com/api/v10/users/@me', {
-      headers: {
-        Authorization: `Bot ${token}`,
-      },
+    // 2. Récupérer les infos de l'utilisateur (Bot) pour vérifier s'il est vérifié
+    const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: { Authorization: `Bot ${token}` },
     });
 
-    if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
-        throw new DiscordTokenUnauthorizedError(
-          `Failed to fetch user info (${response.status})`,
-        );
+    if (!userResponse.ok) {
+      if (userResponse.status === 401 || userResponse.status === 403) {
+        throw new DiscordTokenUnauthorizedError(`Failed to fetch user info (${userResponse.status})`);
       }
-      throw new Error(`Failed to fetch user info (${response.status})`);
+      throw new Error(`Failed to fetch user info (${userResponse.status})`);
     }
 
-    const user = (await response.json()) as DiscordApplication;
-    if (!user.flags) {
-      throw new Error('Failed to fetch user info (missing flags)');
-    }
+    const user = (await userResponse.json()) as DiscordApplication;
+    const userFlags = user.flags ?? 0;
 
-    const flags = user.flags;
-    //  Before doing anything we check if the Bot is verified or not. (Verified bot is identified with  : 1 << 16	VERIFIED_BOT	Verified Bot)
-    if ((flags & (1 << 16)) !== 0) {
+    // 1 << 16 correspond à USER_FLAG_VERIFIED_BOT
+    if ((userFlags & (1 << 16)) !== 0) {
       throw new Error('Bot is verified, cannot enable privileged intents automatically. Please enable them in the Discord Developer Portal.');
     }
 
-    await fetch('https://discord.com/api/v10/applications/@me', {
+    // 3. COMBINAISON SÉCURISÉE DES FLAGS
+    // On garde l'existant (flags) et on ajoute les versions LIMITED via l'opérateur binaire |
+    const updatedFlags = flags |
+      APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED |
+      APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED |
+      APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED;
+
+    const patchResponse = await fetch('https://discord.com/api/v10/applications/@me', {
       method: 'PATCH',
       headers: {
         Authorization: `Bot ${token}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        flags:
-          APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED |
-          APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED |
-          APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED,
+        flags: updatedFlags, // Envoi des flags combinés
       }),
     });
 
-    // Now we can say that they are all enabled, since we just enabled them ourselves.
+    if (!patchResponse.ok) {
+      throw new Error(`Failed to update application flags via PATCH (${patchResponse.status})`);
+    }
+
+    // On remplit le set puisque la modification a réussi
     enabled.add('Guild Members');
     enabled.add('Guild Presence');
     enabled.add('Message Content');
   }
+
   return enabled;
 }
 
