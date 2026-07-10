@@ -80,8 +80,35 @@ export async function fetchPortalEnabledPrivilegedIntents(
     enabled.add('Message Content');
   }
 
-  if (enabled.size < 3) {
+  if (enabled.size < 3 ) {
     // Some of the privileged intents are not enabled, so we will enable them ourselves. (We can only enable LIMITEDS (If bot is unverified))
+
+   const response = await fetch('https://discord.com/api/v10/users/@me', {
+      headers: {
+        Authorization: `Bot ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
+        throw new DiscordTokenUnauthorizedError(
+          `Failed to fetch user info (${response.status})`,
+        );
+      }
+      throw new Error(`Failed to fetch user info (${response.status})`);
+    }
+
+    const user = (await response.json()) as DiscordApplication;
+    if (!user.flags) {
+      throw new Error('Failed to fetch user info (missing flags)');
+    }
+    
+    const flags = user.flags;
+    //  Before doing anything we check if the Bot is verified or not. (Verified bot is identified with  : 1 << 16	VERIFIED_BOT	Verified Bot)
+    if ((flags & (1 << 16)) !== 0) {
+      throw new Error('Bot is verified, cannot enable privileged intents automatically. Please enable them in the Discord Developer Portal.');
+    }
+
     await fetch('https://discord.com/api/v10/applications/@me', {
       method: 'PATCH',
       headers: {
