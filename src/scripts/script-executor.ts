@@ -1,6 +1,5 @@
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import { ScriptDirectRuntime } from './script-direct-runtime.js';
-import { ScriptIsolateRuntime } from './script-isolate-runtime.js';
 import type { ScriptRuntime } from './script-runtime.js';
 
 export interface ScriptExecutorOptions {
@@ -9,17 +8,37 @@ export interface ScriptExecutorOptions {
 }
 
 export class ScriptExecutor {
-  private readonly runtime: ScriptRuntime;
+  private runtime: ScriptRuntime | null = null;
+  private isolateRuntimePromise: Promise<ScriptRuntime> | null = null;
   readonly sandboxed: boolean;
+  private readonly memoryLimitMb: number;
 
   constructor(
     private readonly defaultTimeoutMs: number,
     options: ScriptExecutorOptions = {},
   ) {
     this.sandboxed = options.sandboxed ?? false;
-    this.runtime = this.sandboxed
-      ? new ScriptIsolateRuntime(options.memoryLimitMb ?? 128)
-      : new ScriptDirectRuntime();
+    this.memoryLimitMb = options.memoryLimitMb ?? 128;
+    if (!this.sandboxed) {
+      this.runtime = new ScriptDirectRuntime();
+    }
+  }
+
+  private loadIsolateRuntime(): Promise<ScriptRuntime> {
+    if (!this.isolateRuntimePromise) {
+      this.isolateRuntimePromise = import('./script-isolate-runtime.js').then(
+        ({ ScriptIsolateRuntime }) => new ScriptIsolateRuntime(this.memoryLimitMb),
+      );
+    }
+    return this.isolateRuntimePromise;
+  }
+
+  private async ensureRuntime(): Promise<ScriptRuntime> {
+    if (this.runtime) {
+      return this.runtime;
+    }
+    this.runtime = await this.loadIsolateRuntime();
+    return this.runtime;
   }
 
   async execute(
@@ -28,10 +47,11 @@ export class ScriptExecutor {
     logger: ScriptLogger,
     timeoutMs = this.defaultTimeoutMs,
   ): Promise<unknown> {
-    return this.runtime.execute(script, context, logger, timeoutMs);
+    const runtime = this.sandboxed ? await this.ensureRuntime() : this.runtime!;
+    return runtime.execute(script, context, logger, timeoutMs);
   }
 
   dispose(): void {
-    this.runtime.dispose();
+    this.runtime?.dispose();
   }
 }

@@ -49,7 +49,7 @@ jobs:
 
       - name: Rebuild native modules (Windows)
         if: runner.os == 'Windows'
-        run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native
+        run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native @libsql/client
 
       - name: Build and test
         run: |

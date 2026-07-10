@@ -41,10 +41,19 @@ function rowNullableNumber(row: Record<string, unknown>, column: string): number
 export class LibsqlVariableStore implements VariableDatabase {
   private client: Client | null = null;
   private initialized = false;
+  private readonly inMemory: boolean;
 
-  constructor(private readonly workDir: string) {}
+  constructor(
+    private readonly workDir: string,
+    options?: { inMemory?: boolean },
+  ) {
+    this.inMemory = options?.inMemory === true || workDir === ':memory:';
+  }
 
   get dbPath(): string {
+    if (this.inMemory) {
+      return ':memory:';
+    }
     return path.join(this.workDir, 'variables.db');
   }
 
@@ -53,9 +62,13 @@ export class LibsqlVariableStore implements VariableDatabase {
       return;
     }
 
-    mkdirSync(this.workDir, { recursive: true });
-    this.client = createClient({ url: `file:${this.dbPath}` });
-    await this.client.execute('PRAGMA journal_mode = WAL');
+    if (!this.inMemory) {
+      mkdirSync(this.workDir, { recursive: true });
+    }
+    const url = this.inMemory ? ':memory:' : `file:${this.dbPath}`;
+    this.client = createClient({ url });
+    const journalMode = this.inMemory || process.platform === 'win32' ? 'DELETE' : 'WAL';
+    await this.client.execute(`PRAGMA journal_mode = ${journalMode}`);
     await this.client.execute(`
       CREATE TABLE IF NOT EXISTS variables (
         id INTEGER PRIMARY KEY AUTOINCREMENT,

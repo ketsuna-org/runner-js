@@ -1,7 +1,3 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
-
 import { describe, expect, it, afterEach } from 'vitest';
 
 import { LibsqlVariableStore } from '../src/runtime/libsql-variable-store.js';
@@ -9,7 +5,6 @@ import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import { ScriptDb } from '../src/scripts/script-db.js';
 
 describe('ScriptDb', () => {
-  let dataDir = '';
   let store: VariableDatabase;
 
   const config = {
@@ -33,14 +28,9 @@ describe('ScriptDb', () => {
     guild: { id: 'guild-1' } as never,
   };
 
-  afterEach(async () => {
-    if (store?.dispose) {
-      store.dispose();
-    }
-    if (dataDir) {
-      await rm(dataDir, { recursive: true, force: true });
-      dataDir = '';
-    }
+  afterEach(() => {
+    store?.dispose?.();
+    store = null as never;
   });
 
   async function createDb(
@@ -48,8 +38,7 @@ describe('ScriptDb', () => {
     variables: Record<string, unknown> = {},
     configOverride: typeof config = config,
   ) {
-    dataDir = await mkdtemp(path.join(os.tmpdir(), 'runner-js-db-'));
-    store = new LibsqlVariableStore(path.join(dataDir, 'variables'));
+    store = new LibsqlVariableStore(':memory:', { inMemory: true });
     await store.init();
     return new ScriptDb('bot-1', configOverride, store, ctx, variables);
   }

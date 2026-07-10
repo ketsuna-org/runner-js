@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
+import { isolatedVmAvailable } from './helpers/isolated-vm-available.js';
 
-describe('ScriptExecutor', () => {
+describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
   it('executes async user script with injected context', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
     const variables: Record<string, unknown> = { count: 1 };
