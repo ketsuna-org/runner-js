@@ -80,10 +80,10 @@ export async function fetchPortalEnabledPrivilegedIntents(
     enabled.add('Message Content');
   }
 
-  if (enabled.size < 3 ) {
+  if (enabled.size < 3) {
     // Some of the privileged intents are not enabled, so we will enable them ourselves. (We can only enable LIMITEDS (If bot is unverified))
 
-   const response = await fetch('https://discord.com/api/v10/users/@me', {
+    const response = await fetch('https://discord.com/api/v10/users/@me', {
       headers: {
         Authorization: `Bot ${token}`,
       },
@@ -102,7 +102,7 @@ export async function fetchPortalEnabledPrivilegedIntents(
     if (!user.flags) {
       throw new Error('Failed to fetch user info (missing flags)');
     }
-    
+
     const flags = user.flags;
     //  Before doing anything we check if the Bot is verified or not. (Verified bot is identified with  : 1 << 16	VERIFIED_BOT	Verified Bot)
     if ((flags & (1 << 16)) !== 0) {
@@ -117,7 +117,7 @@ export async function fetchPortalEnabledPrivilegedIntents(
       },
       body: JSON.stringify({
         flags:
-          flags | APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED |
+          APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED |
           APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED |
           APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED,
       }),
