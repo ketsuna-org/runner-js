@@ -420,13 +420,13 @@ function resolveEventExecutionContext(args: unknown[]): {
   interaction?: Interaction;
   guild: Guild | Interaction['guild'] | null;
   member: GuildMember | Interaction['member'] | Message['member'] | null;
-  channel: Channel | Interaction['channel'] | Message['channel'] | null;
+  channel: Message['channel'] | Interaction['channel'] | null;
 } {
   const [first] = args;
   const message = isMessage(first) ? first : undefined;
   const interaction = isInteraction(first) ? first : undefined;
   const guildMember = isGuildMember(first) ? first : undefined;
-  const channel = isChannel(first) ? first : undefined;
+  const channel = isTextBasedChannel(first) ? first : undefined;
   const guild = isGuild(first) ? first : undefined;
 
   return {
@@ -448,8 +448,14 @@ function isGuildMember(value: unknown): value is GuildMember {
   );
 }
 
-function isChannel(value: unknown): value is Channel {
-  return typeof value === 'object' && value !== null && 'isTextBased' in value && 'id' in value;
+function isTextBasedChannel(value: unknown): value is Message['channel'] {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'isTextBased' in value &&
+    typeof (value as Channel).isTextBased === 'function' &&
+    (value as Channel).isTextBased()
+  );
 }
 
 function isGuild(value: unknown): value is Guild {
