@@ -41,6 +41,34 @@ export function findScopedVariableDefinition(
   );
 }
 
+export function ensureScopedVariableDefinition(
+  config: JsBotConfig,
+  key: string,
+  scope: string,
+): { scope: string; key: string; defaultValue?: unknown } {
+  const trimmed = key.trim();
+  if (!trimmed) {
+    throw new Error('Missing scoped variable key.');
+  }
+
+  const storageKey = normalizeScopedStorageKey(trimmed);
+  const normalizedScope = scope.trim();
+  if (!normalizedScope) {
+    throw new Error('Missing scoped variable scope.');
+  }
+
+  for (const entry of config.scopedVariableDefinitions) {
+    const entryKey = normalizeScopedStorageKey(String(entry.key ?? '').trim());
+    const entryScope = String(entry.scope ?? '').trim();
+    if (entryKey === storageKey && entryScope === normalizedScope) {
+      return { scope: entryScope, key: entryKey, defaultValue: entry['defaultValue'] };
+    }
+  }
+
+  config.scopedVariableDefinitions.push({ key: storageKey, scope: normalizedScope });
+  return { scope: normalizedScope, key: storageKey };
+}
+
 export interface DbTarget {
   /** Raw context id (user id, guild id, `guildId:userId`, message id, …). */
   contextId?: string;

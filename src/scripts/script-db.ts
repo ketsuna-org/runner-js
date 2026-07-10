@@ -1,56 +1,66 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import {
   applyVariableAlias,
+  ensureScopedVariableDefinition,
   findScopedVariableDefinition,
-  resolveContextIdForScope,
   parseGuildMemberContextId,
+  resolveContextIdForScope,
   type DbTarget,
-  type DbListOptions,
   type ScopedExecutionContext,
 } from '../runtime/scoped-context.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from '../runtime/variable-keys.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 
-export type { DbTarget, DbListOptions };
+export type DbScopeNamespace = 'user' | 'guild' | 'channel' | 'message';
+
+export interface DbListEntry {
+  id: string;
+  value: unknown;
+}
+
+export interface DbFindEntry {
+  key: string;
+  id: string;
+  value: unknown;
+}
 
 export interface ScriptDbGlobalApi {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
-  has(key: string): Promise<boolean>;
+}
+
+export interface ScriptDbScopedApi {
+  set(key: string, value: unknown, id?: string): Promise<void>;
+  get(key: string, id?: string): Promise<unknown>;
+  delete(key: string, id?: string): Promise<void>;
+  list(
+    key: string,
+    order?: 'asc' | 'desc',
+    limit?: number,
+    offset?: number,
+    filter?: (entry: DbListEntry) => boolean,
+  ): Promise<DbListEntry[]>;
+  find(filter?: (entry: DbFindEntry) => boolean): Promise<DbFindEntry[]>;
 }
 
 /**
- * Persistent bot storage for JavaScript command scripts.
- *
- * Scoped keys must be declared in the Variables editor (same as workflow bots).
+ * Persistent bot storage for JavaScript scripts.
  *
  * @example
- * // Current interaction context (user who ran the command)
- * const coins = await db.get('coins');
- * await db.set('coins', Number(coins ?? 0) + 10);
+ * await db.user.set('coins', 10);
+ * const coins = await db.user.get('coins');
  *
  * @example
- * // Explicit targets — works even in scheduled scripts
- * await db.set('coins', 100, { userId: '123456789' });
- * const guildScore = await db.get('score', { guildId: interaction.guildId });
- * const memberXp = await db.get('xp', { guildId: guild.id, userId: member.id });
- *
- * @example
- * // Leaderboard for a guild (guildMember-scoped key, sorted by value desc)
- * const board = await db.list('coins', {
- *   guildId: interaction.guildId,
- *   sort: 'value',
- *   order: 'desc',
- * });
- * // → { "userIdA": 120, "userIdB": 45, ... }
- *
- * @example
- * // Top 10 only
- * const top10 = await db.list('coins', { guildId: interaction.guildId, limit: 10 });
+ * await db.global.set('counter', 1);
+ * const top = await db.user.list('coins', 'desc', 10, 0);
  */
 export class ScriptDb {
   readonly global: ScriptDbGlobalApi;
+  readonly user: ScriptDbScopedApi;
+  readonly guild: ScriptDbScopedApi;
+  readonly channel: ScriptDbScopedApi;
+  readonly message: ScriptDbScopedApi;
 
   constructor(
     private readonly botId: string,
@@ -63,18 +73,59 @@ export class ScriptDb {
       get: (key) => this.getGlobal(key),
       set: (key, value) => this.setGlobal(key, value),
       delete: (key) => this.deleteGlobal(key),
-      has: (key) => this.hasGlobal(key),
+    };
+    this.user = this.createScopedApi('user');
+    this.guild = this.createScopedApi('guild');
+    this.channel = this.createScopedApi('channel');
+    this.message = this.createScopedApi('message');
+  }
+
+  private createScopedApi(namespace: DbScopeNamespace): ScriptDbScopedApi {
+    return {
+      set: (key, value, id) => this.setScoped(namespace, key, value, id),
+      get: (key, id) => this.getScoped(namespace, key, id),
+      delete: (key, id) => this.deleteScoped(namespace, key, id),
+      list: (key, order, limit, offset, filter) =>
+        this.listScoped(namespace, key, order, limit, offset, filter),
+      find: (filter) => this.findScoped(namespace, filter),
     };
   }
 
-  async get(key: string, target?: DbTarget): Promise<unknown> {
-    const definition = findScopedVariableDefinition(this.config, key);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    return this.readScopedValue(definition, contextId);
+  private resolveStorageScope(namespace: DbScopeNamespace): string {
+    if (namespace === 'user' && resolveGuildId(this.ctx)) {
+      return 'guildMember';
+    }
+    return namespace;
   }
 
-  async set(key: string, value: unknown, target?: DbTarget): Promise<void> {
-    const definition = findScopedVariableDefinition(this.config, key);
+  private targetForId(namespace: DbScopeNamespace, id?: string): DbTarget | undefined {
+    const trimmed = id?.trim();
+    if (!trimmed) {
+      return undefined;
+    }
+    switch (namespace) {
+      case 'user':
+        return { userId: trimmed };
+      case 'guild':
+        return { guildId: trimmed };
+      case 'channel':
+        return { channelId: trimmed };
+      case 'message':
+        return { messageId: trimmed };
+      default:
+        return undefined;
+    }
+  }
+
+  private async setScoped(
+    namespace: DbScopeNamespace,
+    key: string,
+    value: unknown,
+    id?: string,
+  ): Promise<void> {
+    const scope = this.resolveStorageScope(namespace);
+    const definition = ensureScopedVariableDefinition(this.config, key, scope);
+    const target = this.targetForId(namespace, id);
     const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
     await this.store.setScopedVariable(
       this.botId,
@@ -88,8 +139,37 @@ export class ScriptDb {
     }
   }
 
-  async delete(key: string, target?: DbTarget): Promise<void> {
+  private async getScoped(
+    namespace: DbScopeNamespace,
+    key: string,
+    id?: string,
+  ): Promise<unknown> {
+    const scope = this.resolveStorageScope(namespace);
+    let definition: { scope: string; key: string; defaultValue?: unknown };
+    try {
+      definition = findScopedVariableDefinition(this.config, key);
+      if (definition.scope !== scope) {
+        definition = ensureScopedVariableDefinition(this.config, key, scope);
+      }
+    } catch {
+      definition = ensureScopedVariableDefinition(this.config, key, scope);
+    }
+    const target = this.targetForId(namespace, id);
+    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    return this.readScopedValue(definition, contextId);
+  }
+
+  private async deleteScoped(
+    namespace: DbScopeNamespace,
+    key: string,
+    id?: string,
+  ): Promise<void> {
+    const scope = this.resolveStorageScope(namespace);
     const definition = findScopedVariableDefinition(this.config, key);
+    if (definition.scope !== scope) {
+      throw new Error(`Scoped variable "${key.trim()}" is not stored under ${namespace}.`);
+    }
+    const target = this.targetForId(namespace, id);
     const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
     await this.store.removeScopedVariable(
       this.botId,
@@ -102,157 +182,151 @@ export class ScriptDb {
     }
   }
 
-  /** Removes every stored value for this scoped key (all users/guilds/channels). */
-  async reset(key: string): Promise<void> {
-    const definition = findScopedVariableDefinition(this.config, key);
-    await this.store.removeAllScopedValuesForKey(this.botId, definition.scope, definition.key);
-    const legacyKey = toScopedReferenceKey(definition.key);
-    if (legacyKey !== definition.key) {
-      await this.store.removeAllScopedValuesForKey(this.botId, definition.scope, legacyKey);
+  private async listScoped(
+    namespace: DbScopeNamespace,
+    key: string,
+    order: 'asc' | 'desc' = 'desc',
+    limit?: number,
+    offset = 0,
+    filter?: (entry: DbListEntry) => boolean,
+  ): Promise<DbListEntry[]> {
+    const scope = this.resolveStorageScope(namespace);
+    let definition: { scope: string; key: string };
+    try {
+      definition = findScopedVariableDefinition(this.config, key);
+    } catch {
+      definition = ensureScopedVariableDefinition(this.config, key, scope);
     }
-    this.removeVariableAlias(definition.key);
-  }
 
-  /** Returns true when a persisted value exists (defaults do not count). */
-  async has(key: string, target?: DbTarget): Promise<boolean> {
-    const definition = findScopedVariableDefinition(this.config, key);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    const value = await this.readStoredScopedValue(definition, contextId);
-    return value !== undefined && value !== null;
-  }
-
-  /**
-   * Lists stored values for a scoped key.
-   *
-   * - `user` scope → keys are user ids
-   * - `guildMember` scope + `{ guildId }` → keys are user ids for that guild only
-   * - Default sort: value descending (leaderboard order)
-   */
-  async list(key: string, options?: DbListOptions): Promise<Record<string, unknown>> {
-    const definition = findScopedVariableDefinition(this.config, key);
     const contextIds = await this.collectContextIds(definition.key, definition.scope);
-
-    const filterGuildId =
-      options?.guildId?.trim() ||
-      (definition.scope === 'guildMember' ? resolveGuildId(this.ctx) ?? undefined : undefined);
-    const filterUserId = options?.userId?.trim();
-    const filterChannelId = options?.channelId?.trim();
-
-    const entries: Array<{
-      outputKey: string;
-      value: unknown;
-      userId: string;
-      contextId: string;
-    }> = [];
+    const entries: DbListEntry[] = [];
 
     for (const contextId of contextIds) {
       const value = await this.readStoredScopedValue(definition, contextId);
       if (value === undefined || value === null) {
         continue;
       }
-
-      const mapped = this.mapListEntry(definition.scope, contextId, {
-        guildId: filterGuildId,
-        userId: filterUserId,
-        channelId: filterChannelId,
-      });
+      const mapped = this.mapListEntry(definition.scope, contextId, namespace);
       if (!mapped) {
         continue;
       }
-
-      entries.push({
-        outputKey: mapped.outputKey,
-        value,
-        userId: mapped.userId,
-        contextId,
-      });
+      entries.push({ id: mapped, value });
     }
-
-    const sortBy = options?.sort ?? 'value';
-    const order = options?.order ?? 'desc';
-    const direction = order === 'asc' ? 1 : -1;
 
     entries.sort((left, right) => {
-      let cmp = 0;
-      if (sortBy === 'value') {
-        cmp = compareSortableValues(left.value, right.value);
-      } else if (sortBy === 'userId') {
-        cmp = left.userId.localeCompare(right.userId);
-      } else {
-        cmp = left.contextId.localeCompare(right.contextId);
-      }
-      if (cmp === 0) {
-        cmp = left.userId.localeCompare(right.userId);
-      }
-      return cmp * direction;
+      const cmp = compareSortableValues(left.value, right.value);
+      return (order === 'asc' ? 1 : -1) * cmp;
     });
 
-    const limit = normalizeListLimit(options?.limit);
-    const limitedEntries = limit != null ? entries.slice(0, limit) : entries;
-
-    const values: Record<string, unknown> = {};
-    for (const entry of limitedEntries) {
-      values[entry.outputKey] = entry.value;
-    }
-    return values;
+    const filtered = typeof filter === 'function' ? entries.filter(filter) : entries;
+    const normalizedOffset = normalizeNonNegativeInt(offset, 'offset');
+    const normalizedLimit = limit == null ? undefined : normalizePositiveInt(limit, 'limit');
+    const sliced = filtered.slice(normalizedOffset);
+    return normalizedLimit == null ? sliced : sliced.slice(0, normalizedLimit);
   }
 
-  private async collectContextIds(storageKey: string, scope: string): Promise<string[]> {
-    const contextIds = new Set(
-      await this.store.listContextIds(this.botId, scope, storageKey),
-    );
-    const legacyKey = toScopedReferenceKey(storageKey);
-    if (legacyKey !== storageKey) {
-      for (const contextId of await this.store.listContextIds(this.botId, scope, legacyKey)) {
-        contextIds.add(contextId);
+  private async findScoped(
+    namespace: DbScopeNamespace,
+    filter?: (entry: DbFindEntry) => boolean,
+  ): Promise<DbFindEntry[]> {
+
+    const scope = this.resolveStorageScope(namespace);
+    const scopesToScan =
+      namespace === 'user' && scope === 'guildMember'
+        ? ['guildMember']
+        : namespace === 'user'
+          ? ['user', 'guildMember']
+          : [scope];
+
+    const results: DbFindEntry[] = [];
+    const seen = new Set<string>();
+
+    for (const scanScope of scopesToScan) {
+      for (const definition of this.config.scopedVariableDefinitions) {
+        const entryScope = String(definition.scope ?? '').trim();
+        if (entryScope !== scanScope) {
+          continue;
+        }
+        const storageKey = normalizeScopedStorageKey(String(definition.key ?? '').trim());
+        if (!storageKey) {
+          continue;
+        }
+
+        const contextIds = await this.collectContextIds(storageKey, entryScope);
+        for (const contextId of contextIds) {
+          const dedupeKey = `${entryScope}:${storageKey}:${contextId}`;
+          if (seen.has(dedupeKey)) {
+            continue;
+          }
+          seen.add(dedupeKey);
+
+          const value = await this.readStoredScopedValue(
+            { scope: entryScope, key: storageKey },
+            contextId,
+          );
+          if (value === undefined || value === null) {
+            continue;
+          }
+
+          const mappedId = this.mapListEntry(entryScope, contextId, namespace);
+          if (!mappedId) {
+            continue;
+          }
+
+          const entry: DbFindEntry = { key: storageKey, id: mappedId, value };
+          if (!filter || filter(entry)) {
+            results.push(entry);
+          }
+        }
       }
     }
-    return [...contextIds];
+
+    return results;
   }
 
   private mapListEntry(
     scope: string,
     contextId: string,
-    filter: { guildId?: string; userId?: string; channelId?: string },
-  ): { outputKey: string; userId: string } | null {
+    namespace: DbScopeNamespace,
+  ): string | null {
     switch (scope) {
       case 'guildMember': {
         const { guildId, userId } = parseGuildMemberContextId(contextId);
-        if (!userId) {
-          return null;
+        if (namespace === 'user') {
+          const currentGuildId = resolveGuildId(this.ctx);
+          if (currentGuildId && guildId !== currentGuildId) {
+            return null;
+          }
+          return userId || null;
         }
-        if (filter.guildId && guildId !== filter.guildId) {
-          return null;
-        }
-        if (filter.userId && userId !== filter.userId) {
-          return null;
-        }
-        return { outputKey: userId, userId };
+        return contextId;
       }
-      case 'user': {
-        if (filter.userId && contextId !== filter.userId) {
-          return null;
-        }
-        return { outputKey: contextId, userId: contextId };
-      }
-      case 'guild': {
-        if (filter.guildId && contextId !== filter.guildId) {
-          return null;
-        }
-        return { outputKey: contextId, userId: contextId };
-      }
-      case 'channel': {
-        if (filter.channelId && contextId !== filter.channelId) {
-          return null;
-        }
-        return { outputKey: contextId, userId: contextId };
-      }
-      case 'message': {
-        return { outputKey: contextId, userId: contextId };
-      }
+      case 'user':
+        return namespace === 'user' ? contextId : null;
+      case 'guild':
+        return namespace === 'guild' ? contextId : null;
+      case 'channel':
+        return namespace === 'channel' ? contextId : null;
+      case 'message':
+        return namespace === 'message' ? contextId : null;
       default:
-        return { outputKey: contextId, userId: contextId };
+        return contextId;
     }
+  }
+
+  private async collectContextIds(storageKey: string, scope: string): Promise<string[]> {
+    const contextIds = new Set(await this.store.listContextIds(this.botId, scope, storageKey));
+    const legacyKey = toScopedReferenceKey(storageKey);
+    if (legacyKey !== storageKey) {
+      for (const contextId of await this.store.listContextIds(
+        this.botId,
+        scope,
+        legacyKey,
+      )) {
+        contextIds.add(contextId);
+      }
+    }
+    return [...contextIds];
   }
 
   async getGlobal(key: string): Promise<unknown> {
@@ -286,15 +360,6 @@ export class ScriptDb {
     }
     await this.store.removeGlobalVariable(this.botId, normalizedKey);
     delete this.variables[normalizedKey];
-  }
-
-  async hasGlobal(key: string): Promise<boolean> {
-    const normalizedKey = key.trim();
-    if (!normalizedKey) {
-      throw new Error('db.global: missing key.');
-    }
-    const runtime = await this.store.getGlobalVariables(this.botId);
-    return normalizedKey in runtime;
   }
 
   private async readScopedValue(
@@ -333,7 +398,14 @@ export class ScriptDb {
   }
 
   private isCurrentContext(scope: string, contextId: string, target?: DbTarget): boolean {
-    if (target && (target.contextId || target.userId || target.guildId || target.channelId || target.messageId)) {
+    if (
+      target &&
+      (target.contextId ||
+        target.userId ||
+        target.guildId ||
+        target.channelId ||
+        target.messageId)
+    ) {
       return false;
     }
     try {
@@ -386,12 +458,16 @@ function coerceSortNumber(value: unknown): number | null {
   return null;
 }
 
-function normalizeListLimit(limit: number | undefined): number | null {
-  if (limit == null) {
-    return null;
+function normalizePositiveInt(value: number, label: string): number {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`db.list: ${label} must be a positive number.`);
   }
-  if (!Number.isFinite(limit) || limit <= 0) {
-    throw new Error('db.list: limit must be a positive number.');
+  return Math.floor(value);
+}
+
+function normalizeNonNegativeInt(value: number, label: string): number {
+  if (!Number.isFinite(value) || value < 0) {
+    throw new Error(`db.list: ${label} must be zero or greater.`);
   }
-  return Math.floor(limit);
+  return Math.floor(value);
 }

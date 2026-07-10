@@ -25,8 +25,8 @@ export interface HostBridgeSession {
   isClosed: () => boolean;
 }
 
-const DB_METHODS = ['get', 'set', 'delete', 'has', 'list', 'reset'] as const;
-const DB_GLOBAL_METHODS = ['get', 'set', 'delete', 'has'] as const;
+const DB_SCOPED_METHODS = ['get', 'set', 'delete', 'list', 'find'] as const;
+const DB_GLOBAL_METHODS = ['get', 'set', 'delete'] as const;
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
 
 function registerDynamicHost(
@@ -273,7 +273,7 @@ function registerDbTargets(
     id: 'db',
     target: db,
     snapshot: {},
-    methods: [...DB_METHODS],
+    methods: [],
   });
   register({
     id: 'db.global',
@@ -281,6 +281,14 @@ function registerDbTargets(
     snapshot: {},
     methods: [...DB_GLOBAL_METHODS],
   });
+  for (const scope of ['user', 'guild', 'channel', 'message'] as const) {
+    register({
+      id: `db.${scope}`,
+      target: db[scope],
+      snapshot: {},
+      methods: [...DB_SCOPED_METHODS],
+    });
+  }
 }
 
 async function responseToPlain(response: Response): Promise<Record<string, unknown>> {

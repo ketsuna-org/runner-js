@@ -43,9 +43,9 @@ export const EVENT_TO_INTENT_KEYS: Record<string, string[]> = {
   voiceStateUpdate: ['Guild Voice States'],
   voiceChannelEffectSend: ['Guild Voice States'],
   presenceUpdate: ['Guild Presence'],
-  messageCreate: ['Guild Messages'],
-  messageUpdate: ['Guild Messages'],
-  messageDelete: ['Guild Messages'],
+  messageCreate: ['Guild Messages', 'Direct Messages'],
+  messageUpdate: ['Guild Messages', 'Direct Messages'],
+  messageDelete: ['Guild Messages', 'Direct Messages'],
   messageBulkDelete: ['Guild Messages'],
   messageReactionAdd: ['Guild Message Reactions'],
   messageReactionRemove: ['Guild Message Reactions'],
@@ -64,6 +64,11 @@ export const EVENT_TO_INTENT_KEYS: Record<string, string[]> = {
   messagePollVoteAdd: ['Guild Message Polls'],
   messagePollVoteRemove: ['Guild Message Polls'],
 };
+
+const MESSAGE_CONTENT_EVENTS = new Set([
+  'messageCreate',
+  'messageUpdate',
+]);
 
 export function resolveRequiredIntentKeys(options: {
   eventNames: string[];
@@ -85,6 +90,9 @@ export function resolveRequiredIntentKeys(options: {
       for (const intent of intents) {
         required.add(intent);
       }
+    }
+    if (MESSAGE_CONTENT_EVENTS.has(trimmed)) {
+      required.add('Message Content');
     }
   }
 

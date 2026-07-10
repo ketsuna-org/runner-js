@@ -192,6 +192,10 @@ function configEventNames(config: JsBotConfig): string[] {
   return (config.events ?? []).map((event) => event.name);
 }
 
+export function configHasLegacyPrefixCommands(config: JsBotConfig): boolean {
+  return Boolean(config.prefix?.trim());
+}
+
 export function buildEffectiveIntentsMap(
   config: JsBotConfig,
   portalEnabledPrivileged: Set<string>,
@@ -200,7 +204,7 @@ export function buildEffectiveIntentsMap(
   const portalMap = buildPortalIntentsMap(portalEnabledPrivileged);
   const requiredKeys = resolveRequiredIntentKeys({
     eventNames: configEventNames(config),
-    hasLegacyCommands: false,
+    hasLegacyCommands: configHasLegacyPrefixCommands(config),
     approvedPrivilegedIntents: portalEnabledPrivileged,
     warnings,
   });

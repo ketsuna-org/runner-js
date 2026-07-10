@@ -1,6 +1,9 @@
 import {
   Events,
+  type Channel,
   type Client,
+  type Guild,
+  type GuildMember,
   type Interaction,
   type Message,
 } from 'discord.js';
@@ -250,31 +253,48 @@ export class HandlerRegistry {
   private attachEvent(handler: EventHandler): void {
     const eventName = handler.name.trim();
     const listener = async (...args: unknown[]) => {
-      const [first] = args;
-      const message = isMessage(first) ? first : undefined;
-      const interaction = isInteraction(first) ? first : undefined;
+      const context = resolveEventExecutionContext(args);
 
-      if (interaction?.isChatInputCommand()) {
+      if (context.interaction?.isChatInputCommand()) {
         const slashHandler = this.commandMap.get(
-          interaction.commandName.trim().toLowerCase(),
+          context.interaction.commandName.trim().toLowerCase(),
         );
         if (slashHandler) {
           return;
         }
       }
 
+      if (context.message && this.isPrefixCommandMessage(context.message)) {
+        return;
+      }
+
       await this.runScript(handler.script, {
-        message,
-        interaction,
-        guild: message?.guild ?? interaction?.guild ?? null,
-        member: message?.member ?? null,
-        channel: message?.channel ?? interaction?.channel ?? null,
+        message: context.message,
+        interaction: context.interaction,
+        guild: context.guild,
+        member: context.member,
+        channel: context.channel,
         webhook: undefined,
       });
     };
 
     this.client.on(eventName, listener);
     this.disposers.push(() => this.client.off(eventName, listener));
+  }
+
+  private isPrefixCommandMessage(message: Message): boolean {
+    const prefix = this.config.prefix?.trim();
+    if (!prefix || message.author.bot || !message.content.startsWith(prefix)) {
+      return false;
+    }
+
+    const withoutPrefix = message.content.slice(prefix.length).trim();
+    const commandName = withoutPrefix.split(/\s+/)[0]?.toLowerCase();
+    if (!commandName) {
+      return false;
+    }
+
+    return this.commandMap.has(commandName);
   }
 
   private attachScheduled(handler: ScheduledHandler): void {
@@ -393,4 +413,45 @@ function isInteraction(value: unknown): value is Interaction {
 
 function isUnknownInteractionError(message: string): boolean {
   return message.includes('Unknown interaction');
+}
+
+function resolveEventExecutionContext(args: unknown[]): {
+  message?: Message;
+  interaction?: Interaction;
+  guild: Guild | Interaction['guild'] | null;
+  member: GuildMember | Interaction['member'] | Message['member'] | null;
+  channel: Channel | Interaction['channel'] | Message['channel'] | null;
+} {
+  const [first] = args;
+  const message = isMessage(first) ? first : undefined;
+  const interaction = isInteraction(first) ? first : undefined;
+  const guildMember = isGuildMember(first) ? first : undefined;
+  const channel = isChannel(first) ? first : undefined;
+  const guild = isGuild(first) ? first : undefined;
+
+  return {
+    message,
+    interaction,
+    guild: message?.guild ?? interaction?.guild ?? guildMember?.guild ?? guild ?? null,
+    member: message?.member ?? interaction?.member ?? guildMember ?? null,
+    channel: message?.channel ?? interaction?.channel ?? channel ?? null,
+  };
+}
+
+function isGuildMember(value: unknown): value is GuildMember {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'guild' in value &&
+    'user' in value &&
+    'id' in value
+  );
+}
+
+function isChannel(value: unknown): value is Channel {
+  return typeof value === 'object' && value !== null && 'isTextBased' in value && 'id' in value;
+}
+
+function isGuild(value: unknown): value is Guild {
+  return typeof value === 'object' && value !== null && 'members' in value && 'id' in value;
 }

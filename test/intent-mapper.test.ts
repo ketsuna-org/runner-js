@@ -30,7 +30,19 @@ describe('buildEffectiveIntentsMap', () => {
     };
 
     const effective = buildEffectiveIntentsMap(config, new Set(['Message Content']));
-    expect(effective['Message Content']).toBe(false);
+    expect(effective['Message Content']).toBe(true);
+    expect(effective['Guild Messages']).toBe(true);
+    expect(effective['Direct Messages']).toBe(true);
+  });
+
+  it('enables message content for prefix commands when portal-approved', () => {
+    const config: JsBotConfig = {
+      ...baseConfig,
+      prefix: '!',
+    };
+
+    const effective = buildEffectiveIntentsMap(config, new Set(['Message Content']));
+    expect(effective['Message Content']).toBe(true);
     expect(effective['Guild Messages']).toBe(true);
   });
 

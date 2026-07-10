@@ -43,114 +43,88 @@ describe('ScriptDb', () => {
     }
   });
 
-  async function createDb(variables: Record<string, unknown> = {}) {
+  async function createDb(
+    ctx: Record<string, unknown> = interactionCtx,
+    variables: Record<string, unknown> = {},
+    configOverride: typeof config = config,
+  ) {
     dataDir = await mkdtemp(path.join(os.tmpdir(), 'runner-js-db-'));
     store = new SqliteVariableStore(path.join(dataDir, 'variables'));
     await store.init();
-    return new ScriptDb('bot-1', config, store, interactionCtx, variables);
+    return new ScriptDb('bot-1', configOverride, store, ctx, variables);
   }
 
-  it('gets and sets for the current user context', async () => {
+  it('auto-creates scoped variables on set', async () => {
+    const mutableConfig = structuredClone(config);
+    mutableConfig.scopedVariableDefinitions = [];
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.user.set('coins', 42);
+    expect(await db.user.get('coins')).toBe(42);
+    expect(mutableConfig.scopedVariableDefinitions).toEqual([
+      { key: 'coins', scope: 'guildMember' },
+    ]);
+  });
+
+  it('gets and sets for the current guild member context', async () => {
     const variables: Record<string, unknown> = {};
-    const db = await createDb(variables);
+    const db = await createDb(interactionCtx, variables);
 
-    await db.set('coins', 42);
-    expect(await db.get('coins')).toBe(42);
-    expect(variables.coins).toBe(42);
-    expect(await db.has('coins')).toBe(true);
+    await db.user.set('xp', 42);
+    expect(await db.user.get('xp')).toBe(42);
+    expect(variables.xp).toBe(42);
   });
 
-  it('gets and sets for an explicit userId', async () => {
+  it('gets and sets for an explicit user id', async () => {
     const db = await createDb();
 
-    await db.set('coins', 100, { userId: 'user-other' });
-    expect(await db.get('coins', { userId: 'user-other' })).toBe(100);
-    expect(await db.get('coins')).not.toBe(100);
+    await db.user.set('coins', 100, 'user-other');
+    expect(await db.user.get('coins', 'user-other')).toBe(100);
+    expect(await db.user.get('coins')).not.toBe(100);
   });
 
-  it('gets and sets for an explicit guildId', async () => {
+  it('gets and sets guild scope values', async () => {
     const db = await createDb();
 
-    await db.set('score', 9001, { guildId: 'guild-42' });
-    expect(await db.get('score', { guildId: 'guild-42' })).toBe(9001);
+    await db.guild.set('score', 9001, 'guild-42');
+    expect(await db.guild.get('score', 'guild-42')).toBe(9001);
   });
 
-  it('gets and sets guildMember scope with guildId + userId', async () => {
+  it('lists guild member values for a key sorted by value', async () => {
     const db = await createDb();
 
-    await db.set('xp', 15, { guildId: 'g1', userId: 'u1' });
-    expect(await db.get('xp', { guildId: 'g1', userId: 'u1' })).toBe(15);
-    expect(await db.get('xp', { contextId: 'g1:u1' })).toBe(15);
+    await db.user.set('xp', 10, 'user-a');
+    await db.user.set('xp', 50, 'user-b');
+    await db.user.set('xp', 25, 'user-c');
+
+    const rows = await db.user.list('xp', 'desc', 2, 0);
+    expect(rows).toEqual([
+      { id: 'user-b', value: 50 },
+      { id: 'user-c', value: 25 },
+    ]);
   });
 
-  it('lists all stored values for a scoped key sorted by value desc', async () => {
+  it('finds entries with a filter function', async () => {
     const db = await createDb();
 
-    await db.set('coins', 1, { userId: 'u1' });
-    await db.set('coins', 8, { userId: 'u2' });
-    await db.set('coins', 3, { userId: 'u3' });
+    await db.user.set('xp', 10, 'user-a');
+    await db.user.set('xp', 50, 'user-b');
 
-    expect(await db.list('coins')).toEqual({ u2: 8, u3: 3, u1: 1 });
-  });
-
-  it('lists guildMember values for a guild with userId keys in leaderboard order', async () => {
-    const db = await createDb();
-
-    await db.set('xp', 10, { guildId: 'g1', userId: 'u1' });
-    await db.set('xp', 50, { guildId: 'g1', userId: 'u2' });
-    await db.set('xp', 99, { guildId: 'g2', userId: 'u9' });
-
-    expect(await db.list('xp', { guildId: 'g1' })).toEqual({ u2: 50, u1: 10 });
-  });
-
-  it('filters list to a single user when userId is provided', async () => {
-    const db = await createDb();
-
-    await db.set('coins', 1, { userId: 'u1' });
-    await db.set('coins', 8, { userId: 'u2' });
-
-    expect(await db.list('coins', { userId: 'u2' })).toEqual({ u2: 8 });
-  });
-
-  it('limits list results after sorting', async () => {
-    const db = await createDb();
-
-    await db.set('coins', 1, { userId: 'u1' });
-    await db.set('coins', 50, { userId: 'u2' });
-    await db.set('coins', 25, { userId: 'u3' });
-    await db.set('coins', 100, { userId: 'u4' });
-
-    expect(await db.list('coins', { limit: 2 })).toEqual({ u4: 100, u2: 50 });
-  });
-
-  it('rejects invalid list limit', async () => {
-    const db = await createDb();
-    await expect(db.list('coins', { limit: 0 })).rejects.toThrow(/limit must be a positive number/);
-  });
-
-  it('deletes a single context and resets all contexts', async () => {
-    const db = await createDb();
-
-    await db.set('coins', 5, { userId: 'u1' });
-    await db.set('coins', 8, { userId: 'u2' });
-
-    await db.delete('coins', { userId: 'u1' });
-    expect(await db.has('coins', { userId: 'u1' })).toBe(false);
-    expect(await db.get('coins', { userId: 'u2' })).toBe(8);
-
-    await db.reset('coins');
-    expect(await db.list('coins')).toEqual({});
+    const rows = await db.user.find((entry) => Number(entry.value) >= 20);
+    expect(rows).toEqual([
+      { key: 'xp', id: 'user-b', value: 50 },
+    ]);
   });
 
   it('supports db.global get/set/delete', async () => {
-    const variables: Record<string, unknown> = { welcome: 'hi' };
-    const db = await createDb(variables);
+    const variables: Record<string, unknown> = {};
+    const db = await createDb(interactionCtx, variables);
 
-    expect(await db.global.get('welcome')).toBe('hi');
     await db.global.set('counter', 3);
     expect(await db.global.get('counter')).toBe(3);
     expect(variables.counter).toBe(3);
+
     await db.global.delete('counter');
-    expect(await db.global.has('counter')).toBe(false);
+    expect(await db.global.get('counter')).toBeUndefined();
   });
 });

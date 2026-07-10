@@ -471,6 +471,35 @@ export class ScriptIsolateRuntime {
         globalThis.db = setup.makeHostProxy(__find('db'));
         if (globalThis.db) {
           globalThis.db.global = setup.makeHostProxy(__find('db.global'));
+          const __wrapScopedDb = (scopeId) => {
+            const api = setup.makeHostProxy(__find(scopeId));
+            return {
+              set: (...args) => api.set(...args),
+              get: (...args) => api.get(...args),
+              delete: (...args) => api.delete(...args),
+              list: async (key, order, limit, offset, filter) => {
+                if (typeof filter !== 'function') {
+                  return api.list(key, order, limit, offset);
+                }
+                const rows = await api.list(key, order ?? 'desc', 10000, 0);
+                const filtered = rows.filter(filter);
+                const off = offset ?? 0;
+                const lim = limit ?? filtered.length;
+                return filtered.slice(off, off + lim);
+              },
+              find: async (filter) => {
+                if (typeof filter !== 'function') {
+                  throw new Error(scopeId + '.find requires a filter function.');
+                }
+                const rows = await api.find();
+                return rows.filter(filter);
+              },
+            };
+          };
+          globalThis.db.user = __wrapScopedDb('db.user');
+          globalThis.db.guild = __wrapScopedDb('db.guild');
+          globalThis.db.channel = __wrapScopedDb('db.channel');
+          globalThis.db.message = __wrapScopedDb('db.message');
         }
         globalThis.console = setup.makeHostProxy({
           id: 'console',
