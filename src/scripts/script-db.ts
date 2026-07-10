@@ -2,7 +2,6 @@ import type { JsBotConfig } from '../config/js-bot-config.js';
 import {
   applyVariableAlias,
   ensureScopedVariableDefinition,
-  findScopedVariableDefinition,
   parseGuildMemberContextId,
   resolveContextIdForScope,
   type DbTarget,
@@ -11,7 +10,7 @@ import {
 import { normalizeScopedStorageKey, toScopedReferenceKey } from '../runtime/variable-keys.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 
-export type DbScopeNamespace = 'user' | 'guild' | 'channel' | 'message';
+export type DbScopeNamespace = 'user' | 'guild' | 'channel' | 'message' | 'guildMember';
 
 export interface DbListEntry {
   id: string;
@@ -42,6 +41,22 @@ export interface ScriptDbScopedApi {
     filter?: (entry: DbListEntry) => boolean,
   ): Promise<DbListEntry[]>;
   find(filter?: (entry: DbFindEntry) => boolean): Promise<DbFindEntry[]>;
+  reset(key: string): Promise<void>;
+}
+
+export interface ScriptDbGuildMemberApi {
+  set(key: string, value: unknown, userId?: string, guildId?: string): Promise<void>;
+  get(key: string, userId?: string, guildId?: string): Promise<unknown>;
+  delete(key: string, userId?: string, guildId?: string): Promise<void>;
+  list(
+    key: string,
+    order?: 'asc' | 'desc',
+    limit?: number,
+    offset?: number,
+    filter?: (entry: DbListEntry) => boolean,
+  ): Promise<DbListEntry[]>;
+  find(filter?: (entry: DbFindEntry) => boolean): Promise<DbFindEntry[]>;
+  reset(key: string): Promise<void>;
 }
 
 /**
@@ -61,6 +76,7 @@ export class ScriptDb {
   readonly guild: ScriptDbScopedApi;
   readonly channel: ScriptDbScopedApi;
   readonly message: ScriptDbScopedApi;
+  readonly guildMember: ScriptDbGuildMemberApi;
 
   constructor(
     private readonly botId: string,
@@ -78,6 +94,19 @@ export class ScriptDb {
     this.guild = this.createScopedApi('guild');
     this.channel = this.createScopedApi('channel');
     this.message = this.createScopedApi('message');
+    this.guildMember = this.createGuildMemberApi();
+  }
+
+  private createGuildMemberApi(): ScriptDbGuildMemberApi {
+    return {
+      set: (key, value, userId, guildId) => this.setGuildMember(key, value, userId, guildId),
+      get: (key, userId, guildId) => this.getGuildMember(key, userId, guildId),
+      delete: (key, userId, guildId) => this.deleteGuildMember(key, userId, guildId),
+      list: (key, order, limit, offset, filter) =>
+        this.listScoped('guildMember', key, order, limit, offset, filter),
+      find: (filter) => this.findScoped('guildMember', filter),
+      reset: (key) => this.resetScoped('guildMember', key),
+    };
   }
 
   private createScopedApi(namespace: DbScopeNamespace): ScriptDbScopedApi {
@@ -88,6 +117,7 @@ export class ScriptDb {
       list: (key, order, limit, offset, filter) =>
         this.listScoped(namespace, key, order, limit, offset, filter),
       find: (filter) => this.findScoped(namespace, filter),
+      reset: (key) => this.resetScoped(namespace, key),
     };
   }
 
@@ -96,6 +126,101 @@ export class ScriptDb {
       return 'guildMember';
     }
     return namespace;
+  }
+
+  private guildMemberTarget(userId?: string, guildId?: string): DbTarget | undefined {
+    const trimmedUserId = userId?.trim();
+    const trimmedGuildId = guildId?.trim();
+    if (!trimmedUserId && !trimmedGuildId) {
+      return undefined;
+    }
+    return {
+      userId: trimmedUserId,
+      guildId: trimmedGuildId,
+    };
+  }
+
+  private async setGuildMember(
+    key: string,
+    value: unknown,
+    userId?: string,
+    guildId?: string,
+  ): Promise<void> {
+    const definition = ensureScopedVariableDefinition(this.config, key, 'guildMember');
+    const target = this.guildMemberTarget(userId, guildId);
+    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    await this.store.setScopedVariable(
+      this.botId,
+      definition.scope,
+      contextId,
+      definition.key,
+      value,
+    );
+    if (this.isCurrentContext(definition.scope, contextId, target)) {
+      applyVariableAlias(this.variables, definition.key, value);
+    }
+  }
+
+  private async getGuildMember(
+    key: string,
+    userId?: string,
+    guildId?: string,
+  ): Promise<unknown> {
+    const definition = this.findDefinitionForStorageScope(key, 'guildMember');
+    if (!definition) {
+      return undefined;
+    }
+    const target = this.guildMemberTarget(userId, guildId);
+    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    return this.readScopedValue(definition, contextId);
+  }
+
+  private async deleteGuildMember(
+    key: string,
+    userId?: string,
+    guildId?: string,
+  ): Promise<void> {
+    const definition = this.findDefinitionForStorageScope(key, 'guildMember');
+    if (!definition) {
+      throw new Error(`Scoped variable "${key.trim()}" is not stored under guildMember.`);
+    }
+    const target = this.guildMemberTarget(userId, guildId);
+    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    await this.store.removeScopedVariable(
+      this.botId,
+      definition.scope,
+      contextId,
+      definition.key,
+    );
+    if (this.isCurrentContext(definition.scope, contextId, target)) {
+      this.removeVariableAlias(definition.key);
+    }
+  }
+
+  private async resetScoped(namespace: DbScopeNamespace, key: string): Promise<void> {
+    const trimmed = key.trim();
+    if (!trimmed) {
+      throw new Error(`db.${namespace}: missing key.`);
+    }
+    const scope = this.resolveStorageScope(namespace);
+    const storageKey = normalizeScopedStorageKey(trimmed);
+    await this.purgeScopedValuesForKey(scope, storageKey);
+    this.config.scopedVariableDefinitions = this.config.scopedVariableDefinitions.filter(
+      (entry) => {
+        const entryKey = normalizeScopedStorageKey(String(entry.key ?? '').trim());
+        const entryScope = String(entry.scope ?? '').trim();
+        return !(entryKey === storageKey && entryScope === scope);
+      },
+    );
+    this.removeVariableAlias(storageKey);
+  }
+
+  private async purgeScopedValuesForKey(scope: string, storageKey: string): Promise<void> {
+    await this.store.removeAllScopedValuesForKey(this.botId, scope, storageKey);
+    const legacyKey = toScopedReferenceKey(storageKey);
+    if (legacyKey !== storageKey) {
+      await this.store.removeAllScopedValuesForKey(this.botId, scope, legacyKey);
+    }
   }
 
   private targetForId(namespace: DbScopeNamespace, id?: string): DbTarget | undefined {
@@ -139,20 +264,33 @@ export class ScriptDb {
     }
   }
 
+  private findDefinitionForStorageScope(
+    key: string,
+    scope: string,
+  ): { scope: string; key: string; defaultValue?: unknown } | undefined {
+    const storageKey = normalizeScopedStorageKey(key.trim());
+    if (!storageKey) {
+      return undefined;
+    }
+    for (const entry of this.config.scopedVariableDefinitions) {
+      const entryKey = normalizeScopedStorageKey(String(entry.key ?? '').trim());
+      const entryScope = String(entry.scope ?? '').trim();
+      if (entryKey === storageKey && entryScope === scope) {
+        return { scope: entryScope, key: entryKey, defaultValue: entry['defaultValue'] };
+      }
+    }
+    return undefined;
+  }
+
   private async getScoped(
     namespace: DbScopeNamespace,
     key: string,
     id?: string,
   ): Promise<unknown> {
     const scope = this.resolveStorageScope(namespace);
-    let definition: { scope: string; key: string; defaultValue?: unknown };
-    try {
-      definition = findScopedVariableDefinition(this.config, key);
-      if (definition.scope !== scope) {
-        definition = ensureScopedVariableDefinition(this.config, key, scope);
-      }
-    } catch {
-      definition = ensureScopedVariableDefinition(this.config, key, scope);
+    const definition = this.findDefinitionForStorageScope(key, scope);
+    if (!definition) {
+      return undefined;
     }
     const target = this.targetForId(namespace, id);
     const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
@@ -165,8 +303,8 @@ export class ScriptDb {
     id?: string,
   ): Promise<void> {
     const scope = this.resolveStorageScope(namespace);
-    const definition = findScopedVariableDefinition(this.config, key);
-    if (definition.scope !== scope) {
+    const definition = this.findDefinitionForStorageScope(key, scope);
+    if (!definition) {
       throw new Error(`Scoped variable "${key.trim()}" is not stored under ${namespace}.`);
     }
     const target = this.targetForId(namespace, id);
@@ -191,10 +329,8 @@ export class ScriptDb {
     filter?: (entry: DbListEntry) => boolean,
   ): Promise<DbListEntry[]> {
     const scope = this.resolveStorageScope(namespace);
-    let definition: { scope: string; key: string };
-    try {
-      definition = findScopedVariableDefinition(this.config, key);
-    } catch {
+    let definition = this.findDefinitionForStorageScope(key, scope);
+    if (!definition) {
       definition = ensureScopedVariableDefinition(this.config, key, scope);
     }
 
@@ -232,11 +368,13 @@ export class ScriptDb {
 
     const scope = this.resolveStorageScope(namespace);
     const scopesToScan =
-      namespace === 'user' && scope === 'guildMember'
+      namespace === 'guildMember'
         ? ['guildMember']
-        : namespace === 'user'
-          ? ['user', 'guildMember']
-          : [scope];
+        : namespace === 'user' && scope === 'guildMember'
+          ? ['guildMember']
+          : namespace === 'user'
+            ? ['user', 'guildMember']
+            : [scope];
 
     const results: DbFindEntry[] = [];
     const seen = new Set<string>();
@@ -292,10 +430,10 @@ export class ScriptDb {
     switch (scope) {
       case 'guildMember': {
         const { guildId, userId } = parseGuildMemberContextId(contextId);
-        if (namespace === 'user') {
+        if (namespace === 'user' || namespace === 'guildMember') {
           const currentGuildId = resolveGuildId(this.ctx);
           if (currentGuildId && guildId !== currentGuildId) {
-            return null;
+            return namespace === 'guildMember' ? `${guildId}:${userId}` : null;
           }
           return userId || null;
         }

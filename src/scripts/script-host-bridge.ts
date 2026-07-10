@@ -25,7 +25,7 @@ export interface HostBridgeSession {
   isClosed: () => boolean;
 }
 
-const DB_SCOPED_METHODS = ['get', 'set', 'delete', 'list', 'find'] as const;
+const DB_SCOPED_METHODS = ['get', 'set', 'delete', 'list', 'find', 'reset'] as const;
 const DB_GLOBAL_METHODS = ['get', 'set', 'delete'] as const;
 const CONSOLE_METHODS = ['log', 'info', 'warn', 'error', 'debug'] as const;
 
@@ -281,7 +281,7 @@ function registerDbTargets(
     snapshot: {},
     methods: [...DB_GLOBAL_METHODS],
   });
-  for (const scope of ['user', 'guild', 'channel', 'message'] as const) {
+  for (const scope of ['user', 'guild', 'channel', 'message', 'guildMember'] as const) {
     register({
       id: `db.${scope}`,
       target: db[scope],

@@ -31,7 +31,7 @@ describe('ScriptDirectRuntime', () => {
     const result = await executor.execute(
       `
         const path = require('path');
-        return path.join('a', 'b');
+        return path.posix.join('a', 'b');
       `,
       {
         client: {} as never,

@@ -496,12 +496,14 @@ export class ScriptIsolateRuntime implements ScriptRuntime {
                 const rows = await api.find();
                 return rows.filter(filter);
               },
+              reset: (...args) => api.reset(...args),
             };
           };
           globalThis.db.user = __wrapScopedDb('db.user');
           globalThis.db.guild = __wrapScopedDb('db.guild');
           globalThis.db.channel = __wrapScopedDb('db.channel');
           globalThis.db.message = __wrapScopedDb('db.message');
+          globalThis.db.guildMember = __wrapScopedDb('db.guildMember');
         }
         globalThis.console = setup.makeHostProxy({
           id: 'console',

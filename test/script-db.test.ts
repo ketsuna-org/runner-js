@@ -116,4 +116,96 @@ describe('ScriptDb', () => {
     await db.global.delete('counter');
     expect(await db.global.get('counter')).toBeUndefined();
   });
+
+  it('gets and sets guildMember scope for the current member', async () => {
+    const variables: Record<string, unknown> = {};
+    const db = await createDb(interactionCtx, variables);
+
+    await db.guildMember.set('xp', 42);
+    expect(await db.guildMember.get('xp')).toBe(42);
+    expect(variables.xp).toBe(42);
+  });
+
+  it('gets and sets guildMember with explicit user and guild ids', async () => {
+    const db = await createDb();
+
+    await db.guildMember.set('xp', 99, 'user-other', 'guild-9');
+    expect(await db.guildMember.get('xp', 'user-other', 'guild-9')).toBe(99);
+    expect(await db.guildMember.get('xp')).not.toBe(99);
+  });
+
+  it('deletes guildMember values for explicit ids', async () => {
+    const db = await createDb();
+
+    await db.guildMember.set('xp', 10, 'user-a', 'guild-1');
+    await db.guildMember.delete('xp', 'user-a', 'guild-1');
+    expect(await db.guildMember.get('xp', 'user-a', 'guild-1')).toBeUndefined();
+  });
+
+  it('lists guildMember values sorted by value', async () => {
+    const db = await createDb();
+
+    await db.guildMember.set('xp', 10, 'user-a');
+    await db.guildMember.set('xp', 50, 'user-b');
+    await db.guildMember.set('xp', 25, 'user-c');
+
+    const rows = await db.guildMember.list('xp', 'desc', 2, 0);
+    expect(rows).toEqual([
+      { id: 'user-b', value: 50 },
+      { id: 'user-c', value: 25 },
+    ]);
+  });
+
+  it('finds guildMember entries with a filter function', async () => {
+    const db = await createDb();
+
+    await db.guildMember.set('xp', 10, 'user-a');
+    await db.guildMember.set('xp', 50, 'user-b');
+
+    const rows = await db.guildMember.find((entry) => Number(entry.value) >= 20);
+    expect(rows).toEqual([
+      { key: 'xp', id: 'user-b', value: 50 },
+    ]);
+  });
+
+  it('resets user scoped values and removes the definition in guild context', async () => {
+    const mutableConfig = structuredClone(config);
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.user.set('xp', 10, 'user-a');
+    await db.user.set('xp', 50, 'user-b');
+    await db.user.reset('xp');
+
+    expect(await db.user.get('xp', 'user-a')).toBeUndefined();
+    expect(await db.user.get('xp', 'user-b')).toBeUndefined();
+    expect(mutableConfig.scopedVariableDefinitions.some(
+      (entry) => entry.key === 'xp' && entry.scope === 'guildMember',
+    )).toBe(false);
+  });
+
+  it('resets guildMember scoped values and removes the definition', async () => {
+    const mutableConfig = structuredClone(config);
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.guildMember.set('xp', 10, 'user-a');
+    await db.guildMember.set('xp', 50, 'user-b');
+    await db.guildMember.reset('xp');
+
+    expect(mutableConfig.scopedVariableDefinitions.some(
+      (entry) => entry.key === 'xp' && entry.scope === 'guildMember',
+    )).toBe(false);
+  });
+
+  it('resets guild scoped values and removes the definition', async () => {
+    const mutableConfig = structuredClone(config);
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.guild.set('score', 100, 'guild-a');
+    await db.guild.set('score', 200, 'guild-b');
+    await db.guild.reset('score');
+
+    expect(mutableConfig.scopedVariableDefinitions.some(
+      (entry) => entry.key === 'score' && entry.scope === 'guild',
+    )).toBe(false);
+  });
 });
