@@ -4,7 +4,7 @@ import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
 describe('canvas getContext', () => {
   it('exposes the canvas module without calling native bindings', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -38,7 +38,7 @@ describe('canvas getContext', () => {
   it.skipIf(process.platform === 'win32')(
     'supports synchronous createCanvas and getContext',
     async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -91,7 +91,7 @@ describe('canvas getContext', () => {
   it.skipIf(process.platform === 'win32')(
     'works when createCanvas and getContext are awaited',
     async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { createClient, type Client } from '@libsql/client';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 
@@ -17,8 +17,29 @@ import {
   serializeVariableValue,
 } from './variable-serialization.js';
 
-export class SqliteVariableStore implements VariableDatabase {
-  private db: Database.Database | null = null;
+function rowString(row: Record<string, unknown>, column: string): string {
+  const value = row[column];
+  return value == null ? '' : String(value);
+}
+
+function rowNullableString(row: Record<string, unknown>, column: string): string | null {
+  const value = row[column];
+  if (value == null) {
+    return null;
+  }
+  return String(value);
+}
+
+function rowNullableNumber(row: Record<string, unknown>, column: string): number | null {
+  const value = row[column];
+  if (value == null) {
+    return null;
+  }
+  return Number(value);
+}
+
+export class LibsqlVariableStore implements VariableDatabase {
+  private client: Client | null = null;
   private initialized = false;
 
   constructor(private readonly workDir: string) {}
@@ -33,9 +54,9 @@ export class SqliteVariableStore implements VariableDatabase {
     }
 
     mkdirSync(this.workDir, { recursive: true });
-    this.db = new Database(this.dbPath);
-    this.db.pragma('journal_mode = WAL');
-    this.db.exec(`
+    this.client = createClient({ url: `file:${this.dbPath}` });
+    await this.client.execute('PRAGMA journal_mode = WAL');
+    await this.client.execute(`
       CREATE TABLE IF NOT EXISTS variables (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         bot_id TEXT NOT NULL,
@@ -52,34 +73,36 @@ export class SqliteVariableStore implements VariableDatabase {
         CHECK(scope IN ('_global_', 'guild', 'user', 'channel', 'guildMember', 'message'))
       )
     `);
-    this.db.exec(`
+    await this.client.execute(`
       CREATE INDEX IF NOT EXISTS idx_bot_lookup
       ON variables(bot_id, scope, context_id_1, context_id_2)
     `);
-    this.db.exec(`
+    await this.client.execute(`
       CREATE INDEX IF NOT EXISTS idx_scope_key_lookup
       ON variables(bot_id, scope, key)
     `);
-    this.migrateExpiresAtColumnIfNeeded();
+    await this.migrateExpiresAtColumnIfNeeded();
     this.initialized = true;
   }
 
-  private get database(): Database.Database {
-    if (!this.db || !this.initialized) {
-      throw new Error('SqliteVariableStore is not initialized.');
+  private get database(): Client {
+    if (!this.client || !this.initialized) {
+      throw new Error('LibsqlVariableStore is not initialized.');
     }
-    return this.db;
+    return this.client;
   }
 
-  private migrateExpiresAtColumnIfNeeded(): void {
-    const row = this.db!
-      .prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'variables' LIMIT 1")
-      .get() as { sql?: string } | undefined;
-    const sql = row?.sql ?? '';
+  private async migrateExpiresAtColumnIfNeeded(): Promise<void> {
+    const result = await this.client!.execute({
+      sql: "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'variables' LIMIT 1",
+      args: [],
+    });
+    const row = result.rows[0] as Record<string, unknown> | undefined;
+    const sql = rowString(row ?? {}, 'sql');
     if (!sql || sql.includes('expires_at')) {
       return;
     }
-    this.db!.exec('ALTER TABLE variables ADD COLUMN expires_at INTEGER');
+    await this.client!.execute('ALTER TABLE variables ADD COLUMN expires_at INTEGER');
   }
 
   private scopedWhere(includeKey: boolean): string {
@@ -93,8 +116,8 @@ export class SqliteVariableStore implements VariableDatabase {
     ctx1: string,
     ctx2: string,
     key?: string,
-  ): Array<string> {
-    const args: string[] = [botId, scope, ctx1, ctx2];
+  ): Array<string | null> {
+    const args: Array<string | null> = [botId, scope, ctx1, ctx2];
     if (key != null) {
       args.push(key);
     }
@@ -108,59 +131,56 @@ export class SqliteVariableStore implements VariableDatabase {
   async getGlobalVariables(botId: string): Promise<Record<string, unknown>> {
     await this.init();
     const now = Date.now();
-    const rows = this.database
-      .prepare(
-        'SELECT key, value_raw, value_type, expires_at FROM variables WHERE bot_id = ? AND scope = ? ORDER BY updated_at ASC, id ASC',
-      )
-      .all(botId, '_global_') as Array<{
-      key: string;
-      value_raw: string;
-      value_type: string;
-      expires_at: number | null;
-    }>;
+    const result = await this.database.execute({
+      sql: 'SELECT key, value_raw, value_type, expires_at FROM variables WHERE bot_id = ? AND scope = ? ORDER BY updated_at ASC, id ASC',
+      args: [botId, '_global_'],
+    });
 
-    const result: Record<string, unknown> = {};
-    for (const row of rows) {
-      if (this.isExpired(row.expires_at, now)) {
+    const output: Record<string, unknown> = {};
+    for (const row of result.rows as Record<string, unknown>[]) {
+      const expiresAt = rowNullableNumber(row, 'expires_at');
+      if (this.isExpired(expiresAt, now)) {
         continue;
       }
-      result[row.key] = deserializeVariableValue(row.value_raw, row.value_type);
+      output[rowString(row, 'key')] = deserializeVariableValue(
+        rowString(row, 'value_raw'),
+        rowString(row, 'value_type'),
+      );
     }
-    return result;
+    return output;
   }
 
   async setGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
     await this.init();
     const { raw, type } = serializeVariableValue(value);
     const now = Date.now();
-    this.database
-      .prepare(
-        `INSERT INTO variables (bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at)
+    await this.database.execute({
+      sql: `INSERT INTO variables (bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(bot_id, scope, context_id_1, context_id_2, key) DO UPDATE SET
            value_raw = excluded.value_raw,
            value_type = excluded.value_type,
            updated_at = excluded.updated_at,
            expires_at = excluded.expires_at`,
-      )
-      .run(botId, '_global_', '', null, key, raw, type, now, now, null);
+      args: [botId, '_global_', '', null, key, raw, type, now, now, null],
+    });
   }
 
   async removeGlobalVariable(botId: string, key: string): Promise<void> {
     await this.init();
-    this.database
-      .prepare('DELETE FROM variables WHERE bot_id = ? AND scope = ? AND key = ?')
-      .run(botId, '_global_', key);
+    await this.database.execute({
+      sql: 'DELETE FROM variables WHERE bot_id = ? AND scope = ? AND key = ?',
+      args: [botId, '_global_', key],
+    });
   }
 
   async renameGlobalVariable(botId: string, oldKey: string, newKey: string): Promise<void> {
     await this.init();
     const now = Date.now();
-    this.database
-      .prepare(
-        'UPDATE variables SET key = ?, updated_at = ? WHERE bot_id = ? AND scope = ? AND key = ?',
-      )
-      .run(newKey, now, botId, '_global_', oldKey);
+    await this.database.execute({
+      sql: 'UPDATE variables SET key = ?, updated_at = ? WHERE bot_id = ? AND scope = ? AND key = ?',
+      args: [newKey, now, botId, '_global_', oldKey],
+    });
   }
 
   async getScopedVariable(
@@ -172,26 +192,21 @@ export class SqliteVariableStore implements VariableDatabase {
     await this.init();
     const { ctx1, ctx2 } = parseScopedContextParts(scope, contextId);
     const now = Date.now();
-    const row = this.database
-      .prepare(
-        `SELECT value_raw, value_type, expires_at FROM variables WHERE ${this.scopedWhere(true)} ORDER BY updated_at DESC, id DESC LIMIT 1`,
-      )
-      .get(...this.scopedArgs(botId, scope, ctx1, ctx2, key)) as
-      | {
-          value_raw: string;
-          value_type: string;
-          expires_at: number | null;
-        }
-      | undefined;
+    const result = await this.database.execute({
+      sql: `SELECT value_raw, value_type, expires_at FROM variables WHERE ${this.scopedWhere(true)} ORDER BY updated_at DESC, id DESC LIMIT 1`,
+      args: this.scopedArgs(botId, scope, ctx1, ctx2, key),
+    });
+    const row = result.rows[0] as Record<string, unknown> | undefined;
 
     if (!row) {
       return null;
     }
-    if (this.isExpired(row.expires_at, now)) {
+    const expiresAt = rowNullableNumber(row, 'expires_at');
+    if (this.isExpired(expiresAt, now)) {
       await this.removeScopedVariable(botId, scope, contextId, key);
       return null;
     }
-    return deserializeVariableValue(row.value_raw, row.value_type);
+    return deserializeVariableValue(rowString(row, 'value_raw'), rowString(row, 'value_type'));
   }
 
   async setScopedVariable(
@@ -205,17 +220,16 @@ export class SqliteVariableStore implements VariableDatabase {
     const { ctx1, ctx2 } = parseScopedContextParts(scope, contextId);
     const { raw, type } = serializeVariableValue(value);
     const now = Date.now();
-    this.database
-      .prepare(
-        `INSERT INTO variables (bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at)
+    await this.database.execute({
+      sql: `INSERT INTO variables (bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(bot_id, scope, context_id_1, context_id_2, key) DO UPDATE SET
            value_raw = excluded.value_raw,
            value_type = excluded.value_type,
            updated_at = excluded.updated_at,
            expires_at = excluded.expires_at`,
-      )
-      .run(botId, scope, ctx1, ctx2 || null, key, raw, type, now, now, null);
+      args: [botId, scope, ctx1, ctx2 || null, key, raw, type, now, now, null],
+    });
   }
 
   async removeScopedVariable(
@@ -226,9 +240,10 @@ export class SqliteVariableStore implements VariableDatabase {
   ): Promise<void> {
     await this.init();
     const { ctx1, ctx2 } = parseScopedContextParts(scope, contextId);
-    this.database
-      .prepare(`DELETE FROM variables WHERE ${this.scopedWhere(true)}`)
-      .run(...this.scopedArgs(botId, scope, ctx1, ctx2, key));
+    await this.database.execute({
+      sql: `DELETE FROM variables WHERE ${this.scopedWhere(true)}`,
+      args: this.scopedArgs(botId, scope, ctx1, ctx2, key),
+    });
   }
 
   async listContextIds(
@@ -247,34 +262,35 @@ export class SqliteVariableStore implements VariableDatabase {
     const where = whereClauses.join(' AND ');
 
     if (scope === 'guildMember') {
-      const rows = this.database
-        .prepare(`SELECT DISTINCT context_id_1, context_id_2 FROM variables WHERE ${where}`)
-        .all(...args) as Array<{ context_id_1: string; context_id_2: string | null }>;
-      return rows
+      const result = await this.database.execute({
+        sql: `SELECT DISTINCT context_id_1, context_id_2 FROM variables WHERE ${where}`,
+        args,
+      });
+      return (result.rows as Record<string, unknown>[])
         .map((row) =>
           composeGuildMemberContextId(
-            (row.context_id_1 ?? '').toString(),
-            (row.context_id_2 ?? '').toString(),
+            rowString(row, 'context_id_1'),
+            rowNullableString(row, 'context_id_2') ?? '',
           ),
         )
         .filter((id) => id.length > 0);
     }
 
-    const rows = this.database
-      .prepare(
-        `SELECT DISTINCT context_id_1 FROM variables WHERE ${where} AND context_id_1 != ''`,
-      )
-      .all(...args) as Array<{ context_id_1: string }>;
-    return rows
-      .map((row) => (row.context_id_1 ?? '').toString())
+    const result = await this.database.execute({
+      sql: `SELECT DISTINCT context_id_1 FROM variables WHERE ${where} AND context_id_1 != ''`,
+      args,
+    });
+    return (result.rows as Record<string, unknown>[])
+      .map((row) => rowString(row, 'context_id_1'))
       .filter((id) => id.length > 0);
   }
 
   async removeAllScopedValuesForKey(botId: string, scope: string, key: string): Promise<void> {
     await this.init();
-    this.database
-      .prepare('DELETE FROM variables WHERE bot_id = ? AND scope = ? AND key = ?')
-      .run(botId, scope, key);
+    await this.database.execute({
+      sql: 'DELETE FROM variables WHERE bot_id = ? AND scope = ? AND key = ?',
+      args: [botId, scope, key],
+    });
   }
 
   async queryScopedVariableIndex(
@@ -289,33 +305,25 @@ export class SqliteVariableStore implements VariableDatabase {
     const descending = options.descending !== false;
     const now = Date.now();
 
-    const rows = this.database
-      .prepare(
-        'SELECT context_id_1, context_id_2, key, value_raw, value_type, expires_at FROM variables WHERE bot_id = ? AND scope = ? AND key = ?',
-      )
-      .all(botId, scope, key) as Array<{
-      context_id_1: string;
-      context_id_2: string | null;
-      key: string;
-      value_raw: string;
-      value_type: string;
-      expires_at: number | null;
-    }>;
+    const result = await this.database.execute({
+      sql: 'SELECT context_id_1, context_id_2, key, value_raw, value_type, expires_at FROM variables WHERE bot_id = ? AND scope = ? AND key = ?',
+      args: [botId, scope, key],
+    });
 
-    const items = rows
-      .filter((row) => !this.isExpired(row.expires_at, now))
+    const items = (result.rows as Record<string, unknown>[])
+      .filter((row) => !this.isExpired(rowNullableNumber(row, 'expires_at'), now))
       .map((row) => {
         const contextId =
           scope === 'guildMember'
             ? composeGuildMemberContextId(
-                (row.context_id_1 ?? '').toString(),
-                (row.context_id_2 ?? '').toString(),
+                rowString(row, 'context_id_1'),
+                rowNullableString(row, 'context_id_2') ?? '',
               )
-            : (row.context_id_1 ?? '').toString();
+            : rowString(row, 'context_id_1');
         return {
           contextId,
-          key: (row.key ?? '').toString(),
-          value: deserializeVariableValue(row.value_raw, row.value_type),
+          key: rowString(row, 'key'),
+          value: deserializeVariableValue(rowString(row, 'value_raw'), rowString(row, 'value_type')),
         };
       })
       .filter((entry) => entry.contextId.length > 0)
@@ -333,9 +341,9 @@ export class SqliteVariableStore implements VariableDatabase {
   }
 
   dispose(): void {
-    if (this.db) {
-      this.db.close();
-      this.db = null;
+    if (this.client) {
+      this.client.close();
+      this.client = null;
       this.initialized = false;
     }
   }

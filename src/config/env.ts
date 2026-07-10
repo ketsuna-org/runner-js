@@ -36,6 +36,12 @@ function resolveVersion(): string {
   }
 }
 
+export function isManagedRunner(
+  env: Pick<RunnerEnv, 'managedRunnerApi' | 'managedRunnerToken'>,
+): boolean {
+  return env.managedRunnerApi.trim().length > 0 && env.managedRunnerToken.trim().length > 0;
+}
+
 export function loadRunnerEnv(): RunnerEnv {
   const poolMaxRaw = envOrDefault('BOT_CREATOR_POOL_MAX_BOTS', '40');
   const poolMaxBots = Number.parseInt(poolMaxRaw, 10);

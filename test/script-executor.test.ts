@@ -4,7 +4,7 @@ import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
 describe('ScriptExecutor', () => {
   it('executes async user script with injected context', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const variables: Record<string, unknown> = { count: 1 };
     const client = { tag: 'client' };
 
@@ -24,7 +24,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('times out long running scripts', async () => {
-    const executor = new ScriptExecutor(50);
+    const executor = new ScriptExecutor(50, { sandboxed: true });
 
     await expect(
       executor.execute(
@@ -43,7 +43,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('rejects disallowed require modules', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     await expect(
       executor.execute(
@@ -61,7 +61,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes allowlisted canvas and voice modules via require', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -97,7 +97,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('does not expose process to user scripts', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     await expect(
       executor.execute(
@@ -115,7 +115,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('does not expose config.token to user scripts', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       'return config.token;',
@@ -132,7 +132,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes the full client but not the token', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const fetchInvites = vi.fn(async () => ['invite']);
     const client = {
       token: 'super-secret-token',
@@ -181,7 +181,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes client.ws.ping from the host websocket manager', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const client = {
       user: null,
       readyTimestamp: Date.now(),
@@ -209,7 +209,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes full interaction and message APIs dynamically', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async () => ({ ok: true }));
     const react = vi.fn(async () => undefined);
     const getString = vi.fn(() => 'hello');
@@ -249,7 +249,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('supports eval-based prefix command scripts', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: { content: string }) => ({ content: payload.content }));
 
     await executor.execute(
@@ -279,7 +279,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('runs concurrent script executions on the same isolate in parallel', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const order: string[] = [];
     const reply = vi.fn(async (payload: { content: string }) => {
       order.push(payload.content);
@@ -319,7 +319,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('runs setTimeout callbacks before releasing the host bridge', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async () => ({ ok: true }));
 
     await executor.execute(
@@ -342,7 +342,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('waits for fire-and-forget host calls before releasing the bridge', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     let replyFinished = false;
     const reply = vi.fn(async () => {
       await new Promise((resolve) => setTimeout(resolve, 25));
@@ -367,7 +367,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('supports eval prefix scripts with async host replies', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string | { content: string }) => {
       await new Promise((resolve) => setTimeout(resolve, 50));
       return typeof payload === 'string' ? { content: payload } : payload;
@@ -400,7 +400,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('supports await inside eval content', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
 
     await executor.execute(
@@ -429,7 +429,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('allows String() coercion on host reply objects in eval handlers', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string) => ({ content: payload, id: '123' }));
 
     await executor.execute(
@@ -459,7 +459,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('supports return inside eval content', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
 
     await executor.execute(
@@ -490,7 +490,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('does not expose host bridge internals to eval', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
 
     await executor.execute(
@@ -521,7 +521,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('times out without host bridge errors', async () => {
-    const executor = new ScriptExecutor(50);
+    const executor = new ScriptExecutor(50, { sandboxed: true });
 
     await expect(
       executor.execute(
@@ -540,7 +540,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('blocks nested client access on message', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const sharedClient = { token: 'secret', tag: 'Bot#1' };
 
     await expect(
@@ -579,7 +579,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('blocks local filesystem paths in voice and canvas modules', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -645,7 +645,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('fetches remote audio URLs before creating a voice resource', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const mp3Bytes = Buffer.from([
       0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]);
@@ -700,7 +700,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes playAudio on the voice module', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -732,7 +732,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('rejects player.play when createAudioResource was not awaited', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const mp3Bytes = Buffer.from([
       0x49, 0x44, 0x33, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     ]);
@@ -785,7 +785,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('registers isolate callbacks on voice player event listeners', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -820,7 +820,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('passes voiceAdapterCreator functions to voice join without clone errors', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const adapterCreator = vi.fn(() => ({ sendPackets: vi.fn() }));
 
     const result = await executor.execute(
@@ -859,7 +859,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes synchronous voice player methods', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
 
     const result = await executor.execute(
       `
@@ -897,7 +897,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('exposes fetch response body, text(), and json()', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({
@@ -949,7 +949,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('serializes client safely via JSON.stringify', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const client = {
       token: 'super-secret-token',
       uptime: 12345,
@@ -986,7 +986,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('serializes host proxies via JSON.stringify', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: string) => ({ content: payload }));
 
     const result = await executor.execute(
@@ -1048,7 +1048,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('allows passing host proxy objects to host methods', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async (payload: unknown) => ({ ok: true, payload }));
 
     await executor.execute(
@@ -1073,7 +1073,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('blocks local file paths in Discord send attachments', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const send = vi.fn(async () => ({ ok: true }));
 
     await expect(
@@ -1094,7 +1094,7 @@ describe('ScriptExecutor', () => {
   });
 
   it('calls host bridged methods such as interaction.reply', async () => {
-    const executor = new ScriptExecutor(5000);
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
     const reply = vi.fn(async () => ({ ok: true }));
 
     await executor.execute(

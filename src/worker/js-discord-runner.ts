@@ -34,6 +34,7 @@ export class JsDiscordRunner {
       level: 'info' | 'warn' | 'error' | 'debug',
       message: string,
     ) => void,
+    private readonly sandboxScripts = false,
   ) {}
 
   private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
@@ -71,7 +72,16 @@ export class JsDiscordRunner {
       intents: mapIntents(this.effectiveIntents),
     });
 
-    this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
+    this.onLog(
+      'info',
+      this.sandboxScripts
+        ? '[ScriptRuntime] Sandboxed (managed runner)'
+        : '[ScriptRuntime] Direct (unrestricted require)',
+    );
+
+    this.executor = new ScriptExecutor(this.config.scriptTimeoutMs, {
+      sandboxed: this.sandboxScripts,
+    });
     this.registry = new HandlerRegistry(
       this.client,
       this.config,

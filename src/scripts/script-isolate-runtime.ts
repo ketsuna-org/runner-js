@@ -386,7 +386,9 @@ const BOOTSTRAP_SCRIPT = `
 })();
 `;
 
-export class ScriptIsolateRuntime {
+import type { ScriptRuntime } from './script-runtime.js';
+
+export class ScriptIsolateRuntime implements ScriptRuntime {
   private readonly isolate: ivm.Isolate;
   private readonly bootstrap: ivm.Script;
   private readonly bridgeHost: ScriptBridgeHost;

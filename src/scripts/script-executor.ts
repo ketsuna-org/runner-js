@@ -1,14 +1,25 @@
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
+import { ScriptDirectRuntime } from './script-direct-runtime.js';
 import { ScriptIsolateRuntime } from './script-isolate-runtime.js';
+import type { ScriptRuntime } from './script-runtime.js';
+
+export interface ScriptExecutorOptions {
+  sandboxed?: boolean;
+  memoryLimitMb?: number;
+}
 
 export class ScriptExecutor {
-  private readonly runtime: ScriptIsolateRuntime;
+  private readonly runtime: ScriptRuntime;
+  readonly sandboxed: boolean;
 
   constructor(
     private readonly defaultTimeoutMs: number,
-    memoryLimitMb = 128,
+    options: ScriptExecutorOptions = {},
   ) {
-    this.runtime = new ScriptIsolateRuntime(memoryLimitMb);
+    this.sandboxed = options.sandboxed ?? false;
+    this.runtime = this.sandboxed
+      ? new ScriptIsolateRuntime(options.memoryLimitMb ?? 128)
+      : new ScriptDirectRuntime();
   }
 
   async execute(

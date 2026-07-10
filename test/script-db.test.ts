@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { describe, expect, it, afterEach } from 'vitest';
 
-import { SqliteVariableStore } from '../src/runtime/sqlite-variable-store.js';
+import { LibsqlVariableStore } from '../src/runtime/libsql-variable-store.js';
 import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import { ScriptDb } from '../src/scripts/script-db.js';
 
@@ -49,7 +49,7 @@ describe('ScriptDb', () => {
     configOverride: typeof config = config,
   ) {
     dataDir = await mkdtemp(path.join(os.tmpdir(), 'runner-js-db-'));
-    store = new SqliteVariableStore(path.join(dataDir, 'variables'));
+    store = new LibsqlVariableStore(path.join(dataDir, 'variables'));
     await store.init();
     return new ScriptDb('bot-1', configOverride, store, ctx, variables);
   }

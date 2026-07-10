@@ -5,8 +5,9 @@
     ],
     "assets": [
       "node_modules/@discordjs/opus/prebuild/**/*",
-      "node_modules/better-sqlite3/build/Release/*.node",
-      "node_modules/better-sqlite3/prebuilds/**/*",
+      "node_modules/@libsql/linux-x64-gnu/index.node",
+      "node_modules/@libsql/linux-arm64-gnu/index.node",
+      "node_modules/@libsql/win32-x64-msvc/index.node",
       "node_modules/bufferutil/prebuilds/**/*",
       "node_modules/zlib-sync/prebuilds/**/*",
       "node_modules/canvas/build/Release/*.node",

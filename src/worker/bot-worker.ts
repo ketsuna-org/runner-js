@@ -3,6 +3,7 @@ import process from 'node:process';
 import { isParentMessage, type ParentToWorkerMessage } from '../ipc/messages.js';
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig } from '../config/js-bot-config.js';
+import { isManagedRunner, loadRunnerEnv } from '../config/env.js';
 import { resolveVariableStore } from '../runtime/resolve-variable-store.js';
 import { JsDiscordRunner } from './js-discord-runner.js';
 
@@ -15,9 +16,12 @@ export async function runBotWorker(): Promise<void> {
     process.exit(1);
   }
 
+  const env = loadRunnerEnv();
+  const sandboxScripts = isManagedRunner(env);
+
   const variableStore = await resolveVariableStore(dataDir, {
-    managedRunnerApi: process.env.BOT_CREATOR_MANAGED_RUNNER_API ?? '',
-    managedRunnerToken: process.env.BOT_CREATOR_MANAGED_RUNNER_TOKEN ?? '',
+    managedRunnerApi: env.managedRunnerApi,
+    managedRunnerToken: env.managedRunnerToken,
   });
 
   let runner: JsDiscordRunner | null = null;
@@ -43,7 +47,7 @@ export async function runBotWorker(): Promise<void> {
       runner = null;
     }
 
-    runner = new JsDiscordRunner(botId, config, variableStore, emitLog);
+    runner = new JsDiscordRunner(botId, config, variableStore, emitLog, sandboxScripts);
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
     send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });

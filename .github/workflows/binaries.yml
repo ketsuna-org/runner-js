@@ -47,6 +47,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules (Windows)
+        if: runner.os == 'Windows'
+        run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native
+
       - name: Build and test
         run: |
           npm run build
