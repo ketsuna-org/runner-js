@@ -39,8 +39,8 @@ export class JsDiscordRunner {
   private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
     const warnings: string[] = [];
     try {
-      const portalEnabled = await fetchPortalEnabledPrivilegedIntents(this.config.token);
-      const effective = buildEffectiveIntentsMap(this.config, portalEnabled, warnings);
+      const portalSync = await fetchPortalEnabledPrivilegedIntents(this.config.token);
+      const effective = buildEffectiveIntentsMap(this.config, portalSync.enabled, warnings);
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
       }
