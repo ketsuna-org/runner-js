@@ -8,7 +8,6 @@
       "node_modules/@libsql/linux-x64-gnu/index.node",
       "node_modules/@libsql/linux-arm64-gnu/index.node",
       "node_modules/@libsql/darwin-arm64/index.node",
-      "node_modules/@libsql/darwin-x64/index.node",
       "node_modules/@libsql/win32-x64-msvc/index.node",
       "node_modules/bufferutil/prebuilds/**/*",
       "node_modules/zlib-sync/prebuilds/**/*",

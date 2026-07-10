@@ -36,10 +36,6 @@ jobs:
             pkg_script: pkg:macos-arm64
             artifact: bot-creator-runner-js-macos-arm64
             rebuild_native: true
-          - runner: macos-13
-            pkg_script: pkg:macos-x64
-            artifact: bot-creator-runner-js-macos-x64
-            rebuild_native: true
 
     steps:
       - uses: actions/checkout@v4
@@ -96,8 +92,7 @@ jobs:
             -name 'bot-creator-runner-js-linux-x64' -o \
             -name 'bot-creator-runner-js-linux-arm64' -o \
             -name 'bot-creator-runner-js-win.exe' -o \
-            -name 'bot-creator-runner-js-macos-arm64' -o \
-            -name 'bot-creator-runner-js-macos-x64' \
+            -name 'bot-creator-runner-js-macos-arm64' \
             \) -exec cp {} release/ \;
           ls -la release/
 
