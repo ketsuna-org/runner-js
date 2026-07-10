@@ -23,12 +23,23 @@ jobs:
           - runner: ubuntu-latest
             pkg_script: pkg:linux-x64
             artifact: bot-creator-runner-js-linux-x64
+            rebuild_native: false
           - runner: ubuntu-24.04-arm
             pkg_script: pkg:linux-arm64
             artifact: bot-creator-runner-js-linux-arm64
+            rebuild_native: false
           - runner: windows-latest
             pkg_script: pkg:win-x64
             artifact: bot-creator-runner-js-win.exe
+            rebuild_native: true
+          - runner: macos-latest
+            pkg_script: pkg:macos-arm64
+            artifact: bot-creator-runner-js-macos-arm64
+            rebuild_native: true
+          - runner: macos-13
+            pkg_script: pkg:macos-x64
+            artifact: bot-creator-runner-js-macos-x64
+            rebuild_native: true
 
     steps:
       - uses: actions/checkout@v4
@@ -47,8 +58,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Rebuild native modules (Windows)
-        if: runner.os == 'Windows'
+      - name: Rebuild native modules
+        if: matrix.rebuild_native
         run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native @libsql/client
 
       - name: Build and test
@@ -84,7 +95,9 @@ jobs:
           find artifacts -type f \( \
             -name 'bot-creator-runner-js-linux-x64' -o \
             -name 'bot-creator-runner-js-linux-arm64' -o \
-            -name 'bot-creator-runner-js-win.exe' \
+            -name 'bot-creator-runner-js-win.exe' -o \
+            -name 'bot-creator-runner-js-macos-arm64' -o \
+            -name 'bot-creator-runner-js-macos-x64' \
             \) -exec cp {} release/ \;
           ls -la release/
 
