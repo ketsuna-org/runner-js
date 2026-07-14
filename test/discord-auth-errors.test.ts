@@ -2,17 +2,37 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DiscordTokenUnauthorizedError,
+  formatGatewayCloseMessage,
+  isDiscordGatewayDisallowedIntentsClose,
   isDiscordGatewayFatalClose,
   isDiscordTokenUnauthorized,
 } from '../src/discord/discord-auth-errors.js';
 
-describe('isDiscordGatewayFatalClose', () => {
+describe('isDiscordGatewayDisallowedIntentsClose', () => {
   it('detects disallowed intent close code', () => {
-    expect(isDiscordGatewayFatalClose(4014, 'Disallowed Intents')).toBe(true);
+    expect(isDiscordGatewayDisallowedIntentsClose(4014, 'Disallowed Intents')).toBe(true);
   });
 
   it('detects disallowed intent message without code', () => {
-    expect(isDiscordGatewayFatalClose(null, 'Used disallowed intents')).toBe(true);
+    expect(isDiscordGatewayDisallowedIntentsClose(null, 'Used disallowed intents')).toBe(true);
+  });
+});
+
+describe('isDiscordGatewayFatalClose', () => {
+  it('does not treat 4014 as fatal', () => {
+    expect(isDiscordGatewayFatalClose(4014, 'Disallowed Intents')).toBe(false);
+  });
+
+  it('still treats invalid intents as fatal', () => {
+    expect(isDiscordGatewayFatalClose(4013, 'Invalid intents')).toBe(true);
+  });
+});
+
+describe('formatGatewayCloseMessage', () => {
+  it('returns actionable message for 4014', () => {
+    expect(formatGatewayCloseMessage(4014, 'the reason property is deprecated')).toContain(
+      'Disallowed intents (4014)',
+    );
   });
 });
 

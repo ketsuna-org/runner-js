@@ -5,6 +5,7 @@ import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig } from '../config/js-bot-config.js';
 import { isManagedRunner, loadRunnerEnv } from '../config/env.js';
 import { resolveVariableStore } from '../runtime/resolve-variable-store.js';
+import { isDiscordGatewayDisallowedIntentsClose } from '../discord/discord-auth-errors.js';
 import { JsDiscordRunner } from './js-discord-runner.js';
 
 export async function runBotWorker(): Promise<void> {
@@ -42,10 +43,15 @@ export async function runBotWorker(): Promise<void> {
   }
 
   function handleFatalDisconnect(reason: string): void {
+    const disallowedIntents = isDiscordGatewayDisallowedIntentsClose(null, reason);
     send({ type: 'status', botId, state: 'error', lastError: reason });
-    emitLog('error', `Fatal disconnect: ${reason}`);
-    void stopRunner('fatal-disconnect').finally(() => {
-      process.exit(1);
+    if (disallowedIntents) {
+      emitLog('warn', reason);
+    } else {
+      emitLog('error', `Fatal disconnect: ${reason}`);
+    }
+    void stopRunner(disallowedIntents ? 'disallowed-intents' : 'fatal-disconnect').finally(() => {
+      process.exit(disallowedIntents ? 0 : 1);
     });
   }
 

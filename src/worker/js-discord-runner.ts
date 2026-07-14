@@ -10,6 +10,8 @@ import {
 import { buildDiscordClientOptions } from '../discord/discord-client-options.js';
 import {
   DiscordTokenUnauthorizedError,
+  formatGatewayCloseMessage,
+  isDiscordGatewayDisallowedIntentsClose,
   isDiscordGatewayFatalClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
@@ -84,13 +86,19 @@ export class JsDiscordRunner {
 
     this.client.on(Events.ShardDisconnect, (event, shardId) => {
       const code = event.code;
-      const reason = event.reason || `Gateway disconnected (code=${code})`;
-      const detail = `Shard ${shardId} disconnected: ${reason} (code=${code})`;
-      this.lastError = detail;
-      this.onLog('error', detail);
+      const detail = formatGatewayCloseMessage(code, event.reason);
+      const fullDetail = `Shard ${shardId}: ${detail}`;
+      this.lastError = fullDetail;
 
-      if (isDiscordGatewayFatalClose(code, reason)) {
-        void this.handleFatalDisconnect(detail);
+      if (isDiscordGatewayDisallowedIntentsClose(code, event.reason)) {
+        this.onLog('warn', fullDetail);
+        void this.handleDisallowedIntentsDisconnect(fullDetail);
+        return;
+      }
+
+      this.onLog('error', fullDetail);
+      if (isDiscordGatewayFatalClose(code, event.reason)) {
+        void this.handleFatalDisconnect(fullDetail);
       }
     });
 
@@ -100,6 +108,15 @@ export class JsDiscordRunner {
       this.onLog('error', detail);
       void this.handleFatalDisconnect(detail);
     });
+  }
+
+  private async handleDisallowedIntentsDisconnect(reason: string): Promise<void> {
+    if (this.fatalDisconnectHandled) {
+      return;
+    }
+    this.fatalDisconnectHandled = true;
+    await this.stop();
+    this.onFatalDisconnect?.(reason);
   }
 
   private async handleFatalDisconnect(reason: string): Promise<void> {

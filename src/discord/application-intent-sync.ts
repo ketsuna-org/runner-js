@@ -9,7 +9,6 @@ const APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED = 1 << 14;
 const APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS = 1 << 15;
 const APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED = 1 << 18;
 const APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT = 1 << 19;
-const USER_FLAG_VERIFIED_BOT = 1 << 16;
 
 const ALL_INTENT_KEYS = [
   'Guilds',
@@ -36,10 +35,6 @@ const ALL_INTENT_KEYS = [
 ] as const;
 
 type DiscordApplication = {
-  flags?: number;
-};
-
-type DiscordUser = {
   flags?: number;
 };
 
@@ -109,79 +104,13 @@ export async function fetchPortalEnabledPrivilegedIntents(
   const flags = app.flags ?? 0;
   const enabled = portalEnabledPrivilegedIntentsFromFlags(flags);
 
-  if (enabled.size >= PRIVILEGED_INTENT_KEYS.size) {
-    return { enabled, didAutoEnable: false };
-  }
-
-  const userResponse = await fetch('https://discord.com/api/v10/users/@me', {
-    headers: { Authorization: `Bot ${token}` },
-  });
-
-  if (!userResponse.ok) {
-    if (userResponse.status === 401 || userResponse.status === 403) {
-      throw new DiscordTokenUnauthorizedError(
-        `Failed to fetch user info (${userResponse.status})`,
-      );
-    }
-    throw new Error(`Failed to fetch user info (${userResponse.status})`);
-  }
-
-  const user = (await userResponse.json()) as DiscordUser;
-  const userFlags = user.flags ?? 0;
-
-  if ((userFlags & USER_FLAG_VERIFIED_BOT) !== 0) {
-    throw new PortalIntentAutoEnableError();
-  }
-
-  const hasMembers = enabled.has('Guild Members');
-  const hasPresence = enabled.has('Guild Presence');
-  const hasMessageContent = enabled.has('Message Content');
-
-  let patchFlags = flags;
-  if (!hasMembers) {
-    patchFlags |= APPLICATION_FLAG_GATEWAY_GUILD_MEMBERS_LIMITED;
-  }
-  if (!hasPresence) {
-    patchFlags |= APPLICATION_FLAG_GATEWAY_PRESENCE_LIMITED;
-  }
-  if (!hasMessageContent) {
-    patchFlags |= APPLICATION_FLAG_GATEWAY_MESSAGE_CONTENT_LIMITED;
-  }
-
-  if (patchFlags === flags) {
-    return { enabled, didAutoEnable: false };
-  }
-
-  const patchResponse = await fetch('https://discord.com/api/v10/applications/@me', {
-    method: 'PATCH',
-    headers: {
-      Authorization: `Bot ${token}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ flags: patchFlags }),
-  });
-
-  if (patchResponse.status === 401) {
-    throw new DiscordTokenUnauthorizedError(
-      `Failed to update application flags via PATCH (${patchResponse.status})`,
-    );
-  }
-
-  if (!patchResponse.ok) {
-    throw new PortalIntentPatchFailedError(patchResponse.status);
-  }
-
-  return {
-    enabled: new Set(PRIVILEGED_INTENT_KEYS),
-    didAutoEnable: true,
-  };
+  return { enabled, didAutoEnable: false };
 }
 
 export function buildPortalIntentsMap(portalEnabledPrivileged: Set<string>): Record<string, boolean> {
-  const intents: Record<string, boolean> = {};
-  for (const key of ALL_INTENT_KEYS) {
-    intents[key] = !PRIVILEGED_INTENT_KEYS.has(key);
-  }
+  const intents: Record<string, boolean> = {
+    Guilds: true,
+  };
   for (const key of portalEnabledPrivileged) {
     intents[key] = true;
   }
@@ -201,7 +130,6 @@ export function buildEffectiveIntentsMap(
   portalEnabledPrivileged: Set<string>,
   warnings?: string[],
 ): Record<string, boolean> {
-  const portalMap = buildPortalIntentsMap(portalEnabledPrivileged);
   const requiredKeys = resolveRequiredIntentKeys({
     eventNames: configEventNames(config),
     hasLegacyCommands: configHasLegacyPrefixCommands(config),
@@ -209,9 +137,18 @@ export function buildEffectiveIntentsMap(
     warnings,
   });
 
-  const effective = { ...portalMap };
-  for (const key of PRIVILEGED_INTENT_KEYS) {
-    effective[key] = requiredKeys.has(key) && portalEnabledPrivileged.has(key);
+  const effective: Record<string, boolean> = {};
+  for (const key of ALL_INTENT_KEYS) {
+    effective[key] = false;
+  }
+  effective.Guilds = true;
+
+  for (const key of requiredKeys) {
+    if (PRIVILEGED_INTENT_KEYS.has(key)) {
+      effective[key] = portalEnabledPrivileged.has(key);
+    } else {
+      effective[key] = true;
+    }
   }
 
   return effective;

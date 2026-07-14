@@ -11,13 +11,52 @@ const GATEWAY_FATAL_CLOSE_CODES = new Set([
   4011, // sharding required
   4012, // invalid api version
   4013, // invalid intents
-  4014, // disallowed intents
 ]);
+
+const GATEWAY_DISALLOWED_INTENTS_CODE = 4014;
+
+export function isDiscordGatewayDisallowedIntentsClose(
+  code: number | null | undefined,
+  reason?: string | null,
+): boolean {
+  if (code === GATEWAY_DISALLOWED_INTENTS_CODE) {
+    return true;
+  }
+
+  const normalized = (reason ?? '').toLowerCase();
+  return normalized.includes('disallowed intent');
+}
+
+export function formatGatewayCloseMessage(
+  code: number | null | undefined,
+  reason?: string | null,
+): string {
+  if (isDiscordGatewayDisallowedIntentsClose(code, reason)) {
+    return (
+      'Disallowed intents (4014) — enable the required intents in ' +
+      'Discord Developer Portal → Bot → Privileged Gateway Intents'
+    );
+  }
+
+  if (code != null && GATEWAY_FATAL_CLOSE_CODES.has(code)) {
+    return `Gateway disconnected (code=${code})`;
+  }
+
+  if (code != null) {
+    return `Gateway disconnected (code=${code})`;
+  }
+
+  return reason?.trim() || 'Gateway disconnected';
+}
 
 export function isDiscordGatewayFatalClose(
   code: number | null | undefined,
   reason?: string | null,
 ): boolean {
+  if (isDiscordGatewayDisallowedIntentsClose(code, reason)) {
+    return false;
+  }
+
   if (code != null && GATEWAY_FATAL_CLOSE_CODES.has(code)) {
     return true;
   }
@@ -28,7 +67,6 @@ export function isDiscordGatewayFatalClose(
   }
 
   if (
-    normalized.includes('disallowed intent') ||
     normalized.includes('invalid intent') ||
     normalized.includes('authentication failed')
   ) {
@@ -59,6 +97,10 @@ export function isDiscordTokenUnauthorized(error: unknown): boolean {
   const normalized = message.toLowerCase();
 
   if (normalized.includes('discord_token_invalid')) {
+    return true;
+  }
+
+  if (isDiscordGatewayDisallowedIntentsClose(null, message)) {
     return true;
   }
 
