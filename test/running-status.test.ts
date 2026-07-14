@@ -15,15 +15,21 @@ describe('running-status endpoint', () => {
           state: 'running',
           lastSeenAt: null,
           lastError: null,
-          baselineRssBytes: null,
+          baselineRssBytes: 12_000_000,
+          heapUsedBytes: 4_000_000,
+          guildCount: 2,
+          pid: 4242,
         },
         {
           botId: 'stopped-bot',
           botName: 'Stopped Bot',
           state: 'stopped',
           lastSeenAt: null,
-          lastError: null,
+          lastError: 'fatal',
           baselineRssBytes: null,
+          heapUsedBytes: null,
+          guildCount: null,
+          pid: null,
         },
       ],
     } as unknown as RuntimeController;
@@ -49,8 +55,24 @@ describe('running-status endpoint', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       bots: {
-        'running-bot': { connected: true, state: 'running' },
-        'stopped-bot': { connected: false, state: 'stopped' },
+        'running-bot': {
+          connected: true,
+          state: 'running',
+          rssBytes: 12_000_000,
+          heapUsedBytes: 4_000_000,
+          guildCount: 2,
+          pid: 4242,
+          lastError: null,
+        },
+        'stopped-bot': {
+          connected: false,
+          state: 'stopped',
+          rssBytes: null,
+          heapUsedBytes: null,
+          guildCount: null,
+          pid: null,
+          lastError: 'fatal',
+        },
       },
     });
 

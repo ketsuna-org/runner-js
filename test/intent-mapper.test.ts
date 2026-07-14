@@ -84,11 +84,12 @@ describe('mapIntents', () => {
     expect(bits & GatewayIntentBits.GuildEmojisAndStickers).not.toBe(0);
   });
 
-  it('includes privileged bits only when effective map is true', () => {
-    const withContent = mapIntents({ 'Message Content': true })[0];
-    const withoutContent = mapIntents({ 'Message Content': false })[0];
-    expect(withContent & GatewayIntentBits.MessageContent).not.toBe(0);
-    expect(withoutContent & GatewayIntentBits.MessageContent).toBe(0);
+  it('does not add default guild message intents when map is empty', () => {
+    const bits = mapIntents({})[0];
+    expect(bits & GatewayIntentBits.GuildMessages).toBe(0);
+    expect(bits & GatewayIntentBits.GuildMessageReactions).toBe(0);
+    expect(bits & GatewayIntentBits.GuildVoiceStates).toBe(0);
+    expect(bits & GatewayIntentBits.Guilds).not.toBe(0);
   });
 });
 

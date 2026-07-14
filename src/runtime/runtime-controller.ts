@@ -1,7 +1,7 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.js';
 import { BotStore } from './bot-store.js';
-import { BotProcessManager } from './bot-process-manager.js';
+import { BotProcessManager, type ManagedWorkerState } from './bot-process-manager.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
 import type { VariableDatabase } from './variable-database.js';
@@ -15,6 +15,9 @@ export interface RunnerBotRuntimeState {
   lastSeenAt: string | null;
   lastError: string | null;
   baselineRssBytes: number | null;
+  heapUsedBytes: number | null;
+  guildCount: number | null;
+  pid: number | null;
 }
 
 export class RuntimeController {
@@ -282,18 +285,20 @@ export class RuntimeController {
   }
 
   listRuntimeStates(): RunnerBotRuntimeState[] {
-    return this.processManager.listStates().map((state) => ({
-      botId: state.botId,
-      botName: state.botName,
-      state: state.state,
-      lastSeenAt: state.lastSeenAt,
-      lastError: state.lastError,
-      baselineRssBytes: state.rssBytes,
-    }));
+    return this.processManager.listStates().map((state) => this.toRuntimeState(state));
   }
 
   runtimeStateForBot(botId: string): RunnerBotRuntimeState {
-    const state = this.processManager.getState(botId);
+    return this.toRuntimeState(this.processManager.getState(botId));
+  }
+
+  aggregateWorkerRssBytes(): number {
+    return this.processManager.listStates().reduce((sum, state) => {
+      return sum + (state.rssBytes ?? 0);
+    }, 0);
+  }
+
+  private toRuntimeState(state: ManagedWorkerState): RunnerBotRuntimeState {
     return {
       botId: state.botId,
       botName: state.botName,
@@ -301,6 +306,9 @@ export class RuntimeController {
       lastSeenAt: state.lastSeenAt,
       lastError: state.lastError,
       baselineRssBytes: state.rssBytes,
+      heapUsedBytes: state.heapUsedBytes,
+      guildCount: state.guildCount,
+      pid: state.pid,
     };
   }
 

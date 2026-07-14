@@ -98,11 +98,27 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
   });
 
   app.get('/bots/running-status', async () => {
-    const bots: Record<string, { connected: boolean; state: string }> = {};
+    const bots: Record<
+      string,
+      {
+        connected: boolean;
+        state: string;
+        rssBytes: number | null;
+        heapUsedBytes: number | null;
+        guildCount: number | null;
+        pid: number | null;
+        lastError: string | null;
+      }
+    > = {};
     for (const state of deps.runtime.listRuntimeStates()) {
       bots[state.botId] = {
         connected: state.state === 'running',
         state: state.state,
+        rssBytes: state.baselineRssBytes,
+        heapUsedBytes: state.heapUsedBytes,
+        guildCount: state.guildCount,
+        pid: state.pid,
+        lastError: state.lastError,
       };
     }
     return { bots };
@@ -458,24 +474,34 @@ function buildStatusPayload(runtime: RuntimeController) {
     apiVersion: 2,
     running: runtime.isRunning,
     runningCount: runtime.runningCount,
-    bots: runtime.listRuntimeStates().map((state) => ({
-      botId: state.botId,
-      botName: state.botName,
-      state: state.state,
-      lastSeenAt: state.lastSeenAt,
-      lastError: state.lastError,
-      baselineRssBytes: state.baselineRssBytes,
-    })),
+    bots: runtime.listRuntimeStates().map((state) => serializeBotRuntimeState(state)),
+  };
+}
+
+function serializeBotRuntimeState(state: ReturnType<RuntimeController['listRuntimeStates']>[number]) {
+  return {
+    botId: state.botId,
+    botName: state.botName,
+    state: state.state,
+    lastSeenAt: state.lastSeenAt,
+    lastError: state.lastError,
+    baselineRssBytes: state.baselineRssBytes,
+    heapUsedBytes: state.heapUsedBytes,
+    guildCount: state.guildCount,
+    pid: state.pid,
   };
 }
 
 function buildMetricsPayload(runtime: RuntimeController) {
   const memory = process.memoryUsage();
+  const totalWorkerRssBytes = runtime.aggregateWorkerRssBytes();
   return {
     apiVersion: 2,
     running: runtime.isRunning,
     runningCount: runtime.runningCount,
-    rssBytes: memory.rss,
+    rssBytes: memory.rss + totalWorkerRssBytes,
+    mainRssBytes: memory.rss,
+    totalWorkerRssBytes,
     cpuPercent: readCpuPercent(),
     bots: runtime.listRuntimeStates(),
   };

@@ -5,6 +5,51 @@ export class DiscordTokenUnauthorizedError extends Error {
   }
 }
 
+const GATEWAY_FATAL_CLOSE_CODES = new Set([
+  4004, // authentication failed
+  4010, // invalid shard
+  4011, // sharding required
+  4012, // invalid api version
+  4013, // invalid intents
+  4014, // disallowed intents
+]);
+
+export function isDiscordGatewayFatalClose(
+  code: number | null | undefined,
+  reason?: string | null,
+): boolean {
+  if (code != null && GATEWAY_FATAL_CLOSE_CODES.has(code)) {
+    return true;
+  }
+
+  const normalized = (reason ?? '').toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    normalized.includes('disallowed intent') ||
+    normalized.includes('invalid intent') ||
+    normalized.includes('authentication failed')
+  ) {
+    return true;
+  }
+
+  for (const fatalCode of GATEWAY_FATAL_CLOSE_CODES) {
+    if (
+      normalized.includes(String(fatalCode)) &&
+      (normalized.includes('disconnect') ||
+        normalized.includes('close') ||
+        normalized.includes('gateway') ||
+        normalized.includes('auth'))
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 export function isDiscordTokenUnauthorized(error: unknown): boolean {
   if (error instanceof DiscordTokenUnauthorizedError) {
     return true;
@@ -14,6 +59,10 @@ export function isDiscordTokenUnauthorized(error: unknown): boolean {
   const normalized = message.toLowerCase();
 
   if (normalized.includes('discord_token_invalid')) {
+    return true;
+  }
+
+  if (isDiscordGatewayFatalClose(null, message)) {
     return true;
   }
 

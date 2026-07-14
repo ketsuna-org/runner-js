@@ -6,13 +6,16 @@ export type WorkerToParentMessage =
       state: 'starting' | 'running' | 'stopped' | 'error';
       lastError?: string | null;
       startedAt?: string | null;
+      guildCount?: number;
     }
   | {
       type: 'metrics';
       botId: string;
       rssBytes: number;
+      heapUsedBytes?: number;
       cpuPercent: number | null;
       pid: number;
+      guildCount?: number;
     }
   | {
       type: 'log';

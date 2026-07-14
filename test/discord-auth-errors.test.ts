@@ -2,8 +2,19 @@ import { describe, expect, it } from 'vitest';
 
 import {
   DiscordTokenUnauthorizedError,
+  isDiscordGatewayFatalClose,
   isDiscordTokenUnauthorized,
 } from '../src/discord/discord-auth-errors.js';
+
+describe('isDiscordGatewayFatalClose', () => {
+  it('detects disallowed intent close code', () => {
+    expect(isDiscordGatewayFatalClose(4014, 'Disallowed Intents')).toBe(true);
+  });
+
+  it('detects disallowed intent message without code', () => {
+    expect(isDiscordGatewayFatalClose(null, 'Used disallowed intents')).toBe(true);
+  });
+});
 
 describe('isDiscordTokenUnauthorized', () => {
   it('detects DiscordTokenUnauthorizedError', () => {
@@ -20,6 +31,10 @@ describe('isDiscordTokenUnauthorized', () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it('detects disallowed intent errors for auto-restart suppression', () => {
+    expect(isDiscordTokenUnauthorized(new Error('Used disallowed intents'))).toBe(true);
   });
 
   it('ignores transient network errors', () => {

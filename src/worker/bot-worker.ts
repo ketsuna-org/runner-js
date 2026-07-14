@@ -41,16 +41,50 @@ export async function runBotWorker(): Promise<void> {
     return parseJsBotConfig(raw);
   }
 
+  function handleFatalDisconnect(reason: string): void {
+    send({ type: 'status', botId, state: 'error', lastError: reason });
+    emitLog('error', `Fatal disconnect: ${reason}`);
+    void stopRunner('fatal-disconnect').finally(() => {
+      process.exit(1);
+    });
+  }
+
+  function emitMetrics(): void {
+    const memory = process.memoryUsage();
+    send({
+      type: 'metrics',
+      botId,
+      rssBytes: memory.rss,
+      heapUsedBytes: memory.heapUsed,
+      cpuPercent: null,
+      pid: process.pid,
+      guildCount: runner?.getGuildCount() ?? 0,
+    });
+  }
+
   async function startRunner(config: JsBotConfig): Promise<void> {
     if (runner) {
       await runner.stop();
       runner = null;
     }
 
-    runner = new JsDiscordRunner(botId, config, variableStore, emitLog, sandboxScripts);
+    runner = new JsDiscordRunner(
+      botId,
+      config,
+      variableStore,
+      emitLog,
+      sandboxScripts,
+      handleFatalDisconnect,
+    );
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
-    send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });
+    send({
+      type: 'status',
+      botId,
+      state: 'running',
+      startedAt: new Date().toISOString(),
+      guildCount: runner.getGuildCount(),
+    });
   }
 
   async function reloadRunner(config: JsBotConfig): Promise<void> {
@@ -59,7 +93,13 @@ export async function runBotWorker(): Promise<void> {
       return;
     }
     await runner.reload(config);
-    send({ type: 'status', botId, state: 'running', startedAt: new Date().toISOString() });
+    send({
+      type: 'status',
+      botId,
+      state: 'running',
+      startedAt: new Date().toISOString(),
+      guildCount: runner.getGuildCount(),
+    });
   }
 
   async function stopRunner(reason?: string): Promise<void> {
@@ -130,17 +170,21 @@ export async function runBotWorker(): Promise<void> {
   });
 
   const metricsTimer = setInterval(() => {
-    const memory = process.memoryUsage();
-    send({
-      type: 'metrics',
-      botId,
-      rssBytes: memory.rss,
-      cpuPercent: null,
-      pid: process.pid,
-    });
+    emitMetrics();
   }, 5000);
 
+  const memoryLogTimer = setInterval(() => {
+    const memory = process.memoryUsage();
+    const guildCount = runner?.getGuildCount() ?? 0;
+    const rssMb = Math.round(memory.rss / (1024 * 1024));
+    emitLog(
+      'info',
+      `[Memory] bot=${botId} rss=${rssMb}MB guilds=${guildCount} pid=${process.pid}`,
+    );
+  }, 5 * 60 * 1000);
+
   metricsTimer.unref();
+  memoryLogTimer.unref();
 
   send({ type: 'ready', botId, pid: process.pid });
 }

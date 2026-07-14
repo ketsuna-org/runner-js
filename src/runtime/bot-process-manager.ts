@@ -20,6 +20,8 @@ export interface ManagedWorkerState {
   lastError: string | null;
   lastSeenAt: string | null;
   rssBytes: number | null;
+  heapUsedBytes: number | null;
+  guildCount: number | null;
   autoRestart: boolean;
 }
 
@@ -66,6 +68,8 @@ export class BotProcessManager {
         lastError: null,
         lastSeenAt: null,
         rssBytes: null,
+        heapUsedBytes: null,
+        guildCount: null,
         autoRestart: true,
       }
     );
@@ -121,6 +125,8 @@ export class BotProcessManager {
       lastError: null,
       lastSeenAt: new Date().toISOString(),
       rssBytes: null,
+      heapUsedBytes: null,
+      guildCount: null,
       autoRestart: entry.config.autoRestart,
     });
 
@@ -173,7 +179,8 @@ export class BotProcessManager {
 
       if (current.state !== 'stopped') {
         const lastError = current.lastError ?? exitDetail;
-        const tokenInvalid = isDiscordTokenUnauthorized(lastError);
+        const tokenInvalid =
+          isDiscordTokenUnauthorized(lastError) || isDiscordTokenUnauthorized(exitDetail);
         if (tokenInvalid) {
           this.tokenInvalidBots.add(botId);
         }
@@ -359,6 +366,7 @@ export class BotProcessManager {
           startedAt: message.startedAt ?? current.startedAt,
           lastError,
           lastSeenAt: now,
+          guildCount: message.guildCount ?? current.guildCount,
           autoRestart: tokenInvalid ? false : current.autoRestart,
         });
         break;
@@ -367,6 +375,8 @@ export class BotProcessManager {
         this.states.set(botId, {
           ...current,
           rssBytes: message.rssBytes,
+          heapUsedBytes: message.heapUsedBytes ?? current.heapUsedBytes,
+          guildCount: message.guildCount ?? current.guildCount,
           pid: message.pid,
           lastSeenAt: now,
         });

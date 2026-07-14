@@ -37,16 +37,5 @@ export function mapIntents(intentsMap: Record<string, boolean>): GatewayIntentBi
     }
   }
 
-  if (!hasExplicitIntentSelection(intentsMap)) {
-    bits |=
-      GatewayIntentBits.GuildMessages |
-      GatewayIntentBits.GuildMessageReactions |
-      GatewayIntentBits.GuildVoiceStates;
-  }
-
   return [bits];
-}
-
-function hasExplicitIntentSelection(intentsMap: Record<string, boolean>): boolean {
-  return Object.values(intentsMap).some(Boolean);
 }
