@@ -78,4 +78,57 @@ describe('running-status endpoint', () => {
 
     await app.close();
   });
+
+  it('reports metrics for error-state bots in running-status', async () => {
+    const runtime = {
+      listRuntimeStates: () => [
+        {
+          botId: 'error-bot',
+          botName: 'Error Bot',
+          state: 'error',
+          lastSeenAt: null,
+          lastError: 'Disallowed intents (4014)',
+          baselineRssBytes: 8_000_000,
+          heapUsedBytes: 2_000_000,
+          guildCount: 0,
+          pid: 4242,
+        },
+      ],
+    } as unknown as RuntimeController;
+
+    const env = {
+      version: 'test',
+      apiToken: '',
+      webHost: '127.0.0.1',
+    } as RunnerEnv;
+
+    const app = createHttpServer({
+      env,
+      runtime,
+      logStore: { tail: () => [], tailForBot: () => [] } as unknown as LogStore,
+    });
+
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address();
+    const port = typeof address === 'object' && address ? address.port : 0;
+    const baseUrl = `http://127.0.0.1:${port}`;
+
+    const response = await fetch(`${baseUrl}/bots/running-status`);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      bots: {
+        'error-bot': {
+          connected: false,
+          state: 'error',
+          rssBytes: 8_000_000,
+          heapUsedBytes: 2_000_000,
+          guildCount: 0,
+          pid: 4242,
+          lastError: 'Disallowed intents (4014)',
+        },
+      },
+    });
+
+    await app.close();
+  });
 });

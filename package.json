@@ -1,6 +1,6 @@
 {
   "name": "runner-js",
-  "version": "0.2.0",
+  "version": "0.4.0",
   "description": "Bot Creator JS Runner — HTTP handler for pure JavaScript Discord bots",
   "type": "module",
   "main": "dist/index.js",

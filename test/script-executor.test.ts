@@ -97,6 +97,90 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('exposes crypto and util modules in sandbox', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+
+    const result = await executor.execute(
+      `
+        const crypto = require('node:crypto');
+        const util = require('util');
+        const uuid = crypto.randomUUID();
+        const inspected = util.inspect({ a: 1 });
+        return { uuidLength: uuid.length, inspected };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { uuidLength?: number; inspected?: string };
+
+    expect(result.uuidLength).toBe(36);
+    expect(result.inspected).toContain('a: 1');
+
+    executor.dispose();
+  });
+
+  it('exposes discord.js builders but blocks Client in sandbox', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+
+    const builderResult = await executor.execute(
+      `
+        const { EmbedBuilder } = require('discord.js');
+        const embed = new EmbedBuilder().setTitle('hello');
+        return embed.toJSON();
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { title?: string };
+
+    expect(builderResult.title).toBe('hello');
+
+    await expect(
+      executor.execute(
+        `
+          const { Client } = require('discord.js');
+          Client();
+        `,
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/not allowed/i);
+
+    executor.dispose();
+  });
+
+  it('exposes url module in sandbox', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+
+    const result = await executor.execute(
+      `
+        const { URL } = require('node:url');
+        const parsed = new URL('https://example.com/path?q=1');
+        return parsed.hostname;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe('example.com');
+
+    executor.dispose();
+  });
+
   it('does not expose process to user scripts', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
 

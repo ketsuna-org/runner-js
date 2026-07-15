@@ -7,9 +7,15 @@ import { assertHttpOrDataUrl, isBlockedLocalPath } from './script-host-path.js';
 import { assertAllowedFontSource, registerRemoteFont } from './script-host-remote-font.js';
 import type { VoiceSessionCleanup } from './script-host-voice-session.js';
 import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
+import { buildCryptoModule } from './script-host-crypto.js';
 import {
-  asDynamicDescriptor,
-} from './script-host-dynamic.js';
+  buildDiscordJsModule,
+  getDiscordJsModuleConstants,
+} from './script-host-discordjs.js';
+import { buildQuerystringModule } from './script-host-querystring.js';
+import { buildUtilModule, getUtilModuleConstants } from './script-host-util.js';
+import { buildUrlModule } from './script-host-url.js';
+import { asDynamicDescriptor } from './script-host-dynamic.js';
 import {
   HostObjectRegistry,
   type HostProxyDescriptor,
@@ -35,7 +41,19 @@ function getVoice(): VoiceModule {
   return voiceLib;
 }
 
-const ALLOWED_MODULES = new Set(['canvas', '@discordjs/voice']);
+const ALLOWED_MODULES = new Set([
+  'canvas',
+  '@discordjs/voice',
+  'node:crypto',
+  'crypto',
+  'node:util',
+  'util',
+  'discord.js',
+  'node:url',
+  'url',
+  'node:querystring',
+  'querystring',
+]);
 
 export function getCanvasModuleConstants(): Record<string, unknown> {
   const canvas = getCanvas();
@@ -156,6 +174,55 @@ export function registerAllowedModuleTargets(
     registered.push('@discordjs/voice');
   } catch {
     // Voice dependencies are unavailable in this environment.
+  }
+
+  try {
+    const cryptoModule = buildCryptoModule(wrapHostResult);
+    moduleRegistry.registerModule('node:crypto', cryptoModule);
+    moduleRegistry.registerModule('crypto', cryptoModule);
+    moduleRegistry.registerInvokeTarget('module:crypto', cryptoModule);
+    registered.push('node:crypto', 'crypto');
+  } catch {
+    // Crypto module unavailable.
+  }
+
+  try {
+    const utilModule = buildUtilModule();
+    moduleRegistry.registerModule('node:util', utilModule);
+    moduleRegistry.registerModule('util', utilModule);
+    moduleRegistry.registerInvokeTarget('module:util', utilModule);
+    registered.push('node:util', 'util');
+  } catch {
+    // Util module unavailable.
+  }
+
+  try {
+    const discordJsModule = buildDiscordJsModule(wrapHostResult);
+    moduleRegistry.registerModule('discord.js', discordJsModule);
+    moduleRegistry.registerInvokeTarget('module:discordjs', discordJsModule);
+    registered.push('discord.js');
+  } catch {
+    // discord.js builders unavailable.
+  }
+
+  try {
+    const urlModule = buildUrlModule(wrapHostResult);
+    moduleRegistry.registerModule('node:url', urlModule);
+    moduleRegistry.registerModule('url', urlModule);
+    moduleRegistry.registerInvokeTarget('module:url', urlModule);
+    registered.push('node:url', 'url');
+  } catch {
+    // URL module unavailable.
+  }
+
+  try {
+    const querystringModule = buildQuerystringModule();
+    moduleRegistry.registerModule('node:querystring', querystringModule);
+    moduleRegistry.registerModule('querystring', querystringModule);
+    moduleRegistry.registerInvokeTarget('module:querystring', querystringModule);
+    registered.push('node:querystring', 'querystring');
+  } catch {
+    // querystring module unavailable.
   }
 
   return registered;

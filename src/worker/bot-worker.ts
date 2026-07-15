@@ -44,7 +44,14 @@ export async function runBotWorker(): Promise<void> {
 
   function handleFatalDisconnect(reason: string): void {
     const disallowedIntents = isDiscordGatewayDisallowedIntentsClose(null, reason);
-    send({ type: 'status', botId, state: 'error', lastError: reason });
+    emitMetrics();
+    send({
+      type: 'status',
+      botId,
+      state: 'error',
+      lastError: reason,
+      guildCount: runner?.getGuildCount() ?? 0,
+    });
     if (disallowedIntents) {
       emitLog('warn', reason);
     } else {
@@ -84,6 +91,7 @@ export async function runBotWorker(): Promise<void> {
     );
     send({ type: 'status', botId, state: 'starting' });
     await runner.start();
+    emitMetrics();
     send({
       type: 'status',
       botId,

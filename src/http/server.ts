@@ -142,7 +142,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
 
     try {
       await deps.runtime.syncBot(botId, (body.botName ?? '').trim(), body.config);
-      deps.logStore.append('info', `Synced bot ${botId}`);
+      deps.logStore.append('info', `Synced bot ${botId}`, botId);
       return { ok: true };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -156,7 +156,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
 
     try {
       await deps.runtime.startBot(botId, (body.botName ?? '').trim());
-      deps.logStore.append('info', `Started bot ${botId}`);
+      deps.logStore.append('info', `Started bot ${botId}`, botId);
       return buildStatusPayload(deps.runtime);
     } catch (error) {
       if (error instanceof Error && error.message.includes('already running')) {
@@ -172,7 +172,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
   app.post('/bots/:id/stop', async (request) => {
     const botId = (request.params as { id: string }).id;
     await deps.runtime.stopBot(botId);
-    deps.logStore.append('info', `Stopped bot ${botId}`);
+    deps.logStore.append('info', `Stopped bot ${botId}`, botId);
     return buildStatusPayload(deps.runtime);
   });
 

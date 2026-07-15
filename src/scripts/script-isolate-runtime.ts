@@ -315,6 +315,19 @@ const BOOTSTRAP_SCRIPT = `
     return false;
   }
 
+  function __makeModuleFunction(specId, fnName, sync) {
+    const invoke = (...args) =>
+      sync ? __hostCallSync(specId, fnName, args) : __hostCall(specId, fnName, args);
+    const callable = function (...args) {
+      return invoke(...args);
+    };
+    return new Proxy(callable, {
+      construct(_target, args) {
+        return invoke(...args);
+      },
+    });
+  }
+
   function __buildModule(spec) {
     const mod = Object.assign({}, spec.constants || {});
     const syncFunctions = new Set(Array.isArray(spec.syncFunctions) ? spec.syncFunctions : []);
@@ -327,9 +340,7 @@ const BOOTSTRAP_SCRIPT = `
             : __hostCall(spec.id, fnName, args);
         continue;
       }
-      mod[fnName] = syncFunctions.has(fnName)
-        ? (...args) => __hostCallSync(spec.id, fnName, args)
-        : (...args) => __hostCall(spec.id, fnName, args);
+      mod[fnName] = __makeModuleFunction(spec.id, fnName, syncFunctions.has(fnName));
     }
     return mod;
   }
