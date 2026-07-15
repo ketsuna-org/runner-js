@@ -21,7 +21,7 @@ export class ScriptBridgeHost {
   createSession(
     context: ScriptExecutionContext,
     logger: ScriptLogger,
-    dispatchListener?: (listenerId: number, args: unknown[]) => void,
+    dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
   ): number {
     this.assertActive();
     const sessionId = this.nextSessionId++;

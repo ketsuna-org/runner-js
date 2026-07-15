@@ -27,9 +27,15 @@ const BOOTSTRAP_SCRIPT = `
 
   globalThis.__dispatchHostListener = (id, args) => {
     const fn = __hostListeners.get(id);
-    if (typeof fn === 'function') {
-      fn(...args);
+    if (typeof fn !== 'function') {
+      return undefined;
     }
+    const normalizedArgs = args.map((arg) => __normalizeHostValue(arg));
+    const result = fn(...normalizedArgs);
+    if (result != null && typeof result.then === 'function') {
+      __trackHostPromise(Promise.resolve(result));
+    }
+    return result;
   };
 
   function __markHostProxyTarget(proxy, spec) {
@@ -444,17 +450,17 @@ export class ScriptIsolateRuntime implements ScriptRuntime {
       this.bootstrap.runSync(ivmContext);
 
       const listenerDispatchRef = ivmContext.evalClosureSync(
-        'return function(id, args) { globalThis.__dispatchHostListener(id, args); }',
+        'return function(id, args) { return globalThis.__dispatchHostListener(id, args); }',
         [],
         { result: { reference: true } },
       );
 
-      sessionId = this.bridgeHost.createSession(context, logger, (listenerId, args) => {
-        listenerDispatchRef.applyIgnored(undefined, [listenerId, args], {
+      sessionId = this.bridgeHost.createSession(context, logger, (listenerId, args) =>
+        listenerDispatchRef.applySync(undefined, [listenerId, args], {
           arguments: { copy: true },
-          result: { promise: true, copy: true },
-        });
-      });
+          result: { copy: true },
+        }),
+      );
       const { objectSpecs, moduleSpecs } = this.bridgeHost.getSessionSpecs(sessionId);
 
       jail.setSync('__hostBridge', this.bridgeHost.bridgeRef);

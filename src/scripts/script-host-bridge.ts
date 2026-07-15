@@ -46,7 +46,7 @@ function registerDynamicHost(
 export function createHostBridgeSession(
   context: ScriptExecutionContext,
   logger: ScriptLogger,
-  dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
 ): HostBridgeSession {
   const targets = new Map<string, unknown>();
   const objectSpecs: HostObjectSpec[] = [];

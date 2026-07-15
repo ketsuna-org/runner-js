@@ -18,7 +18,7 @@ export async function invokeHostTarget(
   method: string,
   args: unknown[],
   clientRoot?: unknown,
-  dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
 ): Promise<unknown> {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -39,7 +39,7 @@ export function invokeHostTargetSync(
   method: string,
   args: unknown[],
   clientRoot?: unknown,
-  dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
 ): unknown {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -61,7 +61,7 @@ function invokeHostTargetInternal(
   args: unknown[],
   clientRoot: unknown | undefined,
   mode: 'sync' | 'async',
-  dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
 ): unknown {
   const { registry, wrapHostResult } = moduleRegistry;
 
@@ -124,7 +124,7 @@ function resolveBridgeArg(
   registry: HostObjectRegistry,
   targets: Map<string, unknown>,
   value: unknown,
-  dispatchListener?: (listenerId: number, args: unknown[]) => void,
+  dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
 ): unknown {
   if (isHostProxyDescriptor(value) || isHostArgRef(value)) {
     const id = isHostArgRef(value) ? value.__hostArgRef : value.id;
@@ -140,7 +140,12 @@ function resolveBridgeArg(
       throw new Error('Host listener bridge is not available.');
     }
     const listenerId = value.__hostListenerRef;
-    return (...args: unknown[]) => dispatchListener(listenerId, args);
+    const { wrapHostResult } = moduleRegistry;
+    return (...args: unknown[]) =>
+      dispatchListener(
+        listenerId,
+        args.map((arg) => finalizeHostValue(wrapHostResult, arg)),
+      );
   }
 
   if (Array.isArray(value)) {

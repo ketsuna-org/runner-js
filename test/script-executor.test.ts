@@ -1217,6 +1217,81 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     expect(reply).toHaveBeenCalledWith({ content: 'pong' });
     executor.dispose();
   });
+
+  it('propagates sandbox listener return values for message component filters', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const awaitMessageComponent = vi.fn(
+      (options?: { filter?: (interaction: { customId: string; user: { id: string } }) => boolean }) =>
+        new Promise((resolve, reject) => {
+          setTimeout(() => {
+            const candidate = { customId: 'confirm', user: { id: 'user-42' } };
+            if (!options?.filter || options.filter(candidate)) {
+              resolve(candidate);
+              return;
+            }
+            reject(new Error('Collector received no interactions after the allowed time.'));
+          }, 10);
+        }),
+    );
+
+    const result = await executor.execute(
+      `
+        const btn = await message.awaitMessageComponent({
+          filter: (i) => i.customId === 'confirm' && i.user.id === 'user-42',
+          time: 5000,
+        });
+        return btn.customId;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: { awaitMessageComponent } as never,
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe('confirm');
+    expect(awaitMessageComponent).toHaveBeenCalled();
+    executor.dispose();
+  });
+
+  it('rejects message component collection when sandbox filter returns false', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const awaitMessageComponent = vi.fn(
+      (options?: { filter?: (interaction: { customId: string; user: { id: string } }) => boolean }) =>
+        new Promise((resolve, reject) => {
+          setTimeout(() => {
+            const candidate = { customId: 'confirm', user: { id: 'user-42' } };
+            if (!options?.filter || options.filter(candidate)) {
+              resolve(candidate);
+              return;
+            }
+            reject(new Error('Collector received no interactions after the allowed time.'));
+          }, 10);
+        }),
+    );
+
+    await expect(
+      executor.execute(
+        `
+          await message.awaitMessageComponent({
+            filter: (i) => i.user.id === 'someone-else',
+            time: 5000,
+          });
+        `,
+        {
+          client: {} as never,
+          config: { token: 'x' } as never,
+          variables: {},
+          message: { awaitMessageComponent } as never,
+        },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/Collector received no interactions/i);
+
+    executor.dispose();
+  });
 });
 
 function createLogger() {
