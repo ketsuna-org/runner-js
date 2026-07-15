@@ -47,6 +47,9 @@ export const presenceSchema = z
   })
   .optional();
 
+export const MAX_SCRIPT_TIMEOUT_MS = 15 * 60 * 1000;
+export const DEFAULT_SCRIPT_TIMEOUT_MS = MAX_SCRIPT_TIMEOUT_MS;
+
 export const jsBotConfigSchema = z.object({
   token: z.string().min(1),
   intents: z.record(z.boolean()).default({}),
@@ -62,7 +65,12 @@ export const jsBotConfigSchema = z.object({
     .transform((value) => value ?? []),
   globalVariables: z.record(z.unknown()).default({}),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
-  scriptTimeoutMs: z.number().int().positive().default(30_000),
+  scriptTimeoutMs: z
+    .number()
+    .int()
+    .positive()
+    .max(MAX_SCRIPT_TIMEOUT_MS)
+    .default(DEFAULT_SCRIPT_TIMEOUT_MS),
 });
 
 export type CommandHandler = z.infer<typeof commandHandlerSchema>;

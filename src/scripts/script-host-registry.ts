@@ -47,11 +47,22 @@ export function isHostMethodRef(value: unknown): value is HostMethodRef {
 
 export class HostObjectRegistry {
   private readonly objects = new Map<string, unknown>();
+  private readonly objectIds = new WeakMap<object, string>();
   private sequence = 0;
 
   register(prefix: string, target: unknown): string {
+    if (target != null && (typeof target === 'object' || typeof target === 'function')) {
+      const existing = this.objectIds.get(target as object);
+      if (existing) {
+        return existing;
+      }
+    }
+
     const id = `${prefix}:${++this.sequence}`;
     this.objects.set(id, target);
+    if (target != null && (typeof target === 'object' || typeof target === 'function')) {
+      this.objectIds.set(target as object, id);
+    }
     return id;
   }
 

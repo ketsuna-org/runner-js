@@ -141,6 +141,27 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
 
     expect(builderResult.title).toBe('hello');
 
+    const chainedBuilderResult = await executor.execute(
+      `
+        const { EmbedBuilder } = require('discord.js');
+        const embed = new EmbedBuilder()
+          .setTitle('Stats')
+          .setColor(0x5865f2)
+          .addFields({ name: 'Coins', value: '100', inline: true });
+        return embed.toJSON();
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+      },
+      createLogger(),
+    ) as { title?: string; fields?: Array<{ name: string; value: string }> };
+
+    expect(chainedBuilderResult.title).toBe('Stats');
+    expect(chainedBuilderResult.fields?.[0]?.name).toBe('Coins');
+    expect(chainedBuilderResult.fields?.[0]?.value).toBe('100');
+
     await expect(
       executor.execute(
         `

@@ -18,7 +18,7 @@ const baseConfig: JsBotConfig = {
   inboundWebhooks: [],
   globalVariables: {},
   scopedVariableDefinitions: [],
-  scriptTimeoutMs: 30_000,
+  scriptTimeoutMs: 15 * 60 * 1000,
   autoRestart: true,
 };
 

@@ -37,6 +37,20 @@ describe('JsBotConfig', () => {
     expect(() => validateJsBotConfig(config)).toThrow(/Duplicate command name/);
   });
 
+  it('rejects script timeouts above 15 minutes', () => {
+    expect(() =>
+      parseJsBotConfig({
+        token: 'test-token',
+        scriptTimeoutMs: 15 * 60 * 1000 + 1,
+      }),
+    ).toThrow();
+  });
+
+  it('defaults script timeout to 15 minutes', () => {
+    const config = parseJsBotConfig({ token: 'test-token' });
+    expect(config.scriptTimeoutMs).toBe(15 * 60 * 1000);
+  });
+
   it('accepts empty or null command lists', () => {
     const empty = parseJsBotConfig({ token: 'test-token', commands: [] });
     validateJsBotConfig(empty);
