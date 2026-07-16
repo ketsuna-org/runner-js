@@ -334,6 +334,34 @@ export class ScriptDb {
       definition = ensureScopedVariableDefinition(this.config, key, scope);
     }
 
+    const normalizedOffset = normalizeNonNegativeInt(offset, 'offset');
+    const normalizedLimit = limit == null ? undefined : normalizePositiveInt(limit, 'limit');
+
+    if (
+      typeof filter !== 'function' &&
+      typeof this.store.queryScopedVariableIndex === 'function'
+    ) {
+      const page = await this.store.queryScopedVariableIndex(
+        this.botId,
+        definition.scope,
+        definition.key,
+        {
+          offset: normalizedOffset,
+          limit: normalizedLimit ?? 1000,
+          descending: order !== 'asc',
+        },
+      );
+      const entries: DbListEntry[] = [];
+      for (const item of page.items) {
+        const mapped = this.mapListEntry(definition.scope, item.contextId, namespace);
+        if (!mapped) {
+          continue;
+        }
+        entries.push({ id: mapped, value: item.value });
+      }
+      return entries;
+    }
+
     const contextIds = await this.collectContextIds(definition.key, definition.scope);
     const entries: DbListEntry[] = [];
 
@@ -355,8 +383,6 @@ export class ScriptDb {
     });
 
     const filtered = typeof filter === 'function' ? entries.filter(filter) : entries;
-    const normalizedOffset = normalizeNonNegativeInt(offset, 'offset');
-    const normalizedLimit = limit == null ? undefined : normalizePositiveInt(limit, 'limit');
     const sliced = filtered.slice(normalizedOffset);
     return normalizedLimit == null ? sliced : sliced.slice(0, normalizedLimit);
   }
@@ -378,6 +404,9 @@ export class ScriptDb {
 
     const results: DbFindEntry[] = [];
     const seen = new Set<string>();
+    const useQueryIndex =
+      typeof filter !== 'function' &&
+      typeof this.store.queryScopedVariableIndex === 'function';
 
     for (const scanScope of scopesToScan) {
       for (const definition of this.config.scopedVariableDefinitions) {
@@ -387,6 +416,31 @@ export class ScriptDb {
         }
         const storageKey = normalizeScopedStorageKey(String(definition.key ?? '').trim());
         if (!storageKey) {
+          continue;
+        }
+
+        if (useQueryIndex) {
+          const page = await this.store.queryScopedVariableIndex!(
+            this.botId,
+            entryScope,
+            storageKey,
+            { offset: 0, limit: 1000, descending: true },
+          );
+          for (const item of page.items) {
+            const dedupeKey = `${entryScope}:${storageKey}:${item.contextId}`;
+            if (seen.has(dedupeKey)) {
+              continue;
+            }
+            seen.add(dedupeKey);
+            if (item.value === undefined || item.value === null) {
+              continue;
+            }
+            const mappedId = this.mapListEntry(entryScope, item.contextId, namespace);
+            if (!mappedId) {
+              continue;
+            }
+            results.push({ key: storageKey, id: mappedId, value: item.value });
+          }
           continue;
         }
 
@@ -472,9 +526,16 @@ export class ScriptDb {
     if (!normalizedKey) {
       throw new Error('db.global: missing key.');
     }
-    const runtime = await this.store.getGlobalVariables(this.botId);
-    if (normalizedKey in runtime) {
-      return runtime[normalizedKey];
+    if (typeof this.store.getGlobalVariable === 'function') {
+      const value = await this.store.getGlobalVariable(this.botId, normalizedKey);
+      if (value !== undefined && value !== null) {
+        return value;
+      }
+    } else {
+      const runtime = await this.store.getGlobalVariables(this.botId);
+      if (normalizedKey in runtime) {
+        return runtime[normalizedKey];
+      }
     }
     if (normalizedKey in this.config.globalVariables) {
       return this.config.globalVariables[normalizedKey];

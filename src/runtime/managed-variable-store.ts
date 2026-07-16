@@ -95,6 +95,14 @@ export class ManagedVariableStore implements VariableDatabase {
     return {};
   }
 
+  async getGlobalVariable(botId: string, key: string): Promise<unknown> {
+    const response = await this.get(botId, '/global/get', { key });
+    if (response && typeof response === 'object' && 'value' in response) {
+      return (response as { value: unknown }).value;
+    }
+    return response;
+  }
+
   async setGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
     await this.post(botId, '/global/set', { key, value });
   }
@@ -105,6 +113,33 @@ export class ManagedVariableStore implements VariableDatabase {
 
   async renameGlobalVariable(botId: string, oldKey: string, newKey: string): Promise<void> {
     await this.post(botId, '/global/rename', { oldKey, newKey });
+  }
+
+  async getScopedVariables(
+    botId: string,
+    scope: string,
+    contextId: string,
+  ): Promise<Record<string, unknown>> {
+    const { scopeId, scopeAuxId } = splitManagedContextId(scope, contextId);
+    const response = await this.get(botId, '/scoped/list', {
+      scope,
+      scope_id: scopeId,
+      scope_aux_id: scopeAuxId,
+    });
+    if (Array.isArray(response)) {
+      const result: Record<string, unknown> = {};
+      for (const item of response) {
+        if (item && typeof item === 'object' && 'key' in item) {
+          const record = item as { key: unknown; value: unknown };
+          result[String(record.key)] = record.value;
+        }
+      }
+      return result;
+    }
+    if (response && typeof response === 'object') {
+      return { ...(response as Record<string, unknown>) };
+    }
+    return {};
   }
 
   async getScopedVariable(
@@ -171,10 +206,11 @@ export class ManagedVariableStore implements VariableDatabase {
   }
 
   async removeAllScopedValuesForKey(botId: string, scope: string, key: string): Promise<void> {
-    const contextIds = await this.listContextIds(botId, scope, key);
-    await Promise.all(
-      contextIds.map((contextId) => this.removeScopedVariable(botId, scope, contextId, key)),
-    );
+    await this.post(botId, '/scoped/delete-by-key', { scope, key });
+  }
+
+  async deleteAllForBot(botId: string): Promise<void> {
+    await this.post(botId, '/all/delete', {});
   }
 
   async queryScopedVariableIndex(

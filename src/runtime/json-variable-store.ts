@@ -89,6 +89,11 @@ export class JsonVariableStore implements VariableDatabase {
     return { ...data.global };
   }
 
+  async getGlobalVariable(botId: string, key: string): Promise<unknown> {
+    const data = await this.read(botId);
+    return data.global[key];
+  }
+
   async setGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
     const data = await this.read(botId);
     data.global[key] = value;
@@ -137,6 +142,22 @@ export class JsonVariableStore implements VariableDatabase {
     return data.scoped[scope]?.[key]?.[contextId];
   }
 
+  async getScopedVariables(
+    botId: string,
+    scope: string,
+    contextId: string,
+  ): Promise<Record<string, unknown>> {
+    const data = await this.read(botId);
+    const scopeBucket = data.scoped[scope] ?? {};
+    const result: Record<string, unknown> = {};
+    for (const [key, keyBucket] of Object.entries(scopeBucket)) {
+      if (contextId in keyBucket) {
+        result[key] = keyBucket[contextId];
+      }
+    }
+    return result;
+  }
+
   async listContextIds(
     botId: string,
     scope: string,
@@ -178,5 +199,9 @@ export class JsonVariableStore implements VariableDatabase {
       delete data.scoped[scope];
     }
     await this.write(botId, data);
+  }
+
+  async deleteAllForBot(botId: string): Promise<void> {
+    await this.write(botId, { global: {}, scoped: {} });
   }
 }

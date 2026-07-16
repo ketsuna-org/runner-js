@@ -163,6 +163,11 @@ export class LibsqlVariableStore implements VariableDatabase {
     return output;
   }
 
+  async getGlobalVariable(botId: string, key: string): Promise<unknown> {
+    const globals = await this.getGlobalVariables(botId);
+    return globals[key];
+  }
+
   async setGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
     await this.init();
     const { raw, type } = serializeVariableValue(value);
@@ -220,6 +225,31 @@ export class LibsqlVariableStore implements VariableDatabase {
       return null;
     }
     return deserializeVariableValue(rowString(row, 'value_raw'), rowString(row, 'value_type'));
+  }
+
+  async getScopedVariables(
+    botId: string,
+    scope: string,
+    contextId: string,
+  ): Promise<Record<string, unknown>> {
+    await this.init();
+    const { ctx1, ctx2 } = parseScopedContextParts(scope, contextId);
+    const now = Date.now();
+    const result = await this.database.execute({
+      sql: `SELECT key, value_raw, value_type, expires_at FROM variables WHERE ${this.scopedWhere(false)}`,
+      args: this.scopedArgs(botId, scope, ctx1, ctx2),
+    });
+    const output: Record<string, unknown> = {};
+    for (const row of result.rows as Record<string, unknown>[]) {
+      if (this.isExpired(rowNullableNumber(row, 'expires_at'), now)) {
+        continue;
+      }
+      output[rowString(row, 'key')] = deserializeVariableValue(
+        rowString(row, 'value_raw'),
+        rowString(row, 'value_type'),
+      );
+    }
+    return output;
   }
 
   async setScopedVariable(
@@ -306,6 +336,14 @@ export class LibsqlVariableStore implements VariableDatabase {
     });
   }
 
+  async deleteAllForBot(botId: string): Promise<void> {
+    await this.init();
+    await this.database.execute({
+      sql: 'DELETE FROM variables WHERE bot_id = ?',
+      args: [botId],
+    });
+  }
+
   async queryScopedVariableIndex(
     botId: string,
     scope: string,
@@ -314,7 +352,7 @@ export class LibsqlVariableStore implements VariableDatabase {
   ): Promise<ScopedIndexQueryResult> {
     await this.init();
     const safeOffset = options.offset != null && options.offset > 0 ? options.offset : 0;
-    const safeLimit = Math.min(Math.max(options.limit ?? 25, 1), 25);
+    const safeLimit = Math.min(Math.max(options.limit ?? 25, 1), 1000);
     const descending = options.descending !== false;
     const now = Date.now();
 

@@ -12,10 +12,16 @@ export interface ScopedIndexQueryResult {
 
 export interface VariableDatabase {
   getGlobalVariables(botId: string): Promise<Record<string, unknown>>;
+  getGlobalVariable?(botId: string, key: string): Promise<unknown>;
   setGlobalVariable(botId: string, key: string, value: unknown): Promise<void>;
   removeGlobalVariable(botId: string, key: string): Promise<void>;
   renameGlobalVariable(botId: string, oldKey: string, newKey: string): Promise<void>;
 
+  getScopedVariables?(
+    botId: string,
+    scope: string,
+    contextId: string,
+  ): Promise<Record<string, unknown>>;
   getScopedVariable(
     botId: string,
     scope: string,
@@ -37,6 +43,7 @@ export interface VariableDatabase {
   ): Promise<void>;
   listContextIds(botId: string, scope: string, searchKey: string): Promise<string[]>;
   removeAllScopedValuesForKey(botId: string, scope: string, key: string): Promise<void>;
+  deleteAllForBot?(botId: string): Promise<void>;
 
   queryScopedVariableIndex?(
     botId: string,
