@@ -1,6 +1,15 @@
+import {
+  buildWorkerNodeOptions,
+  DEFAULT_WORKER_MAX_HEAP_MB,
+  parsePositiveIntEnv,
+} from './memory-hygiene.js';
+
 const WORKER_INHERITED_ENV_KEYS = [
   'BOT_CREATOR_MANAGED_RUNNER_API',
   'BOT_CREATOR_MANAGED_RUNNER_TOKEN',
+  'BOT_CREATOR_WORKER_RSS_RESTART_MB',
+  'BOT_CREATOR_WORKER_RSS_RESTART_CHECKS',
+  'BOT_CREATOR_WORKER_RSS_RESTART_MIN_UPTIME_MS',
 ] as const;
 
 export function buildWorkerProcessEnv(
@@ -25,6 +34,15 @@ export function buildWorkerProcessEnv(
     if (value) {
       env[key] = value;
     }
+  }
+
+  const maxHeapMb = parsePositiveIntEnv(
+    process.env.BOT_CREATOR_WORKER_MAX_HEAP_MB,
+    DEFAULT_WORKER_MAX_HEAP_MB,
+  );
+  const nodeOptions = buildWorkerNodeOptions(process.env.NODE_OPTIONS, maxHeapMb);
+  if (nodeOptions) {
+    env.NODE_OPTIONS = nodeOptions;
   }
 
   return env;

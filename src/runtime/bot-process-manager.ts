@@ -7,6 +7,10 @@ import {
 } from '../ipc/messages.js';
 import { resolveWorkerLaunch, shouldSpawnWorkerProcess } from './worker-launch.js';
 import { buildWorkerProcessEnv } from './worker-env.js';
+import {
+  appendCappedText,
+  DEFAULT_WORKER_STDERR_MAX_BYTES,
+} from './memory-hygiene.js';
 import type { LogStore } from '../runtime/log-store.js';
 import type { BotStore } from '../runtime/bot-store.js';
 import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
@@ -42,8 +46,14 @@ export class BotProcessManager {
   >();
   private readonly workerStderr = new Map<string, string>();
   private readonly tokenInvalidBots = new Set<string>();
+  private readonly stderrMaxBytes = DEFAULT_WORKER_STDERR_MAX_BYTES;
 
   constructor(private readonly options: BotProcessManagerOptions) {}
+
+  private appendWorkerStderr(botId: string, chunk: string): void {
+    const previous = this.workerStderr.get(botId) ?? '';
+    this.workerStderr.set(botId, appendCappedText(previous, chunk, this.stderrMaxBytes));
+  }
 
   clearTokenInvalid(botId: string): void {
     this.tokenInvalidBots.delete(botId);
@@ -109,8 +119,7 @@ export class BotProcessManager {
 
     child.on('error', (error) => {
       const message = error instanceof Error ? error.message : String(error);
-      const previous = this.workerStderr.get(botId) ?? '';
-      this.workerStderr.set(botId, `${previous}\n${message}`.trim());
+      this.appendWorkerStderr(botId, message);
       this.options.logStore.append('error', `Worker spawn error: ${message}`, botId);
     });
 
@@ -139,9 +148,10 @@ export class BotProcessManager {
 
     child.stderr?.on('data', (chunk: Buffer) => {
       const text = chunk.toString().trim();
-      const previous = this.workerStderr.get(botId) ?? '';
-      this.workerStderr.set(botId, `${previous}\n${text}`.trim());
-      this.options.logStore.append('error', text, botId);
+      if (text.length > 0) {
+        this.appendWorkerStderr(botId, text);
+        this.options.logStore.append('error', text, botId);
+      }
     });
 
     child.on('message', (raw: unknown) => {

@@ -22,5 +22,12 @@ describe('buildDiscordClientOptions', () => {
     const options = buildDiscordClientOptions({ Guilds: true });
     expect(options.makeCache).toBeTypeOf('function');
     expect(options.sweepers?.messages).toEqual({ interval: 300, lifetime: 300 });
+    expect(options.sweepers?.threads).toEqual({ interval: 300, lifetime: 600 });
+  });
+
+  it('adds guild member sweeper when Guild Members intent is enabled', () => {
+    const options = buildDiscordClientOptions({ 'Guild Members': true });
+    expect(options.sweepers?.guildMembers).toBeDefined();
+    expect(options.sweepers?.guildMembers).toMatchObject({ interval: 300 });
   });
 });

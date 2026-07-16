@@ -30,7 +30,7 @@ function seedState(manager: BotProcessManager, botId: string, partial: Partial<M
 
 describe('BotProcessManager', () => {
   it('returns default stopped state for unknown bots', () => {
-    const store = new BotStore();
+    const store = new BotStore('./data/test-bots/synced-bots');
     const logs = new LogStore('./data/test-logs/runner.log');
     const manager = new BotProcessManager({
       dataDir: './data/test-bots',
@@ -45,7 +45,7 @@ describe('BotProcessManager', () => {
   });
 
   it('treats starting state as running for conflict checks', () => {
-    const store = new BotStore();
+    const store = new BotStore('./data/test-bots-starting/synced-bots');
     const logs = new LogStore('./data/test-logs/runner-starting.log');
     const manager = new BotProcessManager({
       dataDir: './data/test-bots-starting',
@@ -63,7 +63,7 @@ describe('BotProcessManager', () => {
   });
 
   it('stores early worker metrics and error status guild counts', () => {
-    const store = new BotStore();
+    const store = new BotStore('./data/test-bots-metrics/synced-bots');
     const logs = new LogStore('./data/test-logs/runner-metrics.log');
     const manager = new BotProcessManager({
       dataDir: './data/test-bots-metrics',

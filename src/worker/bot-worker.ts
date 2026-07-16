@@ -5,6 +5,13 @@ import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig } from '../config/js-bot-config.js';
 import { isManagedRunner, loadRunnerEnv } from '../config/env.js';
 import { resolveVariableStore } from '../runtime/resolve-variable-store.js';
+import {
+  DEFAULT_WORKER_RSS_RESTART_CHECKS,
+  DEFAULT_WORKER_RSS_RESTART_MB,
+  DEFAULT_WORKER_RSS_RESTART_MIN_UPTIME_MS,
+  evaluateWorkerRssRestart,
+  parsePositiveIntEnv,
+} from '../runtime/memory-hygiene.js';
 import { isDiscordGatewayDisallowedIntentsClose } from '../discord/discord-auth-errors.js';
 import { JsDiscordRunner } from './js-discord-runner.js';
 
@@ -19,6 +26,23 @@ export async function runBotWorker(): Promise<void> {
 
   const env = loadRunnerEnv();
   const sandboxScripts = isManagedRunner(env);
+  const rssRestartMb = parsePositiveIntEnv(
+    process.env.BOT_CREATOR_WORKER_RSS_RESTART_MB,
+    DEFAULT_WORKER_RSS_RESTART_MB,
+  );
+  const rssRestartChecks = Math.max(
+    1,
+    parsePositiveIntEnv(
+      process.env.BOT_CREATOR_WORKER_RSS_RESTART_CHECKS,
+      DEFAULT_WORKER_RSS_RESTART_CHECKS,
+    ),
+  );
+  const rssRestartMinUptimeMs = parsePositiveIntEnv(
+    process.env.BOT_CREATOR_WORKER_RSS_RESTART_MIN_UPTIME_MS,
+    DEFAULT_WORKER_RSS_RESTART_MIN_UPTIME_MS,
+  );
+  const workerStartedAtMs = Date.now();
+  let rssOverThresholdStreak = 0;
 
   const variableStore = await resolveVariableStore(dataDir, {
     managedRunnerApi: env.managedRunnerApi,
@@ -127,6 +151,41 @@ export async function runBotWorker(): Promise<void> {
     process.exit(0);
   }
 
+  /**
+   * Tear down Discord cleanly then exit without a `stopped` IPC message so the
+   * parent treats this as an unexpected exit and auto-restarts the bot.
+   */
+  async function softRestartForMemory(rssMb: number, thresholdMb: number): Promise<void> {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    emitLog(
+      'warn',
+      `[Memory] Soft-restarting worker: rss=${rssMb}MB exceeded ${thresholdMb}MB threshold`,
+    );
+    await runner?.stop();
+    runner = null;
+    process.exit(0);
+  }
+
+  function checkRssSoftRestart(): void {
+    const memory = process.memoryUsage();
+    const rssMb = Math.round(memory.rss / (1024 * 1024));
+    const decision = evaluateWorkerRssRestart({
+      rssMb,
+      thresholdMb: rssRestartMb,
+      consecutiveOver: rssOverThresholdStreak,
+      requiredConsecutive: rssRestartChecks,
+      uptimeMs: Date.now() - workerStartedAtMs,
+      minUptimeMs: rssRestartMinUptimeMs,
+    });
+    rssOverThresholdStreak = decision.nextConsecutiveOver;
+    if (decision.shouldRestart) {
+      void softRestartForMemory(rssMb, rssRestartMb);
+    }
+  }
+
   async function handleMessage(message: ParentToWorkerMessage): Promise<void> {
     switch (message.type) {
       case 'start':
@@ -185,6 +244,7 @@ export async function runBotWorker(): Promise<void> {
 
   const metricsTimer = setInterval(() => {
     emitMetrics();
+    checkRssSoftRestart();
   }, 5000);
 
   const memoryLogTimer = setInterval(() => {

@@ -24,6 +24,58 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('recycles the isolate after max executions and keeps working', async () => {
+    const executor = new ScriptExecutor(5000, {
+      sandboxed: true,
+      isolateMaxExecutions: 2,
+      isolateMaxAgeMs: 0,
+    });
+    const logger = createLogger();
+
+    await executor.execute(
+      'return 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    await executor.execute(
+      'return 2;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+
+    const third = await executor.execute(
+      'return 3;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+
+    expect(third).toBe(3);
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.stringMatching(/Recycled isolate after 2 executions/),
+    );
+    executor.dispose();
+  });
+
+  it('nulls runtime on dispose so a later execute recreates the isolate', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const logger = createLogger();
+
+    await executor.execute(
+      'return 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    executor.dispose();
+
+    const result = await executor.execute(
+      'return 2;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(result).toBe(2);
+    executor.dispose();
+  });
+
   it('times out long running scripts', async () => {
     const executor = new ScriptExecutor(50, { sandboxed: true });
 
@@ -1220,18 +1272,9 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
 
   it('propagates sandbox listener return values for message component filters', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
-    const awaitMessageComponent = vi.fn(
-      (options?: { filter?: (interaction: { customId: string; user: { id: string } }) => boolean }) =>
-        new Promise((resolve, reject) => {
-          setTimeout(() => {
-            const candidate = { customId: 'confirm', user: { id: 'user-42' } };
-            if (!options?.filter || options.filter(candidate)) {
-              resolve(candidate);
-              return;
-            }
-            reject(new Error('Collector received no interactions after the allowed time.'));
-          }, 10);
-        }),
+    const awaitMessageComponent = createCollectorMock(
+      { customId: 'confirm', user: { id: 'user-42' } },
+      'Collector received no interactions after the allowed time.',
     );
 
     const result = await executor.execute(
@@ -1258,18 +1301,9 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
 
   it('rejects message component collection when sandbox filter returns false', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
-    const awaitMessageComponent = vi.fn(
-      (options?: { filter?: (interaction: { customId: string; user: { id: string } }) => boolean }) =>
-        new Promise((resolve, reject) => {
-          setTimeout(() => {
-            const candidate = { customId: 'confirm', user: { id: 'user-42' } };
-            if (!options?.filter || options.filter(candidate)) {
-              resolve(candidate);
-              return;
-            }
-            reject(new Error('Collector received no interactions after the allowed time.'));
-          }, 10);
-        }),
+    const awaitMessageComponent = createCollectorMock(
+      { customId: 'confirm', user: { id: 'user-42' } },
+      'Collector received no interactions after the allowed time.',
     );
 
     await expect(
@@ -1292,7 +1326,102 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
 
     executor.dispose();
   });
+
+  it('propagates sandbox listener return values for reaction collectors', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const awaitReaction = createCollectorMock(
+      { emoji: { name: '✅' }, users: { cache: { has: (id: string) => id === 'user-42' } } },
+      'Collector received no reactions after the allowed time.',
+    );
+
+    const result = await executor.execute(
+      `
+        const reaction = await message.awaitReaction({
+          filter: (r, user) => r.emoji.name === '✅' && user.id === 'user-42',
+          time: 5000,
+        });
+        return reaction.emoji.name;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: { awaitReaction } as never,
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe('✅');
+    expect(awaitReaction).toHaveBeenCalled();
+    executor.dispose();
+  });
+
+  it('propagates sandbox listener return values for message collectors', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const candidate = { content: 'hello world', author: { id: 'user-42' } };
+    const awaitMessages = createCollectorMock(
+      candidate,
+      'Collector received no messages after the allowed time.',
+      {
+        resolveValue: {
+          first: () => candidate,
+          size: 1,
+        },
+      },
+    );
+
+    const result = await executor.execute(
+      `
+        const collected = await channel.awaitMessages({
+          filter: (m) => m.content.includes('hello') && m.author.id === 'user-42',
+          max: 1,
+          time: 5000,
+        });
+        return collected.first().content;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        channel: { awaitMessages } as never,
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe('hello world');
+    expect(awaitMessages).toHaveBeenCalled();
+    executor.dispose();
+  });
 });
+
+function createCollectorMock<T>(
+  candidate: T,
+  timeoutMessage: string,
+  options?: { resolveValue?: unknown },
+): ReturnType<typeof vi.fn> {
+  return vi.fn((collectorOptions?: { filter?: (...args: unknown[]) => boolean }) =>
+    new Promise((resolve, reject) => {
+      setTimeout(() => {
+        if (!collectorOptions?.filter) {
+          resolve(options?.resolveValue ?? candidate);
+          return;
+        }
+
+        const args =
+          candidate != null && typeof candidate === 'object' && 'users' in (candidate as object)
+            ? [candidate, { id: 'user-42' }]
+            : [candidate];
+
+        if (collectorOptions.filter(...args)) {
+          resolve(options?.resolveValue ?? candidate);
+          return;
+        }
+
+        reject(new Error(timeoutMessage));
+      }, 10);
+    }),
+  );
+}
 
 function createLogger() {
   return {

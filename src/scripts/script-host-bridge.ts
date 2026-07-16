@@ -1,4 +1,5 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
+import { MAX_FETCH_BODY_BYTES, readResponseBodyCapped } from '../runtime/memory-hygiene.js';
 import { invokeHostTarget, invokeHostTargetSync, resolveInvokeTarget } from './script-host-invoke.js';
 import { isBlockedClientProperty, isBlockedNestedClientAccess, wrapDynamicHostRead } from './script-host-dynamic.js';
 import type { ModuleRegistry } from './script-host-modules.js';
@@ -292,7 +293,7 @@ function registerDbTargets(
 }
 
 async function responseToPlain(response: Response): Promise<Record<string, unknown>> {
-  const bodyText = await response.text();
+  const bodyText = await readResponseBodyCapped(response, MAX_FETCH_BODY_BYTES);
   return createFetchResponseValue({
     ok: response.ok,
     status: response.status,

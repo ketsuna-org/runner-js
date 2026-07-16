@@ -500,7 +500,7 @@ export class ScriptIsolateRuntime implements ScriptRuntime {
                 if (typeof filter !== 'function') {
                   return api.list(key, order, limit, offset);
                 }
-                const rows = await api.list(key, order ?? 'desc', 10000, 0);
+                const rows = await api.list(key, order ?? 'desc', 1000, 0);
                 const filtered = rows.filter(filter);
                 const off = offset ?? 0;
                 const lim = limit ?? filtered.length;

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import type { VariableDatabase } from './variable-database.js';
@@ -8,7 +8,14 @@ interface BotVariableData {
   scoped: Record<string, Record<string, Record<string, unknown>>>;
 }
 
+interface CachedBotVariableData {
+  mtimeMs: number;
+  data: BotVariableData;
+}
+
 export class JsonVariableStore implements VariableDatabase {
+  private readonly cache = new Map<string, CachedBotVariableData>();
+
   constructor(private readonly variablesDir: string) {}
 
   private safeBotId(botId: string): string {
@@ -23,11 +30,32 @@ export class JsonVariableStore implements VariableDatabase {
     return { global: {}, scoped: {} };
   }
 
+  private cloneData(data: BotVariableData): BotVariableData {
+    return {
+      global: { ...data.global },
+      scoped: Object.fromEntries(
+        Object.entries(data.scoped).map(([scope, keys]) => [
+          scope,
+          Object.fromEntries(
+            Object.entries(keys).map(([key, contexts]) => [key, { ...contexts }]),
+          ),
+        ]),
+      ),
+    };
+  }
+
   private async read(botId: string): Promise<BotVariableData> {
+    const filePath = this.fileForBot(botId);
     try {
-      const raw = await readFile(this.fileForBot(botId), 'utf8');
+      const fileStat = await stat(filePath);
+      const cached = this.cache.get(botId);
+      if (cached && cached.mtimeMs === fileStat.mtimeMs) {
+        return this.cloneData(cached.data);
+      }
+
+      const raw = await readFile(filePath, 'utf8');
       const parsed = JSON.parse(raw) as Partial<BotVariableData>;
-      return {
+      const data: BotVariableData = {
         global:
           parsed.global && typeof parsed.global === 'object'
             ? (parsed.global as Record<string, unknown>)
@@ -37,8 +65,11 @@ export class JsonVariableStore implements VariableDatabase {
             ? (parsed.scoped as Record<string, Record<string, Record<string, unknown>>>)
             : {},
       };
+      this.cache.set(botId, { mtimeMs: fileStat.mtimeMs, data: this.cloneData(data) });
+      return data;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        this.cache.delete(botId);
         return this.emptyData();
       }
       throw error;
@@ -47,7 +78,10 @@ export class JsonVariableStore implements VariableDatabase {
 
   private async write(botId: string, data: BotVariableData): Promise<void> {
     await mkdir(this.variablesDir, { recursive: true });
-    await writeFile(this.fileForBot(botId), JSON.stringify(data, null, 2), 'utf8');
+    const filePath = this.fileForBot(botId);
+    await writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
+    const fileStat = await stat(filePath);
+    this.cache.set(botId, { mtimeMs: fileStat.mtimeMs, data: this.cloneData(data) });
   }
 
   async getGlobalVariables(botId: string): Promise<Record<string, unknown>> {

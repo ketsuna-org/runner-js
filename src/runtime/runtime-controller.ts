@@ -1,5 +1,6 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.js';
+import path from 'node:path';
 import { BotStore } from './bot-store.js';
 import { BotProcessManager, type ManagedWorkerState } from './bot-process-manager.js';
 import type { LogStore } from './log-store.js';
@@ -35,7 +36,7 @@ export class RuntimeController {
   }
 
   constructor(dataDir: string, logStore: LogStore, variableStore: VariableDatabase) {
-    this.botStore = new BotStore();
+    this.botStore = new BotStore(path.join(dataDir, 'synced-bots'));
     this.variableStore = variableStore;
     this.processManager = new BotProcessManager({
       dataDir,
