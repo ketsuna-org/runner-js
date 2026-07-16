@@ -116,6 +116,11 @@ export function isSyncHostMethod(targetId: string, method: string): boolean {
   if (targetId.startsWith('djs-')) {
     return true;
   }
+  // Generic host proxies (e.g. Collection-like return values): prefer sync so
+  // patterns like collected.first().content work without await.
+  if (targetId.startsWith('host:')) {
+    return true;
+  }
   return false;
 }
 
