@@ -124,6 +124,15 @@ export async function readResponseBodyCapped(
   }
 
   if (!response.body) {
+    // Response-like mocks (and some polyfills) expose text() without a ReadableStream body.
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      const byteLength = new TextEncoder().encode(text).byteLength;
+      if (byteLength > maxBytes) {
+        throw new Error(`fetch: response body exceeds ${maxBytes} byte limit`);
+      }
+      return text;
+    }
     return '';
   }
 

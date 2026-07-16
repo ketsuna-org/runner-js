@@ -155,6 +155,15 @@ describe('readResponseBodyCapped', () => {
     await expect(readResponseBodyCapped(response, 100)).resolves.toBe('hello world');
   });
 
+  it('falls back to text() when Response has no body stream', async () => {
+    const response = {
+      headers: new Headers(),
+      body: null,
+      text: async () => '{"hello":"world"}',
+    } as unknown as Response;
+    await expect(readResponseBodyCapped(response, 100)).resolves.toBe('{"hello":"world"}');
+  });
+
   it('cuts off when the streamed body exceeds the limit', async () => {
     const encoder = new TextEncoder();
     let pulled = 0;

@@ -669,13 +669,10 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       canvas = getCanvas();
       voice = getVoice();
     } catch {
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        return asDynamicDescriptor(descriptor(registry, 'host', [], {}, value));
-      }
-      return copySerializable(value);
+      // Native modules unavailable — skip instanceof checks below.
     }
 
-    if (value instanceof canvas.Canvas) {
+    if (canvas != null && value instanceof canvas.Canvas) {
       return asDynamicDescriptor(descriptor(
         registry,
         prefix ?? 'canvas',
@@ -689,13 +686,13 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       ));
     }
 
-    if (value instanceof canvas.CanvasRenderingContext2D) {
+    if (canvas != null && value instanceof canvas.CanvasRenderingContext2D) {
       return asDynamicDescriptor(descriptor(registry, 'canvas-context', CONTEXT2D_METHODS, {
         canvas: { width: value.canvas.width, height: value.canvas.height },
       }, value));
     }
 
-    if (value instanceof canvas.Image) {
+    if (canvas != null && value instanceof canvas.Image) {
       return asDynamicDescriptor(descriptor(
         registry,
         prefix ?? 'canvas-image',
@@ -708,7 +705,7 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       ));
     }
 
-    if (value instanceof voice.VoiceConnection) {
+    if (voice != null && value instanceof voice.VoiceConnection) {
       return asDynamicDescriptor(descriptor(
         registry,
         prefix ?? 'voice-connection',
@@ -720,7 +717,7 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       ));
     }
 
-    if (value instanceof voice.AudioPlayer) {
+    if (voice != null && value instanceof voice.AudioPlayer) {
       return asDynamicDescriptor(descriptor(
         registry,
         prefix ?? 'audio-player',
@@ -730,7 +727,7 @@ export function createHostResultWrapper(registry: HostObjectRegistry) {
       ));
     }
 
-    if (value instanceof voice.AudioResource) {
+    if (voice != null && value instanceof voice.AudioResource) {
       return asDynamicDescriptor(descriptor(
         registry,
         prefix ?? 'audio-resource',
@@ -789,7 +786,17 @@ export function resolveHostArg(registry: HostObjectRegistry, value: unknown): un
 
 function isPlainDataObject(value: object): boolean {
   const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+  if (prototype !== Object.prototype && prototype !== null) {
+    return false;
+  }
+  // Plain objects that carry methods (e.g. Collection-like mocks) must stay as host
+  // proxies so sandbox code can call those methods after a bridge round-trip.
+  for (const entry of Object.values(value as Record<string, unknown>)) {
+    if (typeof entry === 'function') {
+      return false;
+    }
+  }
+  return true;
 }
 
 function copySerializable(value: unknown): unknown {
