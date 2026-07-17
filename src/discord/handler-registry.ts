@@ -317,11 +317,12 @@ export class HandlerRegistry {
     },
   ): Promise<void> {
     const logger = this.createLogger();
+    const member = await resolveScriptMember(partial.message, partial.member ?? null);
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
       message: partial.message,
       guild: partial.guild ?? null,
-      member: partial.member ?? null,
+      member,
       channel: partial.channel ?? null,
     };
 
@@ -350,7 +351,7 @@ export class HandlerRegistry {
           interaction: partial.interaction,
           message: partial.message,
           guild: partial.guild ?? null,
-          member: partial.member ?? null,
+          member,
           channel: (partial.channel as never) ?? null,
           webhook: partial.webhook,
         },
@@ -413,6 +414,23 @@ function isInteraction(value: unknown): value is Interaction {
 
 function isUnknownInteractionError(message: string): boolean {
   return message.includes('Unknown interaction');
+}
+
+export async function resolveScriptMember(
+  message: Message | undefined,
+  member: Message['member'] | Interaction['member'] | null,
+): Promise<Message['member'] | Interaction['member'] | GuildMember | null> {
+  if (member) {
+    return member;
+  }
+  if (!message?.guild) {
+    return null;
+  }
+  try {
+    return await message.guild.members.fetch(message.author.id);
+  } catch {
+    return null;
+  }
 }
 
 function resolveEventExecutionContext(args: unknown[]): {

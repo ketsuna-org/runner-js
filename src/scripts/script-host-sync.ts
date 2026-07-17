@@ -91,6 +91,47 @@ const URL_SEARCH_PARAMS_METHODS = new Set([
   'values',
 ]);
 
+// Collection/Map-like methods on nested host proxies. Keep these sync so
+// patterns like collected.first().content work without await. Discord APIs
+// (fetch, send, reply, …) stay async by default.
+const HOST_SYNC_METHODS = new Set([
+  'get',
+  'has',
+  'first',
+  'last',
+  'at',
+  'keyAt',
+  'random',
+  'find',
+  'findKey',
+  'filter',
+  'map',
+  'flatMap',
+  'reduce',
+  'each',
+  'forEach',
+  'every',
+  'some',
+  'keys',
+  'values',
+  'entries',
+  'includes',
+  'equals',
+  'clone',
+  'concat',
+  'sort',
+  'sweep',
+  'reverse',
+  'partition',
+  'intersect',
+  'difference',
+  'symmetricDifference',
+  'tap',
+  'toJSON',
+  'toString',
+  'valueOf',
+]);
+
 export function isSyncHostMethod(targetId: string, method: string): boolean {
   if (targetId.startsWith('canvas:')) {
     return CANVAS_METHODS.has(method);
@@ -116,10 +157,8 @@ export function isSyncHostMethod(targetId: string, method: string): boolean {
   if (targetId.startsWith('djs-')) {
     return true;
   }
-  // Generic host proxies (e.g. Collection-like return values): prefer sync so
-  // patterns like collected.first().content work without await.
   if (targetId.startsWith('host:')) {
-    return true;
+    return HOST_SYNC_METHODS.has(method);
   }
   return false;
 }

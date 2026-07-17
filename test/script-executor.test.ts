@@ -1392,6 +1392,66 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     expect(awaitMessages).toHaveBeenCalled();
     executor.dispose();
   });
+
+  it('awaits nested host: methods such as guild.members.fetch', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const fetch = vi.fn(async (id: string) => ({
+      id,
+      user: { username: 'garder500' },
+      voice: { channelId: 'voice-1' },
+    }));
+    const guild = {
+      members: { fetch },
+    };
+
+    const result = await executor.execute(
+      `
+        const member = await guild.members.fetch('user-42');
+        return {
+          username: member.user.username,
+          channelId: member.voice.channelId,
+        };
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        guild: guild as never,
+      },
+      createLogger(),
+    ) as { username?: string; channelId?: string };
+
+    expect(result.username).toBe('garder500');
+    expect(result.channelId).toBe('voice-1');
+    expect(fetch).toHaveBeenCalledWith('user-42');
+    executor.dispose();
+  });
+
+  it('awaits nested host: methods such as message.channel.send', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const send = vi.fn(async (content: string) => ({ id: 'msg-1', content }));
+    const message = {
+      channel: { send },
+    };
+
+    const result = await executor.execute(
+      `
+        const sent = await message.channel.send('hello');
+        return sent.content;
+      `,
+      {
+        client: {} as never,
+        config: { token: 'x' } as never,
+        variables: {},
+        message: message as never,
+      },
+      createLogger(),
+    );
+
+    expect(result).toBe('hello');
+    expect(send).toHaveBeenCalledWith('hello');
+    executor.dispose();
+  });
 });
 
 function createCollectorMock<T>(

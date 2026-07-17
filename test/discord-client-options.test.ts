@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildDiscordClientOptions } from '../src/discord/discord-client-options.js';
-import { GatewayIntentBits } from 'discord.js';
+import { GatewayIntentBits, GuildMemberManager } from 'discord.js';
 
 describe('buildDiscordClientOptions', () => {
   it('disables message and reaction caches by default', () => {
@@ -29,5 +29,24 @@ describe('buildDiscordClientOptions', () => {
     const options = buildDiscordClientOptions({ 'Guild Members': true });
     expect(options.sweepers?.guildMembers).toBeDefined();
     expect(options.sweepers?.guildMembers).toMatchObject({ interval: 300 });
+  });
+
+  it('keeps a small GuildMemberManager cache without Guild Members intent', () => {
+    const withoutMembers = buildDiscordClientOptions({ Guilds: true, 'Guild Members': false });
+    const withMembers = buildDiscordClientOptions({ Guilds: true, 'Guild Members': true });
+
+    expect(withoutMembers.sweepers?.guildMembers).toBeUndefined();
+    expect(withMembers.sweepers?.guildMembers).toBeDefined();
+
+    // makeCache(managerType, holds, manager) — manager.name selects the limit.
+    const manager = { name: 'GuildMemberManager' };
+    const withoutCache = withoutMembers.makeCache!(GuildMemberManager, null as never, manager as never) as {
+      maxSize?: number;
+    };
+    const withCache = withMembers.makeCache!(GuildMemberManager, null as never, manager as never) as {
+      maxSize?: number;
+    };
+    expect(withoutCache.maxSize).toBe(25);
+    expect(withCache.maxSize).toBe(25);
   });
 });

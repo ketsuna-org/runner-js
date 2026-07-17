@@ -4,7 +4,9 @@ import { mapIntents } from './intent-mapper.js';
 
 /**
  * Builds discord.js Client options with minimal in-memory caches.
- * Cache limits are intent-aware so we only retain data the bot can receive.
+ * Cache limits are intent-aware so we only retain data the bot can receive,
+ * except GuildMemberManager which keeps a small cache so MESSAGE_CREATE
+ * partial members remain resolvable via message.member.
  *
  * Note: GuildManager / GuildChannelManager cannot be limited via cacheWithLimits
  * in current discord.js (typed as TODO) — guild/channel growth is mitigated by
@@ -28,7 +30,9 @@ export function buildDiscordClientOptions(
       GuildEmojiManager: 0,
       GuildForumThreadManager: 0,
       GuildInviteManager: 0,
-      GuildMemberManager: hasGuildMembers ? 25 : 0,
+      // Keep a small member cache even without Guild Members intent so
+      // MESSAGE_CREATE partial members remain resolvable via message.member.
+      GuildMemberManager: 25,
       GuildScheduledEventManager: 0,
       GuildStickerManager: 0,
       GuildTextThreadManager: 25,
