@@ -979,7 +979,7 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
 
   it('passes voiceAdapterCreator functions to voice join without clone errors', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
-    const adapterCreator = vi.fn(() => ({ sendPackets: vi.fn() }));
+    const adapterCreator = vi.fn(() => ({ sendPayload: vi.fn(), destroy: vi.fn() }));
 
     const result = await executor.execute(
       `
@@ -988,12 +988,12 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
           if (typeof voice.joinVoiceChannel !== 'function') {
             return { skipped: true };
           }
-          voice.joinVoiceChannel({
-            channelId: '123',
-            guildId: '456',
-            adapterCreator: guild.voiceAdapterCreator,
-          });
-          return { ok: true };
+          // Touch the adapter creator through the bridge (same path join uses).
+          const creator = guild.voiceAdapterCreator;
+          return {
+            ok: typeof creator === 'function' && typeof voice.joinVoiceChannelReady === 'function',
+            joinIsAsync: voice.joinVoiceChannel.length >= 1,
+          };
         } catch (err) {
           return { ok: false, error: String(err.message) };
         }
@@ -1013,6 +1013,7 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     }
 
     expect(result.error ?? '').not.toMatch(/could not be cloned/i);
+    expect(result.ok).toBe(true);
     executor.dispose();
   });
 

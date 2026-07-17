@@ -45,7 +45,6 @@ const VOICE_SPEC = {
     'validateDiscordOpusHead',
   ],
   syncFunctions: [
-    'joinVoiceChannel',
     'createAudioPlayer',
     'getVoiceConnection',
     'generateDependencyReport',

@@ -365,6 +365,55 @@ function wrapVoiceConnection(
   );
 }
 
+async function joinVoiceChannelAndWaitReady(
+  context: ScriptExecutionContext,
+  voice: VoiceModule,
+  wrapHostResult: ModuleRegistry['wrapHostResult'],
+  options: Record<string, unknown>,
+  timeoutMs = 30_000,
+  voiceSession?: VoiceSessionCleanup,
+  voiceLog?: ScriptLogger,
+): Promise<unknown> {
+  const normalized = normalizeVoiceJoinOptions(context, options);
+  const connection = voice.joinVoiceChannel(normalized as never);
+
+  const channelId = String(normalized.channelId ?? '');
+  const guildId = String(normalized.guildId ?? '');
+  voiceLog?.info(
+    `Voice joining channel ${channelId} in guild ${guildId} (state=${String(connection.state.status)})`,
+  );
+
+  const onStateChange = (oldState: { status: unknown }, newState: { status: unknown }) => {
+    voiceLog?.info(
+      `Voice connection ${String(oldState.status)} -> ${String(newState.status)}`,
+    );
+  };
+  connection.on('stateChange', onStateChange);
+
+  try {
+    if (connection.state.status !== voice.VoiceConnectionStatus.Ready) {
+      await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, timeoutMs);
+    }
+  } catch (error) {
+    connection.off('stateChange', onStateChange);
+    const status = String(connection.state.status);
+    try {
+      connection.destroy();
+    } catch {
+      // Ignore destroy errors after a failed Ready wait.
+    }
+    throw new Error(
+      `Voice connection did not become Ready within ${timeoutMs}ms (state=${status}). ` +
+        'Ensure the Guild Voice States intent is enabled and the bot can Connect/Speak in the channel.' +
+        (error instanceof Error ? ` (${error.message})` : ''),
+    );
+  }
+
+  connection.off('stateChange', onStateChange);
+  voiceLog?.info(`Voice connection Ready in guild ${guildId}`);
+  return wrapVoiceConnection(voice, wrapHostResult, connection, voiceSession);
+}
+
 const MAX_REMOTE_AUDIO_BYTES = 50 * 1024 * 1024;
 
 type DestroyableStream = {
@@ -503,21 +552,32 @@ function buildVoiceModule(
   voiceLog?: ScriptLogger,
 ) {
   return {
-    joinVoiceChannel: (options: Record<string, unknown>) =>
-      wrapVoiceConnection(
+    joinVoiceChannel: (
+      options: Record<string, unknown>,
+      timeoutMs = 30_000,
+    ) =>
+      joinVoiceChannelAndWaitReady(
+        context,
         voice,
         wrapHostResult,
-        voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never),
+        options,
+        timeoutMs,
         voiceSession,
+        voiceLog,
       ),
     joinVoiceChannelReady: async (
       options: Record<string, unknown>,
       timeoutMs = 30_000,
-    ) => {
-      const connection = voice.joinVoiceChannel(normalizeVoiceJoinOptions(context, options) as never);
-      await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, timeoutMs);
-      return wrapVoiceConnection(voice, wrapHostResult, connection, voiceSession);
-    },
+    ) =>
+      joinVoiceChannelAndWaitReady(
+        context,
+        voice,
+        wrapHostResult,
+        options,
+        timeoutMs,
+        voiceSession,
+        voiceLog,
+      ),
     createAudioPlayer: (options?: Record<string, unknown>) => {
       const player = voice.createAudioPlayer({
         behaviors: {
@@ -547,6 +607,11 @@ function buildVoiceModule(
         moduleRegistry.registry,
         playerInput,
       ) as InstanceType<VoiceModule['AudioPlayer']>;
+
+      if (connection.state.status !== voice.VoiceConnectionStatus.Ready) {
+        await voice.entersState(connection, voice.VoiceConnectionStatus.Ready, 30_000);
+      }
+
       const resource = await createAudioResourceRaw(voice, source, options, voiceSession, voiceLog);
 
       connection.subscribe(player);
