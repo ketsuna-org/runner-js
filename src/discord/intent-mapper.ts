@@ -10,6 +10,7 @@ const INTENT_MAP: Record<string, GatewayIntentBitsType> = {
   'Guild Webhooks': GatewayIntentBits.GuildWebhooks,
   'Guild Invites': GatewayIntentBits.GuildInvites,
   'Guild Voice States': GatewayIntentBits.GuildVoiceStates,
+  'Guild Presence': GatewayIntentBits.GuildPresences,
   'Guild Presences': GatewayIntentBits.GuildPresences,
   'Guild Messages': GatewayIntentBits.GuildMessages,
   'Guild Message Reactions': GatewayIntentBits.GuildMessageReactions,

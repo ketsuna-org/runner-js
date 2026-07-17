@@ -137,17 +137,16 @@ export function buildEffectiveIntentsMap(
     warnings,
   });
 
+  // Non-privileged intents are always on. Privileged ones stay off unless
+  // required by the bot config AND approved in the Discord Developer Portal.
   const effective: Record<string, boolean> = {};
   for (const key of ALL_INTENT_KEYS) {
-    effective[key] = false;
+    effective[key] = !PRIVILEGED_INTENT_KEYS.has(key);
   }
-  effective.Guilds = true;
 
   for (const key of requiredKeys) {
     if (PRIVILEGED_INTENT_KEYS.has(key)) {
       effective[key] = portalEnabledPrivileged.has(key);
-    } else {
-      effective[key] = true;
     }
   }
 

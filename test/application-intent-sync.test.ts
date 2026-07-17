@@ -81,12 +81,17 @@ describe('fetchPortalEnabledPrivilegedIntents', () => {
 });
 
 describe('buildEffectiveIntentsMap', () => {
-  it('enables only Guilds when no events require more intents', () => {
+  it('enables all non-privileged intents by default', () => {
     const effective = buildEffectiveIntentsMap(emptyConfig, new Set());
 
     expect(effective.Guilds).toBe(true);
-    expect(effective['Guild Messages']).toBe(false);
+    expect(effective['Guild Messages']).toBe(true);
+    expect(effective['Guild Voice States']).toBe(true);
+    expect(effective['Direct Messages']).toBe(true);
+    expect(effective['Guild Message Reactions']).toBe(true);
     expect(effective['Message Content']).toBe(false);
+    expect(effective['Guild Members']).toBe(false);
+    expect(effective['Guild Presence']).toBe(false);
   });
 
   it('enables required non-privileged intents from events', () => {

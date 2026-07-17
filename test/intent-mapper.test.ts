@@ -65,6 +65,9 @@ describe('buildEffectiveIntentsMap', () => {
     );
     expect(effective['Message Content']).toBe(false);
     expect(effective['Guild Members']).toBe(false);
+    // Non-privileged stay on by default.
+    expect(effective['Guild Messages']).toBe(true);
+    expect(effective['Guild Voice States']).toBe(true);
   });
 });
 
