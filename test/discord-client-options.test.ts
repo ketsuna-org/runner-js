@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildDiscordClientOptions } from '../src/discord/discord-client-options.js';
-import { GatewayIntentBits, GuildMemberManager } from 'discord.js';
+import {
+  buildDiscordClientOptions,
+  clientHasGuildVoiceStatesIntent,
+} from '../src/discord/discord-client-options.js';
+import { GatewayIntentBits, GuildMemberManager, VoiceStateManager } from 'discord.js';
 
 describe('buildDiscordClientOptions', () => {
   it('disables message and reaction caches by default', () => {
@@ -42,11 +45,45 @@ describe('buildDiscordClientOptions', () => {
     const manager = { name: 'GuildMemberManager' };
     const withoutCache = withoutMembers.makeCache!(GuildMemberManager, null as never, manager as never) as {
       maxSize?: number;
+      keepOverLimit?: (entry: { id: string }) => boolean;
     };
     const withCache = withMembers.makeCache!(GuildMemberManager, null as never, manager as never) as {
       maxSize?: number;
+      keepOverLimit?: (entry: { id: string }) => boolean;
     };
     expect(withoutCache.maxSize).toBe(25);
     expect(withCache.maxSize).toBe(25);
+    expect(typeof withoutCache.keepOverLimit).toBe('function');
+  });
+
+  it('keeps the bot voice state when Guild Voice States intent is enabled', () => {
+    const options = buildDiscordClientOptions({
+      Guilds: true,
+      'Guild Voice States': true,
+    });
+    const manager = { name: 'VoiceStateManager' };
+    const cache = options.makeCache!(VoiceStateManager, null as never, manager as never) as {
+      maxSize?: number;
+      keepOverLimit?: unknown;
+    };
+    expect(cache.maxSize).toBe(50);
+    expect(typeof cache.keepOverLimit).toBe('function');
+  });
+
+  it('detects Guild Voice States intent on client options', () => {
+    const withVoice = buildDiscordClientOptions({
+      Guilds: true,
+      'Guild Voice States': true,
+    });
+    const withoutVoice = buildDiscordClientOptions({
+      Guilds: true,
+      'Guild Voice States': false,
+    });
+
+    const clientWith = { options: withVoice } as import('discord.js').Client;
+    const clientWithout = { options: withoutVoice } as import('discord.js').Client;
+
+    expect(clientHasGuildVoiceStatesIntent(clientWith)).toBe(true);
+    expect(clientHasGuildVoiceStatesIntent(clientWithout)).toBe(false);
   });
 });

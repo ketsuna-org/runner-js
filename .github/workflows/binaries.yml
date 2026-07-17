@@ -56,7 +56,7 @@ jobs:
 
       - name: Rebuild native modules
         if: matrix.rebuild_native
-        run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native @libsql/client
+        run: npm rebuild isolated-vm canvas @discordjs/opus bufferutil zlib-sync sodium-native @libsql/client @snazzah/davey
 
       - name: Build and test
         run: |

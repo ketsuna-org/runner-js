@@ -7,6 +7,8 @@ import { assertHttpOrDataUrl, isBlockedLocalPath } from './script-host-path.js';
 import { assertAllowedFontSource, registerRemoteFont } from './script-host-remote-font.js';
 import type { VoiceSessionCleanup } from './script-host-voice-session.js';
 import { ensureFfmpegAvailable } from '../runtime/ffmpeg-setup.js';
+import { clientHasGuildVoiceStatesIntent } from '../discord/discord-client-options.js';
+import { getVoiceDependencyStatus } from '../runtime/voice-deps.js';
 import { buildCryptoModule } from './script-host-crypto.js';
 import {
   buildDiscordJsModule,
@@ -327,11 +329,16 @@ function normalizeVoiceJoinOptions(
 ): Record<string, unknown> {
   const guildId = String(options.guildId ?? '');
   const channelId = String(options.channelId ?? '');
-  let adapterCreator = options.adapterCreator;
 
-  if (adapterCreator == null && context.client && guildId) {
+  // Always use the live client's adapter. Script-bridged adapters can miss
+  // VOICE_STATE_UPDATE / VOICE_SERVER_UPDATE and leave joins in signalling.
+  let adapterCreator: unknown;
+  if (context.client && guildId) {
     const guild = context.client.guilds.cache.get(guildId);
     adapterCreator = guild?.voiceAdapterCreator;
+  }
+  if (adapterCreator == null) {
+    adapterCreator = options.adapterCreator;
   }
 
   if (adapterCreator == null) {
@@ -342,6 +349,8 @@ function normalizeVoiceJoinOptions(
 
   return {
     ...(options as Record<string, unknown>),
+    selfDeaf: options.selfDeaf ?? false,
+    selfMute: options.selfMute ?? false,
     guildId,
     channelId,
     adapterCreator: adapterCreator as never,
@@ -365,6 +374,38 @@ function wrapVoiceConnection(
   );
 }
 
+async function ensureBotMemberCached(
+  context: ScriptExecutionContext,
+  guildId: string,
+  voiceLog?: ScriptLogger,
+): Promise<void> {
+  const client = context.client;
+  const userId = client?.user?.id;
+  if (!client || !userId || !guildId) {
+    return;
+  }
+
+  const guild = client.guilds.cache.get(guildId);
+  if (!guild) {
+    return;
+  }
+
+  if (guild.members.cache.has(userId)) {
+    return;
+  }
+
+  try {
+    await guild.members.fetch(userId);
+    voiceLog?.info(`Cached bot member ${userId} in guild ${guildId} for voice adapter`);
+  } catch (error) {
+    voiceLog?.warn(
+      `Could not fetch bot member before voice join: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+}
+
 async function joinVoiceChannelAndWaitReady(
   context: ScriptExecutionContext,
   voice: VoiceModule,
@@ -375,20 +416,47 @@ async function joinVoiceChannelAndWaitReady(
   voiceLog?: ScriptLogger,
 ): Promise<unknown> {
   const normalized = normalizeVoiceJoinOptions(context, options);
-  const connection = voice.joinVoiceChannel(normalized as never);
-
   const channelId = String(normalized.channelId ?? '');
   const guildId = String(normalized.guildId ?? '');
+
+  if (context.client && !clientHasGuildVoiceStatesIntent(context.client)) {
+    throw new Error(
+      'joinVoiceChannel: Guild Voice States intent is not enabled on this bot client. ' +
+        'Restart the bot after enabling non-privileged intents (or Guild Voice States).',
+    );
+  }
+
+  await ensureBotMemberCached(context, guildId, voiceLog);
+
+  const connection = voice.joinVoiceChannel({
+    ...(normalized as Record<string, unknown>),
+    debug: true,
+  } as never);
+
   voiceLog?.info(
     `Voice joining channel ${channelId} in guild ${guildId} (state=${String(connection.state.status)})`,
   );
 
   const onStateChange = (oldState: { status: unknown }, newState: { status: unknown }) => {
+    const detail =
+      newState && typeof newState === 'object' && 'reason' in (newState as object)
+        ? ` reason=${String((newState as { reason?: unknown }).reason)}`
+        : '';
+    const closeCode =
+      newState && typeof newState === 'object' && 'closeCode' in (newState as object)
+        ? ` closeCode=${String((newState as { closeCode?: unknown }).closeCode)}`
+        : '';
     voiceLog?.info(
-      `Voice connection ${String(oldState.status)} -> ${String(newState.status)}`,
+      `Voice connection ${String(oldState.status)} -> ${String(newState.status)}${detail}${closeCode}`,
     );
   };
   connection.on('stateChange', onStateChange);
+  connection.on('error', (error: Error) => {
+    voiceLog?.error(`Voice connection error: ${error.message}`);
+  });
+  connection.on('debug', (message: string) => {
+    voiceLog?.debug(`Voice debug: ${message}`);
+  });
 
   try {
     if (connection.state.status !== voice.VoiceConnectionStatus.Ready) {
@@ -404,7 +472,11 @@ async function joinVoiceChannelAndWaitReady(
     }
     throw new Error(
       `Voice connection did not become Ready within ${timeoutMs}ms (state=${status}). ` +
-        'Ensure the Guild Voice States intent is enabled and the bot can Connect/Speak in the channel.' +
+        'Ensure the Guild Voice States intent is enabled, the bot member stays cached, ' +
+        'and the bot can Connect/Speak in the channel.' +
+        (!getVoiceDependencyStatus().davey
+          ? ' DAVE library @snazzah/davey is missing (Discord close code 4017).'
+          : '') +
         (error instanceof Error ? ` (${error.message})` : ''),
     );
   }
