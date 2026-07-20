@@ -11,6 +11,14 @@ import {
   isHostProxyDescriptor,
 } from './script-host-registry.js';
 
+const LISTENER_ATTACH_METHODS = new Set(['on', 'once', 'addListener']);
+
+export type HostListenerAttachment = {
+  target: { off?: (event: string | symbol, listener: (...args: unknown[]) => void) => void; removeListener?: (event: string | symbol, listener: (...args: unknown[]) => void) => void };
+  event: string | symbol;
+  listener: (...args: unknown[]) => void;
+};
+
 export async function invokeHostTarget(
   moduleRegistry: ModuleRegistry,
   targets: Map<string, unknown>,
@@ -19,6 +27,7 @@ export async function invokeHostTarget(
   args: unknown[],
   clientRoot?: unknown,
   dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
+  trackListener?: (attachment: HostListenerAttachment) => void,
 ): Promise<unknown> {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -29,6 +38,7 @@ export async function invokeHostTarget(
     clientRoot,
     'async',
     dispatchListener,
+    trackListener,
   ) as Promise<unknown>;
 }
 
@@ -40,6 +50,7 @@ export function invokeHostTargetSync(
   args: unknown[],
   clientRoot?: unknown,
   dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
+  trackListener?: (attachment: HostListenerAttachment) => void,
 ): unknown {
   return invokeHostTargetInternal(
     moduleRegistry,
@@ -50,6 +61,7 @@ export function invokeHostTargetSync(
     clientRoot,
     'sync',
     dispatchListener,
+    trackListener,
   );
 }
 
@@ -62,6 +74,7 @@ function invokeHostTargetInternal(
   clientRoot: unknown | undefined,
   mode: 'sync' | 'async',
   dispatchListener?: (listenerId: number, args: unknown[]) => unknown,
+  trackListener?: (attachment: HostListenerAttachment) => void,
 ): unknown {
   const { registry, wrapHostResult } = moduleRegistry;
 
@@ -85,6 +98,18 @@ function invokeHostTargetInternal(
   if (method === 'play' && targetId.startsWith('audio-player:')) {
     assertValidAudioResourceForPlay(resolvedArgs[0]);
     moduleRegistry.voiceSession?.markPlayerPlayed(target as never);
+  }
+
+  if (
+    trackListener &&
+    LISTENER_ATTACH_METHODS.has(method) &&
+    typeof resolvedArgs[1] === 'function'
+  ) {
+    trackListener({
+      target: target as HostListenerAttachment['target'],
+      event: resolvedArgs[0] as string | symbol,
+      listener: resolvedArgs[1] as (...args: unknown[]) => void,
+    });
   }
 
   if (typeof target === 'function') {

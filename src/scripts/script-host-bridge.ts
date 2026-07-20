@@ -1,6 +1,11 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { MAX_FETCH_BODY_BYTES, readResponseBodyCapped } from '../runtime/memory-hygiene.js';
-import { invokeHostTarget, invokeHostTargetSync, resolveInvokeTarget } from './script-host-invoke.js';
+import {
+  invokeHostTarget,
+  invokeHostTargetSync,
+  resolveInvokeTarget,
+  type HostListenerAttachment,
+} from './script-host-invoke.js';
 import { isBlockedClientProperty, isBlockedNestedClientAccess, wrapDynamicHostRead } from './script-host-dynamic.js';
 import type { ModuleRegistry } from './script-host-modules.js';
 import { createScriptModuleRegistry, type ModuleSpec } from './script-module-specs.js';
@@ -52,10 +57,15 @@ export function createHostBridgeSession(
   const targets = new Map<string, unknown>();
   const objectSpecs: HostObjectSpec[] = [];
   const timers = new Set<NodeJS.Timeout>();
+  const attachedListeners: HostListenerAttachment[] = [];
   const voiceSession = createVoiceSessionCleanup();
   const { moduleRegistry, moduleSpecs } = createScriptModuleRegistry(context, voiceSession, logger);
   let closed = false;
   let bridgeInFlight = 0;
+
+  const trackListener = (attachment: HostListenerAttachment) => {
+    attachedListeners.push(attachment);
+  };
 
   const register = (spec: HostObjectSpec) => {
     targets.set(spec.id, spec.target);
@@ -143,6 +153,7 @@ export function createHostBridgeSession(
       args,
       context.client,
       dispatchListener,
+      trackListener,
     );
   };
 
@@ -159,6 +170,7 @@ export function createHostBridgeSession(
       args,
       context.client,
       dispatchListener,
+      trackListener,
     );
   };
 
@@ -188,6 +200,11 @@ export function createHostBridgeSession(
       return undefined;
     }
 
+    // Never expose ScriptDb internals even if somehow registered.
+    if (targetId === 'db' && (property === 'config' || property === 'store')) {
+      return undefined;
+    }
+
     if (
       context.client != null &&
       isBlockedNestedClientAccess(context.client, target, property)
@@ -202,7 +219,7 @@ export function createHostBridgeSession(
       return wrapDynamicHostRead(moduleRegistry, targetId, property, value);
     }
 
-    return copyHostValue(value);
+    return copyHostValue(value, { redactSensitive: true });
   };
 
   const dispatch = (
@@ -248,6 +265,18 @@ export function createHostBridgeSession(
       timers.clear();
     },
     close: () => {
+      for (const attachment of attachedListeners) {
+        try {
+          if (typeof attachment.target.off === 'function') {
+            attachment.target.off(attachment.event, attachment.listener);
+          } else if (typeof attachment.target.removeListener === 'function') {
+            attachment.target.removeListener(attachment.event, attachment.listener);
+          }
+        } catch {
+          // Best-effort cleanup; emitter may already be destroyed.
+        }
+      }
+      attachedListeners.length = 0;
       voiceSession.dispose();
       closed = true;
       targets.clear();
@@ -262,17 +291,35 @@ function delay(ms: number): Promise<void> {
 }
 
 export function sanitizeConfigForScript(config: JsBotConfig): Record<string, unknown> {
-  const { token: _token, ...safeConfig } = config;
-  return copyHostValue(safeConfig) as Record<string, unknown>;
+  const { token: _token, inboundWebhooks, ...safeConfig } = config;
+  const sanitized: Record<string, unknown> = {
+    ...safeConfig,
+    inboundWebhooks: (inboundWebhooks ?? []).map(({ secret: _secret, ...webhook }) => webhook),
+  };
+  return copyHostValue(sanitized, { redactSensitive: true }) as Record<string, unknown>;
 }
+
+const DB_PUBLIC_NAMESPACES = [
+  'global',
+  'user',
+  'guild',
+  'channel',
+  'message',
+  'guildMember',
+] as const;
 
 function registerDbTargets(
   db: ScriptDb,
   register: (spec: HostObjectSpec) => void,
 ): void {
+  // Facade only — never expose the ScriptDb instance (config/store internals).
+  const facade: Record<string, unknown> = {};
+  for (const scope of DB_PUBLIC_NAMESPACES) {
+    facade[scope] = db[scope];
+  }
   register({
     id: 'db',
-    target: db,
+    target: facade,
     snapshot: {},
     methods: [],
   });
@@ -417,7 +464,7 @@ function copyHostValue(
 
     const output: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
-      if (options?.redactSensitive && (key === 'client' || key === 'token')) {
+      if (key === 'token' || key === 'secret' || (options?.redactSensitive && key === 'client')) {
         continue;
       }
       if (typeof entry === 'function') {

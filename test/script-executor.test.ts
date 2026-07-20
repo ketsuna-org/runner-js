@@ -289,6 +289,109 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('does not expose the bot token via db.config or db.store', async () => {
+    const { ScriptDb } = await import('../src/scripts/script-db.js');
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const store = {
+      token: 'managed-bearer-secret',
+      getGlobalVariables: async () => ({}),
+      setGlobalVariable: async () => undefined,
+      removeGlobalVariable: async () => undefined,
+      getScopedVariable: async () => undefined,
+      setScopedVariable: async () => undefined,
+      removeScopedVariable: async () => undefined,
+      listContextIds: async () => [],
+      removeAllScopedValuesForKey: async () => undefined,
+    };
+    const config = {
+      token: 'super-secret-token',
+      globalVariables: {},
+      scopedVariableDefinitions: [],
+    } as never;
+    const db = new ScriptDb('bot-1', config, store as never, {}, {});
+
+    const result = await executor.execute(
+      `
+        return {
+          config: db.config,
+          configToken: db.config?.token,
+          store: db.store,
+          storeToken: db.store?.token,
+          json: JSON.stringify(db),
+        };
+      `,
+      {
+        client: {} as never,
+        config,
+        variables: {},
+        db,
+      },
+      createLogger(),
+    ) as {
+      config?: unknown;
+      configToken?: string;
+      store?: unknown;
+      storeToken?: string;
+      json?: string;
+    };
+
+    expect(result.config).toBeUndefined();
+    expect(result.configToken).toBeUndefined();
+    expect(result.store).toBeUndefined();
+    expect(result.storeToken).toBeUndefined();
+    expect(result.json ?? '').not.toContain('super-secret-token');
+    expect(result.json ?? '').not.toContain('managed-bearer-secret');
+    executor.dispose();
+  });
+
+  it('does not expose db.config.token in direct runtime', async () => {
+    const { ScriptDb } = await import('../src/scripts/script-db.js');
+    const executor = new ScriptExecutor(5000, { sandboxed: false });
+    const store = {
+      getGlobalVariables: async () => ({}),
+      setGlobalVariable: async () => undefined,
+      removeGlobalVariable: async () => undefined,
+      getScopedVariable: async () => undefined,
+      setScopedVariable: async () => undefined,
+      removeScopedVariable: async () => undefined,
+      listContextIds: async () => [],
+      removeAllScopedValuesForKey: async () => undefined,
+    };
+    const config = {
+      token: 'super-secret-token',
+      globalVariables: {},
+      scopedVariableDefinitions: [],
+    } as never;
+    const db = new ScriptDb('bot-1', config, store as never, {}, {});
+    const client = { token: 'super-secret-token', uptime: 1 };
+
+    const result = await executor.execute(
+      `
+        return {
+          dbConfig: db.config,
+          dbToken: db.config?.token,
+          clientToken: client.token,
+        };
+      `,
+      {
+        client: client as never,
+        config,
+        variables: {},
+        db,
+      },
+      createLogger(),
+    ) as {
+      dbConfig?: unknown;
+      dbToken?: string;
+      clientToken?: string;
+    };
+
+    expect(result.dbConfig).toBeUndefined();
+    expect(result.dbToken).toBeUndefined();
+    expect(result.clientToken).toBeUndefined();
+    executor.dispose();
+  });
+
   it('exposes the full client but not the token', async () => {
     const executor = new ScriptExecutor(5000, { sandboxed: true });
     const fetchInvites = vi.fn(async () => ['invite']);

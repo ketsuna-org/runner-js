@@ -1,9 +1,9 @@
 /** Default RSS threshold (MB) before a worker soft-restarts. 0 = disabled. */
-export const DEFAULT_WORKER_RSS_RESTART_MB = 400;
+export const DEFAULT_WORKER_RSS_RESTART_MB = 350;
 /** Consecutive checks above threshold required before restart. */
 export const DEFAULT_WORKER_RSS_RESTART_CHECKS = 3;
 /** Minimum worker uptime before an RSS soft-restart is allowed. */
-export const DEFAULT_WORKER_RSS_RESTART_MIN_UPTIME_MS = 10 * 60 * 1000;
+export const DEFAULT_WORKER_RSS_RESTART_MIN_UPTIME_MS = 5 * 60 * 1000;
 /** Max bytes retained per worker stderr buffer in the parent process. */
 export const DEFAULT_WORKER_STDERR_MAX_BYTES = 16 * 1024;
 /** Default V8 old-space heap cap (MB) for bot workers. 0 = disabled. */

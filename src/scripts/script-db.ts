@@ -78,13 +78,25 @@ export class ScriptDb {
   readonly message: ScriptDbScopedApi;
   readonly guildMember: ScriptDbGuildMemberApi;
 
+  // True privates so host/direct scripts cannot read config.token / store.token.
+  readonly #botId: string;
+  readonly #config: JsBotConfig;
+  readonly #store: VariableDatabase;
+  readonly #ctx: ScopedExecutionContext;
+  readonly #variables: Record<string, unknown>;
+
   constructor(
-    private readonly botId: string,
-    private readonly config: JsBotConfig,
-    private readonly store: VariableDatabase,
-    private readonly ctx: ScopedExecutionContext,
-    private readonly variables: Record<string, unknown>,
+    botId: string,
+    config: JsBotConfig,
+    store: VariableDatabase,
+    ctx: ScopedExecutionContext,
+    variables: Record<string, unknown>,
   ) {
+    this.#botId = botId;
+    this.#config = config;
+    this.#store = store;
+    this.#ctx = ctx;
+    this.#variables = variables;
     this.global = {
       get: (key) => this.getGlobal(key),
       set: (key, value) => this.setGlobal(key, value),
@@ -122,7 +134,7 @@ export class ScriptDb {
   }
 
   private resolveStorageScope(namespace: DbScopeNamespace): string {
-    if (namespace === 'user' && resolveGuildId(this.ctx)) {
+    if (namespace === 'user' && resolveGuildId(this.#ctx)) {
       return 'guildMember';
     }
     return namespace;
@@ -146,18 +158,18 @@ export class ScriptDb {
     userId?: string,
     guildId?: string,
   ): Promise<void> {
-    const definition = ensureScopedVariableDefinition(this.config, key, 'guildMember');
+    const definition = ensureScopedVariableDefinition(this.#config, key, 'guildMember');
     const target = this.guildMemberTarget(userId, guildId);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    await this.store.setScopedVariable(
-      this.botId,
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    await this.#store.setScopedVariable(
+      this.#botId,
       definition.scope,
       contextId,
       definition.key,
       value,
     );
     if (this.isCurrentContext(definition.scope, contextId, target)) {
-      applyVariableAlias(this.variables, definition.key, value);
+      applyVariableAlias(this.#variables, definition.key, value);
     }
   }
 
@@ -171,7 +183,7 @@ export class ScriptDb {
       return undefined;
     }
     const target = this.guildMemberTarget(userId, guildId);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
     return this.readScopedValue(definition, contextId);
   }
 
@@ -185,9 +197,9 @@ export class ScriptDb {
       throw new Error(`Scoped variable "${key.trim()}" is not stored under guildMember.`);
     }
     const target = this.guildMemberTarget(userId, guildId);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    await this.store.removeScopedVariable(
-      this.botId,
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    await this.#store.removeScopedVariable(
+      this.#botId,
       definition.scope,
       contextId,
       definition.key,
@@ -205,7 +217,7 @@ export class ScriptDb {
     const scope = this.resolveStorageScope(namespace);
     const storageKey = normalizeScopedStorageKey(trimmed);
     await this.purgeScopedValuesForKey(scope, storageKey);
-    this.config.scopedVariableDefinitions = this.config.scopedVariableDefinitions.filter(
+    this.#config.scopedVariableDefinitions = this.#config.scopedVariableDefinitions.filter(
       (entry) => {
         const entryKey = normalizeScopedStorageKey(String(entry.key ?? '').trim());
         const entryScope = String(entry.scope ?? '').trim();
@@ -216,10 +228,10 @@ export class ScriptDb {
   }
 
   private async purgeScopedValuesForKey(scope: string, storageKey: string): Promise<void> {
-    await this.store.removeAllScopedValuesForKey(this.botId, scope, storageKey);
+    await this.#store.removeAllScopedValuesForKey(this.#botId, scope, storageKey);
     const legacyKey = toScopedReferenceKey(storageKey);
     if (legacyKey !== storageKey) {
-      await this.store.removeAllScopedValuesForKey(this.botId, scope, legacyKey);
+      await this.#store.removeAllScopedValuesForKey(this.#botId, scope, legacyKey);
     }
   }
 
@@ -249,18 +261,18 @@ export class ScriptDb {
     id?: string,
   ): Promise<void> {
     const scope = this.resolveStorageScope(namespace);
-    const definition = ensureScopedVariableDefinition(this.config, key, scope);
+    const definition = ensureScopedVariableDefinition(this.#config, key, scope);
     const target = this.targetForId(namespace, id);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    await this.store.setScopedVariable(
-      this.botId,
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    await this.#store.setScopedVariable(
+      this.#botId,
       definition.scope,
       contextId,
       definition.key,
       value,
     );
     if (this.isCurrentContext(definition.scope, contextId, target)) {
-      applyVariableAlias(this.variables, definition.key, value);
+      applyVariableAlias(this.#variables, definition.key, value);
     }
   }
 
@@ -272,7 +284,7 @@ export class ScriptDb {
     if (!storageKey) {
       return undefined;
     }
-    for (const entry of this.config.scopedVariableDefinitions) {
+    for (const entry of this.#config.scopedVariableDefinitions) {
       const entryKey = normalizeScopedStorageKey(String(entry.key ?? '').trim());
       const entryScope = String(entry.scope ?? '').trim();
       if (entryKey === storageKey && entryScope === scope) {
@@ -293,7 +305,7 @@ export class ScriptDb {
       return undefined;
     }
     const target = this.targetForId(namespace, id);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
     return this.readScopedValue(definition, contextId);
   }
 
@@ -308,9 +320,9 @@ export class ScriptDb {
       throw new Error(`Scoped variable "${key.trim()}" is not stored under ${namespace}.`);
     }
     const target = this.targetForId(namespace, id);
-    const contextId = resolveContextIdForScope(definition.scope, this.ctx, target);
-    await this.store.removeScopedVariable(
-      this.botId,
+    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    await this.#store.removeScopedVariable(
+      this.#botId,
       definition.scope,
       contextId,
       definition.key,
@@ -331,7 +343,7 @@ export class ScriptDb {
     const scope = this.resolveStorageScope(namespace);
     let definition = this.findDefinitionForStorageScope(key, scope);
     if (!definition) {
-      definition = ensureScopedVariableDefinition(this.config, key, scope);
+      definition = ensureScopedVariableDefinition(this.#config, key, scope);
     }
 
     const normalizedOffset = normalizeNonNegativeInt(offset, 'offset');
@@ -339,10 +351,10 @@ export class ScriptDb {
 
     if (
       typeof filter !== 'function' &&
-      typeof this.store.queryScopedVariableIndex === 'function'
+      typeof this.#store.queryScopedVariableIndex === 'function'
     ) {
-      const page = await this.store.queryScopedVariableIndex(
-        this.botId,
+      const page = await this.#store.queryScopedVariableIndex(
+        this.#botId,
         definition.scope,
         definition.key,
         {
@@ -406,10 +418,10 @@ export class ScriptDb {
     const seen = new Set<string>();
     const useQueryIndex =
       typeof filter !== 'function' &&
-      typeof this.store.queryScopedVariableIndex === 'function';
+      typeof this.#store.queryScopedVariableIndex === 'function';
 
     for (const scanScope of scopesToScan) {
-      for (const definition of this.config.scopedVariableDefinitions) {
+      for (const definition of this.#config.scopedVariableDefinitions) {
         const entryScope = String(definition.scope ?? '').trim();
         if (entryScope !== scanScope) {
           continue;
@@ -420,8 +432,8 @@ export class ScriptDb {
         }
 
         if (useQueryIndex) {
-          const page = await this.store.queryScopedVariableIndex!(
-            this.botId,
+          const page = await this.#store.queryScopedVariableIndex!(
+            this.#botId,
             entryScope,
             storageKey,
             { offset: 0, limit: 1000, descending: true },
@@ -485,7 +497,7 @@ export class ScriptDb {
       case 'guildMember': {
         const { guildId, userId } = parseGuildMemberContextId(contextId);
         if (namespace === 'user' || namespace === 'guildMember') {
-          const currentGuildId = resolveGuildId(this.ctx);
+          const currentGuildId = resolveGuildId(this.#ctx);
           if (currentGuildId && guildId !== currentGuildId) {
             return namespace === 'guildMember' ? `${guildId}:${userId}` : null;
           }
@@ -507,11 +519,11 @@ export class ScriptDb {
   }
 
   private async collectContextIds(storageKey: string, scope: string): Promise<string[]> {
-    const contextIds = new Set(await this.store.listContextIds(this.botId, scope, storageKey));
+    const contextIds = new Set(await this.#store.listContextIds(this.#botId, scope, storageKey));
     const legacyKey = toScopedReferenceKey(storageKey);
     if (legacyKey !== storageKey) {
-      for (const contextId of await this.store.listContextIds(
-        this.botId,
+      for (const contextId of await this.#store.listContextIds(
+        this.#botId,
         scope,
         legacyKey,
       )) {
@@ -526,19 +538,19 @@ export class ScriptDb {
     if (!normalizedKey) {
       throw new Error('db.global: missing key.');
     }
-    if (typeof this.store.getGlobalVariable === 'function') {
-      const value = await this.store.getGlobalVariable(this.botId, normalizedKey);
+    if (typeof this.#store.getGlobalVariable === 'function') {
+      const value = await this.#store.getGlobalVariable(this.#botId, normalizedKey);
       if (value !== undefined && value !== null) {
         return value;
       }
     } else {
-      const runtime = await this.store.getGlobalVariables(this.botId);
+      const runtime = await this.#store.getGlobalVariables(this.#botId);
       if (normalizedKey in runtime) {
         return runtime[normalizedKey];
       }
     }
-    if (normalizedKey in this.config.globalVariables) {
-      return this.config.globalVariables[normalizedKey];
+    if (normalizedKey in this.#config.globalVariables) {
+      return this.#config.globalVariables[normalizedKey];
     }
     return undefined;
   }
@@ -548,8 +560,8 @@ export class ScriptDb {
     if (!normalizedKey) {
       throw new Error('db.global: missing key.');
     }
-    await this.store.setGlobalVariable(this.botId, normalizedKey, value);
-    this.variables[normalizedKey] = value;
+    await this.#store.setGlobalVariable(this.#botId, normalizedKey, value);
+    this.#variables[normalizedKey] = value;
   }
 
   async deleteGlobal(key: string): Promise<void> {
@@ -557,8 +569,8 @@ export class ScriptDb {
     if (!normalizedKey) {
       throw new Error('db.global: missing key.');
     }
-    await this.store.removeGlobalVariable(this.botId, normalizedKey);
-    delete this.variables[normalizedKey];
+    await this.#store.removeGlobalVariable(this.#botId, normalizedKey);
+    delete this.#variables[normalizedKey];
   }
 
   private async readScopedValue(
@@ -576,8 +588,8 @@ export class ScriptDb {
     definition: { scope: string; key: string },
     contextId: string,
   ): Promise<unknown> {
-    let value = await this.store.getScopedVariable(
-      this.botId,
+    let value = await this.#store.getScopedVariable(
+      this.#botId,
       definition.scope,
       contextId,
       definition.key,
@@ -585,8 +597,8 @@ export class ScriptDb {
     if (value == null) {
       const legacyKey = toScopedReferenceKey(definition.key);
       if (legacyKey !== definition.key) {
-        value = await this.store.getScopedVariable(
-          this.botId,
+        value = await this.#store.getScopedVariable(
+          this.#botId,
           definition.scope,
           contextId,
           legacyKey,
@@ -608,18 +620,18 @@ export class ScriptDb {
       return false;
     }
     try {
-      return resolveContextIdForScope(scope, this.ctx) === contextId;
+      return resolveContextIdForScope(scope, this.#ctx) === contextId;
     } catch {
       return false;
     }
   }
 
   private removeVariableAlias(storageKey: string): void {
-    delete this.variables[storageKey];
-    delete this.variables[normalizeScopedStorageKey(storageKey)];
+    delete this.#variables[storageKey];
+    delete this.#variables[normalizeScopedStorageKey(storageKey)];
     const referenceKey = toScopedReferenceKey(storageKey);
     if (referenceKey !== storageKey) {
-      delete this.variables[referenceKey];
+      delete this.#variables[referenceKey];
     }
   }
 }

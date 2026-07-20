@@ -10,6 +10,8 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
   type: z.literal('command').default('command'),
   name: z.string().min(1).max(32),
   description: z.string().default(''),
+  /** Discord application command type: chatInput | user | message */
+  discordType: z.enum(['chatInput', 'user', 'message']).default('chatInput'),
   options: z.array(z.record(z.unknown())).default([]),
 });
 

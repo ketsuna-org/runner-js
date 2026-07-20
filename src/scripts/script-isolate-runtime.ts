@@ -444,19 +444,21 @@ export class ScriptIsolateRuntime implements ScriptRuntime {
     const ivmContext = await this.isolate.createContext();
     const jail = ivmContext.global;
     let sessionId = 0;
+    let listenerDispatchRef: { release(): void } | null = null;
 
     try {
       await jail.set('global', jail.derefInto());
       this.bootstrap.runSync(ivmContext);
 
-      const listenerDispatchRef = ivmContext.evalClosureSync(
+      const dispatchRef = ivmContext.evalClosureSync(
         'return function(id, args) { return globalThis.__dispatchHostListener(id, args); }',
         [],
         { result: { reference: true } },
       );
+      listenerDispatchRef = dispatchRef;
 
       sessionId = this.bridgeHost.createSession(context, logger, (listenerId, args) =>
-        listenerDispatchRef.applySync(undefined, [listenerId, args], {
+        dispatchRef.applySync(undefined, [listenerId, args], {
           arguments: { copy: true },
           result: { copy: true },
         }),
@@ -591,6 +593,11 @@ ${trimmed}
       }
     } finally {
       await this.bridgeHost.closeSession(sessionId, timeoutMs);
+      try {
+        listenerDispatchRef?.release();
+      } catch {
+        // Ignore release errors after context teardown.
+      }
       ivmContext.release();
     }
   }

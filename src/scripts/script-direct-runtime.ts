@@ -25,6 +25,40 @@ function createConsoleProxy(logger: ScriptLogger): Console {
   } as Console;
 }
 
+/** Prevent direct-mode scripts from reading Discord/API tokens. */
+function createTokenSafeClientProxy(client: ScriptExecutionContext['client']): unknown {
+  if (client == null || typeof client !== 'object') {
+    return client;
+  }
+  return new Proxy(client as object, {
+    get(target, property, receiver) {
+      if (property === 'token') {
+        return undefined;
+      }
+      const value = Reflect.get(target, property, receiver);
+      if (typeof value === 'function') {
+        return value.bind(target);
+      }
+      return value;
+    },
+    set(target, property, value, receiver) {
+      if (property === 'token') {
+        throw new Error('Cannot set "token" on client.');
+      }
+      return Reflect.set(target, property, value, receiver);
+    },
+    ownKeys(target) {
+      return Reflect.ownKeys(target).filter((key) => key !== 'token');
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'token') {
+        return undefined;
+      }
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+  });
+}
+
 export class ScriptDirectRuntime implements ScriptRuntime {
   async execute(
     script: string,
@@ -38,7 +72,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
     }
 
     const scope = {
-      client: context.client,
+      client: createTokenSafeClientProxy(context.client),
       config: sanitizeConfigForScript(context.config),
       variables: context.variables,
       interaction: context.interaction,
@@ -47,6 +81,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       guild: context.guild,
       channel: context.channel,
       webhook: context.webhook ?? null,
+      // ScriptDb uses #private fields; config/store are not enumerable.
       db: context.db,
       console: createConsoleProxy(logger),
       fetch: globalThis.fetch.bind(globalThis),

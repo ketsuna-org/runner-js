@@ -122,6 +122,10 @@ export class ScriptExecutor {
       return result;
     } finally {
       this.inFlight = Math.max(0, this.inFlight - 1);
+      // Recycle after the last concurrent run finishes so busy bots still reclaim.
+      if (this.sandboxed) {
+        this.maybeRecycleIsolate(logger);
+      }
     }
   }
 

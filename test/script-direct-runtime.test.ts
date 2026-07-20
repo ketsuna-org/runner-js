@@ -100,6 +100,62 @@ describe('ScriptDirectRuntime', () => {
     expect(reply).toHaveBeenCalledWith({ content: 'pong' });
     executor.dispose();
   });
+
+  it('does not expose config.token, client.token, or db.config', async () => {
+    const { ScriptDb } = await import('../src/scripts/script-db.js');
+    const executor = createDirectExecutor();
+    const store = {
+      token: 'managed-bearer-secret',
+      getGlobalVariables: async () => ({}),
+      setGlobalVariable: async () => undefined,
+      removeGlobalVariable: async () => undefined,
+      getScopedVariable: async () => undefined,
+      setScopedVariable: async () => undefined,
+      removeScopedVariable: async () => undefined,
+      listContextIds: async () => [],
+      removeAllScopedValuesForKey: async () => undefined,
+    };
+    const config = {
+      token: 'super-secret-token',
+      globalVariables: {},
+      scopedVariableDefinitions: [],
+      inboundWebhooks: [{ id: '1', path: '/hook', secret: 'webhook-secret', script: '', enabled: true }],
+    } as never;
+    const db = new ScriptDb('bot-1', config, store as never, {}, {});
+    const client = { token: 'super-secret-token', uptime: 1 };
+
+    const result = (await executor.execute(
+      `
+        return {
+          configToken: config.token,
+          clientToken: client.token,
+          dbConfig: db.config,
+          dbToken: db.config?.token,
+          webhookSecret: config.inboundWebhooks?.[0]?.secret,
+        };
+      `,
+      {
+        client: client as never,
+        config,
+        variables: {},
+        db,
+      },
+      createLogger(),
+    )) as {
+      configToken?: string;
+      clientToken?: string;
+      dbConfig?: unknown;
+      dbToken?: string;
+      webhookSecret?: string;
+    };
+
+    expect(result.configToken).toBeUndefined();
+    expect(result.clientToken).toBeUndefined();
+    expect(result.dbConfig).toBeUndefined();
+    expect(result.dbToken).toBeUndefined();
+    expect(result.webhookSecret).toBeUndefined();
+    executor.dispose();
+  });
 });
 
 function createLogger() {

@@ -96,7 +96,8 @@ export class HandlerRegistry {
         return;
       }
 
-      if (!interaction.isChatInputCommand()) {
+      // Slash + context-menu commands share the command map by name.
+      if (!interaction.isChatInputCommand() && !interaction.isContextMenuCommand()) {
         return;
       }
 
@@ -255,7 +256,7 @@ export class HandlerRegistry {
     const listener = async (...args: unknown[]) => {
       const context = resolveEventExecutionContext(args);
 
-      if (context.interaction?.isChatInputCommand()) {
+      if (context.interaction?.isChatInputCommand() || context.interaction?.isContextMenuCommand()) {
         const slashHandler = this.commandMap.get(
           context.interaction.commandName.trim().toLowerCase(),
         );
@@ -409,7 +410,11 @@ function isMessage(value: unknown): value is Message {
 }
 
 function isInteraction(value: unknown): value is Interaction {
-  return typeof value === 'object' && value !== null && 'isChatInputCommand' in value;
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('isChatInputCommand' in value || 'isContextMenuCommand' in value || 'isButton' in value)
+  );
 }
 
 function isUnknownInteractionError(message: string): boolean {

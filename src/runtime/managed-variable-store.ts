@@ -12,12 +12,12 @@ interface ManagedVariableStoreOptions {
 
 export class ManagedVariableStore implements VariableDatabase {
   private readonly baseUrl: string;
-  private readonly token: string;
+  readonly #token: string;
 
   constructor(options: ManagedVariableStoreOptions) {
     const trimmed = options.baseUrl.trim();
     this.baseUrl = trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
-    this.token = options.token.trim();
+    this.#token = options.token.trim();
   }
 
   private async post(
@@ -30,7 +30,7 @@ export class ManagedVariableStore implements VariableDatabase {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${this.#token}`,
       },
       body: JSON.stringify(body),
     });
@@ -62,7 +62,7 @@ export class ManagedVariableStore implements VariableDatabase {
     }`;
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${this.token}`,
+        Authorization: `Bearer ${this.#token}`,
         'Cache-Control': 'no-cache',
       },
     });

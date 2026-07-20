@@ -33,11 +33,12 @@ export function isHostMethodBridge(value: unknown): value is HostMethodBridge {
 }
 
 export function isBlockedClientProperty(
-  clientRoot: unknown,
-  target: unknown,
+  _clientRoot: unknown,
+  _target: unknown,
   property: string,
 ): boolean {
-  return CLIENT_BLOCKED_PROPERTIES.has(property) && target === clientRoot;
+  // Always hide token on any host object, not only the root client.
+  return CLIENT_BLOCKED_PROPERTIES.has(property);
 }
 
 export function wrapDynamicHostRead(
