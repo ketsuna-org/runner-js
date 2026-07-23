@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  appendCappedText,
-  buildWorkerNodeOptions,
-  evaluateWorkerRssRestart,
+  DEFAULT_PROCESS_RSS_CHECKS,
+  DEFAULT_PROCESS_RSS_CRITICAL_MB,
+  DEFAULT_PROCESS_RSS_MIN_UPTIME_MS,
+  DEFAULT_PROCESS_RSS_SOFT_MB,
+  evaluateSustainedRss,
   parsePositiveIntEnv,
   readResponseBodyCapped,
+  resolveProcessMemoryPolicy,
 } from '../src/runtime/memory-hygiene.js';
 import { shouldRecycleIsolate } from '../src/scripts/script-executor.js';
 
@@ -25,10 +28,10 @@ describe('shouldRecycleIsolate', () => {
   });
 });
 
-describe('evaluateWorkerRssRestart', () => {
+describe('evaluateSustainedRss', () => {
   it('does nothing when threshold is disabled', () => {
     expect(
-      evaluateWorkerRssRestart({
+      evaluateSustainedRss({
         rssMb: 999,
         thresholdMb: 0,
         consecutiveOver: 5,
@@ -36,12 +39,12 @@ describe('evaluateWorkerRssRestart', () => {
         uptimeMs: 60 * 60 * 1000,
         minUptimeMs: 10 * 60 * 1000,
       }),
-    ).toEqual({ shouldRestart: false, nextConsecutiveOver: 0 });
+    ).toEqual({ shouldTrigger: false, nextConsecutiveOver: 0 });
   });
 
   it('resets streak when RSS drops below threshold', () => {
     expect(
-      evaluateWorkerRssRestart({
+      evaluateSustainedRss({
         rssMb: 100,
         thresholdMb: 400,
         consecutiveOver: 2,
@@ -49,12 +52,12 @@ describe('evaluateWorkerRssRestart', () => {
         uptimeMs: 60 * 60 * 1000,
         minUptimeMs: 10 * 60 * 1000,
       }),
-    ).toEqual({ shouldRestart: false, nextConsecutiveOver: 0 });
+    ).toEqual({ shouldTrigger: false, nextConsecutiveOver: 0 });
   });
 
-  it('increments streak but does not restart before min uptime', () => {
+  it('increments streak but does not trigger before min uptime', () => {
     expect(
-      evaluateWorkerRssRestart({
+      evaluateSustainedRss({
         rssMb: 500,
         thresholdMb: 400,
         consecutiveOver: 2,
@@ -62,12 +65,12 @@ describe('evaluateWorkerRssRestart', () => {
         uptimeMs: 5 * 60 * 1000,
         minUptimeMs: 10 * 60 * 1000,
       }),
-    ).toEqual({ shouldRestart: false, nextConsecutiveOver: 3 });
+    ).toEqual({ shouldTrigger: false, nextConsecutiveOver: 3 });
   });
 
-  it('restarts after sustained high RSS past min uptime', () => {
+  it('triggers after sustained high RSS past min uptime', () => {
     expect(
-      evaluateWorkerRssRestart({
+      evaluateSustainedRss({
         rssMb: 500,
         thresholdMb: 400,
         consecutiveOver: 2,
@@ -75,12 +78,12 @@ describe('evaluateWorkerRssRestart', () => {
         uptimeMs: 15 * 60 * 1000,
         minUptimeMs: 10 * 60 * 1000,
       }),
-    ).toEqual({ shouldRestart: true, nextConsecutiveOver: 3 });
+    ).toEqual({ shouldTrigger: true, nextConsecutiveOver: 3 });
   });
 
-  it('does not restart before required consecutive checks', () => {
+  it('does not trigger before required consecutive checks', () => {
     expect(
-      evaluateWorkerRssRestart({
+      evaluateSustainedRss({
         rssMb: 500,
         thresholdMb: 400,
         consecutiveOver: 1,
@@ -88,23 +91,34 @@ describe('evaluateWorkerRssRestart', () => {
         uptimeMs: 15 * 60 * 1000,
         minUptimeMs: 10 * 60 * 1000,
       }),
-    ).toEqual({ shouldRestart: false, nextConsecutiveOver: 2 });
+    ).toEqual({ shouldTrigger: false, nextConsecutiveOver: 2 });
   });
 });
 
-describe('appendCappedText', () => {
-  it('keeps content under maxBytes without trimming when short', () => {
-    expect(appendCappedText('aa', 'bb', 10)).toBe('aa\nbb');
+describe('resolveProcessMemoryPolicy', () => {
+  it('falls back to defaults with an empty environment', () => {
+    expect(resolveProcessMemoryPolicy({})).toEqual({
+      softThresholdMb: DEFAULT_PROCESS_RSS_SOFT_MB,
+      criticalThresholdMb: DEFAULT_PROCESS_RSS_CRITICAL_MB,
+      requiredConsecutive: DEFAULT_PROCESS_RSS_CHECKS,
+      minUptimeMs: DEFAULT_PROCESS_RSS_MIN_UPTIME_MS,
+    });
   });
 
-  it('trims from the front when over budget', () => {
-    const result = appendCappedText('aaaaaaaa', 'bbbb', 8);
-    expect(result.length).toBe(8);
-    expect(result.endsWith('bbbb')).toBe(true);
-  });
-
-  it('returns empty string when maxBytes is 0', () => {
-    expect(appendCappedText('hello', 'world', 0)).toBe('');
+  it('honors env overrides and enforces at least one check', () => {
+    expect(
+      resolveProcessMemoryPolicy({
+        BOT_CREATOR_PROCESS_RSS_SOFT_MB: '1200',
+        BOT_CREATOR_PROCESS_RSS_CRITICAL_MB: '1600',
+        BOT_CREATOR_PROCESS_RSS_CHECKS: '0',
+        BOT_CREATOR_PROCESS_RSS_MIN_UPTIME_MS: '60000',
+      }),
+    ).toEqual({
+      softThresholdMb: 1200,
+      criticalThresholdMb: 1600,
+      requiredConsecutive: 1,
+      minUptimeMs: 60_000,
+    });
   });
 });
 
@@ -115,26 +129,6 @@ describe('parsePositiveIntEnv', () => {
     expect(parsePositiveIntEnv('', 100)).toBe(100);
     expect(parsePositiveIntEnv('nope', 100)).toBe(100);
     expect(parsePositiveIntEnv('-5', 100)).toBe(100);
-  });
-});
-
-describe('buildWorkerNodeOptions', () => {
-  it('injects max-old-space-size when enabled', () => {
-    expect(buildWorkerNodeOptions(undefined, 512)).toBe('--max-old-space-size=512');
-    expect(buildWorkerNodeOptions('--enable-source-maps', 256)).toBe(
-      '--enable-source-maps --max-old-space-size=256',
-    );
-  });
-
-  it('replaces an existing max-old-space-size flag', () => {
-    expect(buildWorkerNodeOptions('--max-old-space-size=1024 --trace-warnings', 256)).toBe(
-      '--max-old-space-size=256 --trace-warnings',
-    );
-  });
-
-  it('returns existing options unchanged when disabled', () => {
-    expect(buildWorkerNodeOptions(undefined, 0)).toBeUndefined();
-    expect(buildWorkerNodeOptions('--trace-warnings', 0)).toBe('--trace-warnings');
   });
 });
 

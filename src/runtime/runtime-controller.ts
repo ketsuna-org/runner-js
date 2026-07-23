@@ -1,8 +1,9 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.js';
 import path from 'node:path';
+import { isManagedRunner } from '../config/env.js';
 import { BotStore } from './bot-store.js';
-import { BotProcessManager, type ManagedWorkerState } from './bot-process-manager.js';
+import { BotSupervisor, type ManagedBotState } from './bot-supervisor.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
 import type { VariableDatabase } from './variable-database.js';
@@ -24,7 +25,7 @@ export interface RunnerBotRuntimeState {
 export class RuntimeController {
   readonly botStore: BotStore;
   readonly variableStore: VariableDatabase;
-  private readonly processManager: BotProcessManager;
+  private readonly processManager: BotSupervisor;
 
   static async create(
     dataDir: string,
@@ -32,16 +33,23 @@ export class RuntimeController {
     env: VariableStoreEnv,
   ): Promise<RuntimeController> {
     const variableStore = await resolveVariableStore(dataDir, env);
-    return new RuntimeController(dataDir, logStore, variableStore);
+    // Multi-tenant (managed/pool) runners must sandbox user scripts.
+    return new RuntimeController(dataDir, logStore, variableStore, isManagedRunner(env));
   }
 
-  constructor(dataDir: string, logStore: LogStore, variableStore: VariableDatabase) {
+  constructor(
+    dataDir: string,
+    logStore: LogStore,
+    variableStore: VariableDatabase,
+    sandboxScripts = false,
+  ) {
     this.botStore = new BotStore(path.join(dataDir, 'synced-bots'));
     this.variableStore = variableStore;
-    this.processManager = new BotProcessManager({
-      dataDir,
+    this.processManager = new BotSupervisor({
       botStore: this.botStore,
       logStore,
+      variableStore,
+      sandboxScripts,
     });
   }
 
@@ -299,7 +307,7 @@ export class RuntimeController {
     }, 0);
   }
 
-  private toRuntimeState(state: ManagedWorkerState): RunnerBotRuntimeState {
+  private toRuntimeState(state: ManagedBotState): RunnerBotRuntimeState {
     return {
       botId: state.botId,
       botName: state.botName,

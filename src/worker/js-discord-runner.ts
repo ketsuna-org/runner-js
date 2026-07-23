@@ -47,6 +47,19 @@ export class JsDiscordRunner {
     return this.guildCount;
   }
 
+  /** Heap used by the bot's sandbox isolate, or null without a sandbox. */
+  getHeapUsedBytes(): number | null {
+    return this.executor?.getHeapUsedBytes() ?? null;
+  }
+
+  /**
+   * Disposes the bot's sandbox isolate when idle (or unconditionally between
+   * runs when `force` is set). It is recreated on the next script execution.
+   */
+  disposeIdleIsolate(force = false): boolean {
+    return this.executor?.disposeIdleIsolate(force) ?? false;
+  }
+
   private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
     const warnings: string[] = [];
     try {

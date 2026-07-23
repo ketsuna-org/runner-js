@@ -6,7 +6,9 @@ import type { LogStore } from '../src/runtime/log-store.js';
 import type { RunnerEnv } from '../src/config/env.js';
 
 describe('running-status endpoint', () => {
-  it('reports connected only for bots in the process manager state map', async () => {
+  it('reports connected only for bots in the supervisor state map', async () => {
+    // Single-process runner: per-bot rssBytes/pid are null; heapUsedBytes
+    // reflects the bot's isolate heap.
     const runtime = {
       listRuntimeStates: () => [
         {
@@ -15,10 +17,10 @@ describe('running-status endpoint', () => {
           state: 'running',
           lastSeenAt: null,
           lastError: null,
-          baselineRssBytes: 12_000_000,
+          baselineRssBytes: null,
           heapUsedBytes: 4_000_000,
           guildCount: 2,
-          pid: 4242,
+          pid: null,
         },
         {
           botId: 'stopped-bot',
@@ -58,10 +60,10 @@ describe('running-status endpoint', () => {
         'running-bot': {
           connected: true,
           state: 'running',
-          rssBytes: 12_000_000,
+          rssBytes: null,
           heapUsedBytes: 4_000_000,
           guildCount: 2,
-          pid: 4242,
+          pid: null,
           lastError: null,
         },
         'stopped-bot': {
@@ -88,10 +90,10 @@ describe('running-status endpoint', () => {
           state: 'error',
           lastSeenAt: null,
           lastError: 'Disallowed intents (4014)',
-          baselineRssBytes: 8_000_000,
+          baselineRssBytes: null,
           heapUsedBytes: 2_000_000,
           guildCount: 0,
-          pid: 4242,
+          pid: null,
         },
       ],
     } as unknown as RuntimeController;
@@ -120,10 +122,10 @@ describe('running-status endpoint', () => {
         'error-bot': {
           connected: false,
           state: 'error',
-          rssBytes: 8_000_000,
+          rssBytes: null,
           heapUsedBytes: 2_000_000,
           guildCount: 0,
-          pid: 4242,
+          pid: null,
           lastError: 'Disallowed intents (4014)',
         },
       },

@@ -49,7 +49,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     name: 'Bot Creator JS Runner',
     version: deps.env.version,
     engine: 'javascript',
-    capabilities: ['js-native', 'worker-process'],
+    capabilities: ['js-native', 'in-process'],
   }));
 
   app.get('/health', async () => ({ ok: true }));
@@ -494,6 +494,9 @@ function serializeBotRuntimeState(state: ReturnType<RuntimeController['listRunti
 
 function buildMetricsPayload(runtime: RuntimeController) {
   const memory = process.memoryUsage();
+  // Single-process runner: bots have no dedicated processes, so per-bot
+  // rssBytes are null and this sums to 0. The apiVersion 2 shape is kept
+  // stable for the Go manager (rssBytes = mainRssBytes + totalWorkerRssBytes).
   const totalWorkerRssBytes = runtime.aggregateWorkerRssBytes();
   return {
     apiVersion: 2,

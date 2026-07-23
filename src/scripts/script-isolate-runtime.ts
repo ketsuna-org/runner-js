@@ -602,6 +602,17 @@ ${trimmed}
     }
   }
 
+  getHeapUsedBytes(): number | null {
+    if (this.disposed) {
+      return null;
+    }
+    try {
+      return this.isolate.getHeapStatisticsSync().used_heap_size;
+    } catch {
+      return null;
+    }
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;

@@ -1,33 +1,70 @@
-/** Default RSS threshold (MB) before a worker soft-restarts. 0 = disabled. */
-export const DEFAULT_WORKER_RSS_RESTART_MB = 350;
-/** Consecutive checks above threshold required before restart. */
-export const DEFAULT_WORKER_RSS_RESTART_CHECKS = 3;
-/** Minimum worker uptime before an RSS soft-restart is allowed. */
-export const DEFAULT_WORKER_RSS_RESTART_MIN_UPTIME_MS = 5 * 60 * 1000;
-/** Max bytes retained per worker stderr buffer in the parent process. */
-export const DEFAULT_WORKER_STDERR_MAX_BYTES = 16 * 1024;
-/** Default V8 old-space heap cap (MB) for bot workers. 0 = disabled. */
-export const DEFAULT_WORKER_MAX_HEAP_MB = 512;
+/**
+ * Memory policy for the shared bot process.
+ *
+ * All bots run in a single Node process. When RSS is sustained above the soft
+ * threshold, idle script isolates are force-disposed. If RSS stays above the
+ * critical threshold, the process exits non-zero so the container
+ * orchestrator restarts the node (bots are re-synced by pool bootstrap).
+ */
+
+/** Sustained RSS (MB) above which idle isolates are force-disposed. 0 = disabled. */
+export const DEFAULT_PROCESS_RSS_SOFT_MB = 768;
+/** Sustained RSS (MB) above which the process exits non-zero. 0 = disabled. */
+export const DEFAULT_PROCESS_RSS_CRITICAL_MB = 1024;
+/** Consecutive checks above a threshold required before acting. */
+export const DEFAULT_PROCESS_RSS_CHECKS = 3;
+/** Minimum process uptime before RSS actions are allowed. */
+export const DEFAULT_PROCESS_RSS_MIN_UPTIME_MS = 5 * 60 * 1000;
 /** Max bytes allowed for script-side fetch() response bodies. */
 export const MAX_FETCH_BODY_BYTES = 10 * 1024 * 1024;
 
-export interface WorkerRssRestartDecision {
-  shouldRestart: boolean;
+export interface ProcessMemoryPolicy {
+  softThresholdMb: number;
+  criticalThresholdMb: number;
+  requiredConsecutive: number;
+  minUptimeMs: number;
+}
+
+export function resolveProcessMemoryPolicy(
+  env: NodeJS.ProcessEnv = process.env,
+): ProcessMemoryPolicy {
+  return {
+    softThresholdMb: parsePositiveIntEnv(
+      env.BOT_CREATOR_PROCESS_RSS_SOFT_MB,
+      DEFAULT_PROCESS_RSS_SOFT_MB,
+    ),
+    criticalThresholdMb: parsePositiveIntEnv(
+      env.BOT_CREATOR_PROCESS_RSS_CRITICAL_MB,
+      DEFAULT_PROCESS_RSS_CRITICAL_MB,
+    ),
+    requiredConsecutive: Math.max(
+      1,
+      parsePositiveIntEnv(env.BOT_CREATOR_PROCESS_RSS_CHECKS, DEFAULT_PROCESS_RSS_CHECKS),
+    ),
+    minUptimeMs: parsePositiveIntEnv(
+      env.BOT_CREATOR_PROCESS_RSS_MIN_UPTIME_MS,
+      DEFAULT_PROCESS_RSS_MIN_UPTIME_MS,
+    ),
+  };
+}
+
+export interface SustainedRssDecision {
+  shouldTrigger: boolean;
   nextConsecutiveOver: number;
 }
 
 /**
- * Pure decision helper for worker RSS soft-restart.
- * Returns whether to exit (and let the parent auto-restart) and the updated streak.
+ * Pure decision helper for sustained-RSS thresholds.
+ * Returns whether to act and the updated over-threshold streak.
  */
-export function evaluateWorkerRssRestart(input: {
+export function evaluateSustainedRss(input: {
   rssMb: number;
   thresholdMb: number;
   consecutiveOver: number;
   requiredConsecutive: number;
   uptimeMs: number;
   minUptimeMs: number;
-}): WorkerRssRestartDecision {
+}): SustainedRssDecision {
   const {
     rssMb,
     thresholdMb,
@@ -38,23 +75,23 @@ export function evaluateWorkerRssRestart(input: {
   } = input;
 
   if (thresholdMb <= 0) {
-    return { shouldRestart: false, nextConsecutiveOver: 0 };
+    return { shouldTrigger: false, nextConsecutiveOver: 0 };
   }
 
   if (rssMb < thresholdMb) {
-    return { shouldRestart: false, nextConsecutiveOver: 0 };
+    return { shouldTrigger: false, nextConsecutiveOver: 0 };
   }
 
   const nextConsecutiveOver = consecutiveOver + 1;
   if (uptimeMs < minUptimeMs) {
-    return { shouldRestart: false, nextConsecutiveOver };
+    return { shouldTrigger: false, nextConsecutiveOver };
   }
 
   if (nextConsecutiveOver < requiredConsecutive) {
-    return { shouldRestart: false, nextConsecutiveOver };
+    return { shouldTrigger: false, nextConsecutiveOver };
   }
 
-  return { shouldRestart: true, nextConsecutiveOver };
+  return { shouldTrigger: true, nextConsecutiveOver };
 }
 
 export function parsePositiveIntEnv(
@@ -67,42 +104,6 @@ export function parsePositiveIntEnv(
   }
   const parsed = Number.parseInt(trimmed, 10);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
-}
-
-/** Appends stderr text while keeping only the last `maxBytes` characters. */
-export function appendCappedText(
-  previous: string,
-  chunk: string,
-  maxBytes: number,
-): string {
-  if (maxBytes <= 0) {
-    return '';
-  }
-  const combined = previous.length > 0 ? `${previous}\n${chunk}` : chunk;
-  if (combined.length <= maxBytes) {
-    return combined;
-  }
-  return combined.slice(combined.length - maxBytes);
-}
-
-/**
- * Builds NODE_OPTIONS for a worker, injecting --max-old-space-size when enabled.
- * Preserves any existing parent NODE_OPTIONS (without duplicating the flag).
- */
-export function buildWorkerNodeOptions(
-  existingNodeOptions: string | undefined,
-  maxHeapMb: number,
-): string | undefined {
-  const existing = (existingNodeOptions ?? '').trim();
-  if (maxHeapMb <= 0) {
-    return existing.length > 0 ? existing : undefined;
-  }
-
-  const flag = `--max-old-space-size=${maxHeapMb}`;
-  if (existing.includes('--max-old-space-size')) {
-    return existing.replace(/--max-old-space-size=\d+/g, flag);
-  }
-  return existing.length > 0 ? `${existing} ${flag}` : flag;
 }
 
 /**

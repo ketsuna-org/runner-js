@@ -76,6 +76,54 @@ describe.skipIf(!isolatedVmAvailable)('ScriptExecutor', () => {
     executor.dispose();
   });
 
+  it('disposes an idle isolate and recreates it on the next execution', async () => {
+    const executor = new ScriptExecutor(5000, {
+      sandboxed: true,
+      isolateIdleDisposeMs: 25,
+    });
+    const logger = createLogger();
+
+    await executor.execute(
+      'return 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+
+    // Just executed: not idle yet.
+    expect(executor.disposeIdleIsolate()).toBe(false);
+    expect(executor.getHeapUsedBytes()).not.toBeNull();
+
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(executor.disposeIdleIsolate()).toBe(true);
+    expect(executor.getHeapUsedBytes()).toBeNull();
+
+    const result = await executor.execute(
+      'return 2;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(result).toBe(2);
+    executor.dispose();
+  });
+
+  it('force-disposes a non-idle isolate between runs', async () => {
+    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const logger = createLogger();
+
+    await executor.execute(
+      'return 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+
+    expect(executor.disposeIdleIsolate()).toBe(false);
+    expect(executor.disposeIdleIsolate(true)).toBe(true);
+    expect(executor.getHeapUsedBytes()).toBeNull();
+    // Nothing left to dispose.
+    expect(executor.disposeIdleIsolate(true)).toBe(false);
+    executor.dispose();
+  });
+
   it('times out long running scripts', async () => {
     const executor = new ScriptExecutor(50, { sandboxed: true });
 

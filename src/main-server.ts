@@ -15,6 +15,17 @@ export async function startMainServer(): Promise<void> {
   const logStore = new LogStore(env.logFile);
   await logStore.init();
 
+  // All bots share this process; log unexpected errors but never exit, since
+  // exiting would take down every bot on the node.
+  process.on('uncaughtException', (error) => {
+    logStore.append('error', `uncaughtException: ${error?.stack ?? String(error)}`);
+  });
+  process.on('unhandledRejection', (reason) => {
+    const message =
+      reason instanceof Error ? (reason.stack ?? reason.message) : String(reason);
+    logStore.append('error', `unhandledRejection: ${message}`);
+  });
+
   const runtime = await RuntimeController.create(env.dataDir, logStore, env);
   const app = createHttpServer({ env, runtime, logStore });
 

@@ -6,7 +6,10 @@ import type { LogStore } from '../src/runtime/log-store.js';
 import type { RunnerEnv } from '../src/config/env.js';
 
 describe('metrics payload', () => {
-  it('aggregates main and worker RSS bytes', async () => {
+  it('keeps the apiVersion 2 shape with process RSS as the total', async () => {
+    // Single-process runner: bots have no dedicated processes, so per-bot RSS
+    // is null and the worker aggregate is 0; per-bot heapUsedBytes comes from
+    // the bot's isolate.
     const runtime = {
       isRunning: true,
       runningCount: 2,
@@ -17,10 +20,10 @@ describe('metrics payload', () => {
           state: 'running',
           lastSeenAt: null,
           lastError: null,
-          baselineRssBytes: 50_000_000,
+          baselineRssBytes: null,
           heapUsedBytes: 20_000_000,
           guildCount: 3,
-          pid: 1001,
+          pid: null,
         },
         {
           botId: 'bot-b',
@@ -28,13 +31,13 @@ describe('metrics payload', () => {
           state: 'running',
           lastSeenAt: null,
           lastError: null,
-          baselineRssBytes: 30_000_000,
+          baselineRssBytes: null,
           heapUsedBytes: 10_000_000,
           guildCount: 1,
-          pid: 1002,
+          pid: null,
         },
       ],
-      aggregateWorkerRssBytes: () => 80_000_000,
+      aggregateWorkerRssBytes: () => 0,
     } as unknown as RuntimeController;
 
     const env = {
@@ -57,15 +60,18 @@ describe('metrics payload', () => {
     const response = await fetch(`${baseUrl}/metrics`);
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
+      apiVersion: number;
       totalWorkerRssBytes: number;
       mainRssBytes: number;
       rssBytes: number;
-      bots: unknown[];
+      bots: Array<{ heapUsedBytes: number | null }>;
     };
-    expect(body.totalWorkerRssBytes).toBe(80_000_000);
+    expect(body.apiVersion).toBe(2);
+    expect(body.totalWorkerRssBytes).toBe(0);
     expect(body.mainRssBytes).toBeGreaterThan(0);
-    expect(body.rssBytes).toBe(body.mainRssBytes + body.totalWorkerRssBytes);
+    expect(body.rssBytes).toBe(body.mainRssBytes);
     expect(body.bots).toHaveLength(2);
+    expect(body.bots[0].heapUsedBytes).toBe(20_000_000);
 
     await app.close();
   });
