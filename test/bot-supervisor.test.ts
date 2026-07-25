@@ -38,7 +38,6 @@ function fakeRunner(overrides: Partial<BotRunnerHandle> = {}): BotRunnerHandle {
     triggerWebhook: vi.fn(async () => true),
     getGuildCount: vi.fn(() => 3),
     getHeapUsedBytes: vi.fn(() => 1_000_000),
-    disposeIdleIsolate: vi.fn(() => false),
     ...overrides,
   };
 }
@@ -48,7 +47,6 @@ interface Harness {
   runners: BotRunnerHandle[];
   createdParams: CreateRunnerParams[];
   logStore: LogStore;
-  exitProcess: ReturnType<typeof vi.fn>;
 }
 
 const disposers: Array<() => Promise<void>> = [];
@@ -56,28 +54,25 @@ const disposers: Array<() => Promise<void>> = [];
 function makeHarness(options: {
   botStore?: BotStore;
   nextRunner?: () => BotRunnerHandle;
-  memoryPolicy?: ConstructorParameters<typeof BotSupervisor>[0]['memoryPolicy'];
+  maxBots?: number;
 } = {}): Harness {
   const logStore = fakeLogStore();
   const runners: BotRunnerHandle[] = [];
   const createdParams: CreateRunnerParams[] = [];
-  const exitProcess = vi.fn();
   const supervisor = new BotSupervisor({
     botStore: options.botStore ?? fakeBotStore(),
     logStore,
     variableStore: {} as VariableDatabase,
-    sandboxScripts: true,
+    maxBots: options.maxBots ?? 40,
     createRunner: (params) => {
       createdParams.push(params);
       const runner = options.nextRunner ? options.nextRunner() : fakeRunner();
       runners.push(runner);
       return runner;
     },
-    memoryPolicy: options.memoryPolicy,
-    exitProcess,
   });
   disposers.push(() => supervisor.dispose());
-  return { supervisor, runners, createdParams, logStore, exitProcess };
+  return { supervisor, runners, createdParams, logStore };
 }
 
 afterEach(async () => {
@@ -122,6 +117,16 @@ describe('BotSupervisor', () => {
     expect(runners[0].stop).toHaveBeenCalled();
     expect(supervisor.isRunning('bot-1')).toBe(false);
     expect(supervisor.getState('bot-1').state).toBe('stopped');
+  });
+
+  it('refuses a second bot when maxBots is 1', async () => {
+    const { supervisor } = makeHarness({ maxBots: 1 });
+
+    await supervisor.startBot('bot-1', 'Bot One');
+    await expect(supervisor.startBot('bot-2', 'Bot Two')).rejects.toThrow(
+      /only allows 1 bot/,
+    );
+    expect(supervisor.runningCount).toBe(1);
   });
 
   it('marks the bot token-invalid when start fails with an auth error', async () => {
@@ -245,7 +250,7 @@ describe('BotSupervisor', () => {
   });
 
   it('drains all running bots', async () => {
-    const { supervisor, runners } = makeHarness();
+    const { supervisor, runners } = makeHarness({ maxBots: 40 });
 
     await supervisor.startBot('bot-1', '');
     await supervisor.startBot('bot-2', '');
@@ -257,7 +262,7 @@ describe('BotSupervisor', () => {
     expect(supervisor.runningCount).toBe(0);
   });
 
-  it('updates per-bot isolate heap metrics on the maintenance tick', async () => {
+  it('updates per-bot process heap metrics on the maintenance tick', async () => {
     vi.useFakeTimers();
     const { supervisor } = makeHarness({
       nextRunner: () =>
@@ -276,27 +281,4 @@ describe('BotSupervisor', () => {
     expect(state.rssBytes).toBeNull();
   });
 
-  it('force-disposes idle isolates and exits on sustained critical RSS', async () => {
-    vi.useFakeTimers();
-    const disposeIdleIsolate = vi.fn(() => true);
-    const { supervisor, exitProcess, logStore } = makeHarness({
-      nextRunner: () => fakeRunner({ disposeIdleIsolate }),
-      memoryPolicy: {
-        softThresholdMb: 1,
-        criticalThresholdMb: 1,
-        requiredConsecutive: 1,
-        minUptimeMs: 0,
-      },
-    });
-
-    await supervisor.startBot('bot-1', '');
-    await vi.advanceTimersByTimeAsync(5000);
-
-    expect(disposeIdleIsolate).toHaveBeenCalledWith(true);
-    expect(exitProcess).toHaveBeenCalledWith(1);
-    expect(logStore.append).toHaveBeenCalledWith(
-      'error',
-      expect.stringMatching(/critical threshold/),
-    );
-  });
 });

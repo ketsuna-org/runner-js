@@ -9,7 +9,7 @@ describe('metrics payload', () => {
   it('keeps the apiVersion 2 shape with process RSS as the total', async () => {
     // Single-process runner: bots have no dedicated processes, so per-bot RSS
     // is null and the worker aggregate is 0; per-bot heapUsedBytes comes from
-    // the bot's isolate.
+    // the process V8 heap (1 bot = 1 pod).
     const runtime = {
       isRunning: true,
       runningCount: 2,

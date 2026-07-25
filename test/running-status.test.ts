@@ -8,7 +8,7 @@ import type { RunnerEnv } from '../src/config/env.js';
 describe('running-status endpoint', () => {
   it('reports connected only for bots in the supervisor state map', async () => {
     // Single-process runner: per-bot rssBytes/pid are null; heapUsedBytes
-    // reflects the bot's isolate heap.
+    // reflects the process V8 heap.
     const runtime = {
       listRuntimeStates: () => [
         {

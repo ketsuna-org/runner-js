@@ -6,11 +6,6 @@ import {
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
 import type { LogStore } from './log-store.js';
-import {
-  evaluateSustainedRss,
-  resolveProcessMemoryPolicy,
-  type ProcessMemoryPolicy,
-} from './memory-hygiene.js';
 import type { VariableDatabase } from './variable-database.js';
 
 export interface ManagedBotState {
@@ -42,7 +37,6 @@ export interface BotRunnerHandle {
   ): Promise<boolean>;
   getGuildCount(): number;
   getHeapUsedBytes(): number | null;
-  disposeIdleIsolate(force?: boolean): boolean;
 }
 
 export interface CreateRunnerParams {
@@ -50,7 +44,6 @@ export interface CreateRunnerParams {
   config: JsBotConfig;
   variableStore: VariableDatabase;
   onLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void;
-  sandboxScripts: boolean;
   onFatalDisconnect: (reason: string) => void;
 }
 
@@ -58,17 +51,17 @@ export interface BotSupervisorOptions {
   botStore: BotStore;
   logStore: LogStore;
   variableStore: VariableDatabase;
-  /** Force isolated-vm sandboxing for user scripts (managed/pool mode). */
-  sandboxScripts: boolean;
+  /**
+   * Max concurrent bots on this node. When <= 1 (JS 1:1 pods), refuse starting
+   * a second bot as defense in depth.
+   */
+  maxBots: number;
   /** Runner factory, overridable in tests. Defaults to JsDiscordRunner. */
   createRunner?: (params: CreateRunnerParams) => BotRunnerHandle;
   /** Delay before auto-restarting a bot after a fatal disconnect. */
   restartDelayMs?: number;
   /** Interval of the metrics/memory maintenance tick. */
   metricsIntervalMs?: number;
-  memoryPolicy?: Partial<ProcessMemoryPolicy>;
-  /** Exit hook for the critical-memory path, overridable in tests. */
-  exitProcess?: (code: number) => void;
 }
 
 const DEFAULT_RESTART_DELAY_MS = 2000;
@@ -80,11 +73,10 @@ interface ManagedBot {
 }
 
 /**
- * In-process supervisor for all bots on this node. Each bot is a
- * JsDiscordRunner (discord.js client + per-bot script executor) inside the
- * shared process; script isolation is provided by isolated-vm, not by OS
- * processes. A native crash therefore affects every bot on the node — the
- * accepted trade-off for dropping ~1 Node runtime of overhead per bot.
+ * In-process supervisor for bots on this node. Each bot is a JsDiscordRunner
+ * (discord.js client + script executor) inside the shared process. JS pool
+ * nodes run with maxBots=1 so isolation is the pod/cgroup, not in-process
+ * sandboxing.
  */
 export class BotSupervisor {
   private readonly bots = new Map<string, ManagedBot>();
@@ -95,12 +87,8 @@ export class BotSupervisor {
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
   private readonly createRunner: (params: CreateRunnerParams) => BotRunnerHandle;
   private readonly restartDelayMs: number;
-  private readonly memoryPolicy: ProcessMemoryPolicy;
-  private readonly exitProcess: (code: number) => void;
   private readonly maintenanceTimer: NodeJS.Timeout;
-  private readonly startedAtMs = Date.now();
-  private rssOverSoftStreak = 0;
-  private rssOverCriticalStreak = 0;
+  private maxBots: number;
   private tickCount = 0;
   private disposed = false;
 
@@ -113,20 +101,19 @@ export class BotSupervisor {
           params.config,
           params.variableStore,
           params.onLog,
-          params.sandboxScripts,
           params.onFatalDisconnect,
         ));
+    this.maxBots = options.maxBots;
     this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
-    this.memoryPolicy = {
-      ...resolveProcessMemoryPolicy(),
-      ...options.memoryPolicy,
-    };
-    this.exitProcess = options.exitProcess ?? ((code) => process.exit(code));
     this.maintenanceTimer = setInterval(
       () => this.onMaintenanceTick(),
       options.metricsIntervalMs ?? DEFAULT_METRICS_INTERVAL_MS,
     );
     this.maintenanceTimer.unref();
+  }
+
+  setMaxBots(maxBots: number): void {
+    this.maxBots = maxBots;
   }
 
   clearTokenInvalid(botId: string): void {
@@ -175,6 +162,13 @@ export class BotSupervisor {
       throw new Error(`Bot "${botId}" is already running.`);
     }
 
+    // Defense in depth for JS 1:1 pods — refuse a second bot when maxBots <= 1.
+    if (this.maxBots <= 1 && this.runningCount >= 1) {
+      throw new Error(
+        `This runner only allows ${this.maxBots} bot(s) (maxBots=${this.maxBots}).`,
+      );
+    }
+
     const entry = await this.options.botStore.load(botId);
     if (!entry) {
       throw new Error(`Bot "${botId}" is not synced.`);
@@ -202,7 +196,6 @@ export class BotSupervisor {
       config: entry.config,
       variableStore: this.options.variableStore,
       onLog: (level, message) => this.options.logStore.append(level, message, botId),
-      sandboxScripts: this.options.sandboxScripts,
       onFatalDisconnect: (reason) => this.handleFatalDisconnect(botId, reason),
     });
     this.bots.set(botId, { runner });
@@ -432,14 +425,12 @@ export class BotSupervisor {
     this.tickCount += 1;
     const now = new Date().toISOString();
     let totalGuilds = 0;
+    const heapUsedBytes = process.memoryUsage().heapUsed;
 
     for (const [botId, bot] of this.bots) {
       const current = this.states.get(botId);
       if (!current || (current.state !== 'running' && current.state !== 'starting')) {
         continue;
-      }
-      if (bot.runner.disposeIdleIsolate()) {
-        this.options.logStore.append('debug', '[ScriptRuntime] Disposed idle isolate', botId);
       }
       const guildCount = bot.runner.getGuildCount();
       totalGuilds += guildCount;
@@ -447,7 +438,8 @@ export class BotSupervisor {
         ...current,
         lastSeenAt: now,
         guildCount,
-        heapUsedBytes: bot.runner.getHeapUsedBytes(),
+        // 1 bot = 1 process: report process V8 heap on the running bot.
+        heapUsedBytes: bot.runner.getHeapUsedBytes() ?? heapUsedBytes,
       });
     }
 
@@ -458,52 +450,6 @@ export class BotSupervisor {
         'info',
         `[Memory] rss=${rssMb}MB bots=${this.bots.size} guilds=${totalGuilds}`,
       );
-    }
-
-    this.checkProcessMemory(rssMb);
-  }
-
-  private checkProcessMemory(rssMb: number): void {
-    const uptimeMs = Date.now() - this.startedAtMs;
-
-    const soft = evaluateSustainedRss({
-      rssMb,
-      thresholdMb: this.memoryPolicy.softThresholdMb,
-      consecutiveOver: this.rssOverSoftStreak,
-      requiredConsecutive: this.memoryPolicy.requiredConsecutive,
-      uptimeMs,
-      minUptimeMs: this.memoryPolicy.minUptimeMs,
-    });
-    this.rssOverSoftStreak = soft.nextConsecutiveOver;
-    if (soft.shouldTrigger) {
-      this.rssOverSoftStreak = 0;
-      let disposedCount = 0;
-      for (const bot of this.bots.values()) {
-        if (bot.runner.disposeIdleIsolate(true)) {
-          disposedCount += 1;
-        }
-      }
-      this.options.logStore.append(
-        'warn',
-        `[Memory] rss=${rssMb}MB over ${this.memoryPolicy.softThresholdMb}MB soft threshold — disposed ${disposedCount} idle isolate(s)`,
-      );
-    }
-
-    const critical = evaluateSustainedRss({
-      rssMb,
-      thresholdMb: this.memoryPolicy.criticalThresholdMb,
-      consecutiveOver: this.rssOverCriticalStreak,
-      requiredConsecutive: this.memoryPolicy.requiredConsecutive,
-      uptimeMs,
-      minUptimeMs: this.memoryPolicy.minUptimeMs,
-    });
-    this.rssOverCriticalStreak = critical.nextConsecutiveOver;
-    if (critical.shouldTrigger) {
-      this.options.logStore.append(
-        'error',
-        `[Memory] rss=${rssMb}MB over ${this.memoryPolicy.criticalThresholdMb}MB critical threshold — exiting so the orchestrator restarts this node`,
-      );
-      this.exitProcess(1);
     }
   }
 }

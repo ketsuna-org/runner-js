@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
-import { isolatedVmAvailable } from './helpers/isolated-vm-available.js';
 
-describe.skipIf(!isolatedVmAvailable)('canvas getContext', () => {
+describe('canvas getContext', () => {
   it('exposes the canvas module without calling native bindings', async () => {
-    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const executor = new ScriptExecutor(5000);
 
     const result = await executor.execute(
       `
@@ -39,7 +38,7 @@ describe.skipIf(!isolatedVmAvailable)('canvas getContext', () => {
   it.skipIf(process.platform === 'win32')(
     'supports synchronous createCanvas and getContext',
     async () => {
-    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const executor = new ScriptExecutor(5000);
 
     const result = await executor.execute(
       `
@@ -92,7 +91,7 @@ describe.skipIf(!isolatedVmAvailable)('canvas getContext', () => {
   it.skipIf(process.platform === 'win32')(
     'works when createCanvas and getContext are awaited',
     async () => {
-    const executor = new ScriptExecutor(5000, { sandboxed: true });
+    const executor = new ScriptExecutor(5000);
 
     const result = await executor.execute(
       `

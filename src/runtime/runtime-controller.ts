@@ -1,7 +1,7 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.js';
 import path from 'node:path';
-import { isManagedRunner } from '../config/env.js';
+import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
 import { BotSupervisor, type ManagedBotState } from './bot-supervisor.js';
 import type { LogStore } from './log-store.js';
@@ -30,18 +30,17 @@ export class RuntimeController {
   static async create(
     dataDir: string,
     logStore: LogStore,
-    env: VariableStoreEnv,
+    env: VariableStoreEnv & Pick<RunnerEnv, 'poolMaxBots'>,
   ): Promise<RuntimeController> {
     const variableStore = await resolveVariableStore(dataDir, env);
-    // Multi-tenant (managed/pool) runners must sandbox user scripts.
-    return new RuntimeController(dataDir, logStore, variableStore, isManagedRunner(env));
+    return new RuntimeController(dataDir, logStore, variableStore, env.poolMaxBots);
   }
 
   constructor(
     dataDir: string,
     logStore: LogStore,
     variableStore: VariableDatabase,
-    sandboxScripts = false,
+    maxBots = 1,
   ) {
     this.botStore = new BotStore(path.join(dataDir, 'synced-bots'));
     this.variableStore = variableStore;
@@ -49,8 +48,12 @@ export class RuntimeController {
       botStore: this.botStore,
       logStore,
       variableStore,
-      sandboxScripts,
+      maxBots,
     });
+  }
+
+  setMaxBots(maxBots: number): void {
+    this.processManager.setMaxBots(maxBots);
   }
 
   get isRunning(): boolean {

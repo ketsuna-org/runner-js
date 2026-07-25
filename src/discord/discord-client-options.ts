@@ -20,7 +20,7 @@ function keepClientUser<T extends { id: string; client: { user?: { id: string } 
  *
  * Note: GuildManager / GuildChannelManager cannot be limited via cacheWithLimits
  * in current discord.js (typed as TODO) — guild/channel growth is mitigated by
- * worker RSS soft-restart instead.
+ * the pod cgroup memory limit (OOMKill) instead.
  */
 export function buildDiscordClientOptions(
   intentsMap: Record<string, boolean>,

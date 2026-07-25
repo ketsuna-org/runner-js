@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
 function createDirectExecutor(timeoutMs = 5000): ScriptExecutor {
-  return new ScriptExecutor(timeoutMs, { sandboxed: false });
+  return new ScriptExecutor(timeoutMs);
 }
 
 describe('ScriptDirectRuntime', () => {

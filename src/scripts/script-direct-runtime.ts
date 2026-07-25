@@ -3,7 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { runnerPackageRoot } from '../config/env.js';
-import { sanitizeConfigForScript } from './script-host-bridge.js';
+import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import type { ScriptRuntime } from './script-runtime.js';
 

@@ -159,7 +159,10 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       deps.logStore.append('info', `Started bot ${botId}`, botId);
       return buildStatusPayload(deps.runtime);
     } catch (error) {
-      if (error instanceof Error && error.message.includes('already running')) {
+      if (
+        error instanceof Error &&
+        (error.message.includes('already running') || error.message.includes('only allows'))
+      ) {
         throw conflict(error.message);
       }
       if (isDiscordTokenUnauthorized(error)) {
@@ -203,6 +206,7 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       throw badRequest('Invalid max_bots value.');
     }
     deps.env.poolMaxBots = parsed;
+    deps.runtime.setMaxBots(parsed);
     return { max_bots: deps.env.poolMaxBots };
   });
 

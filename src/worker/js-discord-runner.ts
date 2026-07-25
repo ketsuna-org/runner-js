@@ -39,7 +39,6 @@ export class JsDiscordRunner {
       level: 'info' | 'warn' | 'error' | 'debug',
       message: string,
     ) => void,
-    private readonly sandboxScripts = false,
     private readonly onFatalDisconnect?: (reason: string) => void,
   ) {}
 
@@ -47,17 +46,9 @@ export class JsDiscordRunner {
     return this.guildCount;
   }
 
-  /** Heap used by the bot's sandbox isolate, or null without a sandbox. */
+  /** Process V8 heap used bytes while the bot is running. */
   getHeapUsedBytes(): number | null {
     return this.executor?.getHeapUsedBytes() ?? null;
-  }
-
-  /**
-   * Disposes the bot's sandbox isolate when idle (or unconditionally between
-   * runs when `force` is set). It is recreated on the next script execution.
-   */
-  disposeIdleIsolate(force = false): boolean {
-    return this.executor?.disposeIdleIsolate(force) ?? false;
   }
 
   private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
@@ -150,20 +141,13 @@ export class JsDiscordRunner {
 
     this.client = new Client(buildDiscordClientOptions(this.effectiveIntents));
 
-    this.onLog(
-      'info',
-      this.sandboxScripts
-        ? '[ScriptRuntime] Sandboxed (managed runner)'
-        : '[ScriptRuntime] Direct (unrestricted require)',
-    );
+    this.onLog('info', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
     this.onLog(
       'info',
       `[DiscordCache] Minimal cache enabled; intents: ${this.enabledIntentNames().join(', ') || 'Guilds only'}`,
     );
 
-    this.executor = new ScriptExecutor(this.config.scriptTimeoutMs, {
-      sandboxed: this.sandboxScripts,
-    });
+    this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
