@@ -1,5 +1,5 @@
 # Build stage
-FROM node:22-bookworm-slim AS builder
+FROM oven/bun:1-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -15,18 +15,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
-RUN npm ci
+COPY package.json bun.lock* ./
+RUN bun install
 
-COPY tsconfig.json vitest.config.ts ./
+COPY tsconfig.json ./
 COPY src ./src
 COPY test ./test
 
-RUN npm run build && npm test
-RUN npm prune --omit=dev
+RUN bun test
+RUN bun run build
 
 # Runtime stage
-FROM node:22-bookworm-slim
+FROM oven/bun:1-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
@@ -39,7 +39,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY package.json package-lock.json* ./
+COPY package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 
@@ -51,4 +51,4 @@ ENV BOT_CREATOR_WEB_PORT=8080
 VOLUME ["/bots", "/data"]
 EXPOSE 8080
 
-CMD ["node", "dist/index.js"]
+CMD ["bun", "dist/index.js"]

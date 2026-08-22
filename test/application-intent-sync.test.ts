@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
 
 import {
   buildEffectiveIntentsMap,
@@ -18,18 +18,17 @@ const emptyConfig: JsBotConfig = {
 };
 
 describe('fetchPortalEnabledPrivilegedIntents', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
+  const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
   });
 
   it('reads portal flags without PATCHing', async () => {
     let patchCalled = false;
 
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
       if (url.endsWith('/applications/@me') && init?.method !== 'PATCH') {
         return new Response(JSON.stringify({ flags: MEMBERS_LIMITED }), {
@@ -40,7 +39,7 @@ describe('fetchPortalEnabledPrivilegedIntents', () => {
         patchCalled = true;
       }
       return new Response('not found', { status: 404 });
-    });
+    }) as typeof fetch;
 
     const result = await fetchPortalEnabledPrivilegedIntents('token');
 
@@ -50,7 +49,7 @@ describe('fetchPortalEnabledPrivilegedIntents', () => {
   });
 
   it('returns all privileged intents when portal has them enabled', async () => {
-    vi.mocked(fetch).mockImplementation(async (input, init) => {
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input.toString();
       if (url.endsWith('/applications/@me') && init?.method !== 'PATCH') {
         return new Response(
@@ -61,7 +60,7 @@ describe('fetchPortalEnabledPrivilegedIntents', () => {
         );
       }
       return new Response('not found', { status: 404 });
-    });
+    }) as typeof fetch;
 
     const result = await fetchPortalEnabledPrivilegedIntents('token');
 
@@ -72,7 +71,7 @@ describe('fetchPortalEnabledPrivilegedIntents', () => {
   });
 
   it('throws DiscordTokenUnauthorizedError on unauthorized application fetch', async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response('unauthorized', { status: 401 }));
+    globalThis.fetch = vi.fn(async () => new Response('unauthorized', { status: 401 })) as typeof fetch;
 
     await expect(fetchPortalEnabledPrivilegedIntents('token')).rejects.toBeInstanceOf(
       DiscordTokenUnauthorizedError,

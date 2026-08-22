@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock, spyOn, vi } from 'bun:test';
 
 import { resolveScriptMember } from '../src/discord/handler-registry.js';
 

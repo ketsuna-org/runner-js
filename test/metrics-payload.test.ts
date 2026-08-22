@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { createHttpServer } from '../src/http/server.js';
 import type { RuntimeController } from '../src/runtime/runtime-controller.js';
@@ -7,9 +7,6 @@ import type { RunnerEnv } from '../src/config/env.js';
 
 describe('metrics payload', () => {
   it('keeps the apiVersion 2 shape with process RSS as the total', async () => {
-    // Single-process runner: bots have no dedicated processes, so per-bot RSS
-    // is null and the worker aggregate is 0; per-bot heapUsedBytes comes from
-    // the process V8 heap (1 bot = 1 pod).
     const runtime = {
       isRunning: true,
       runningCount: 2,
@@ -52,12 +49,7 @@ describe('metrics payload', () => {
       logStore: { tail: () => [], tailForBot: () => [] } as unknown as LogStore,
     });
 
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const baseUrl = `http://127.0.0.1:${port}`;
-
-    const response = await fetch(`${baseUrl}/metrics`);
+    const response = await app.request('/metrics');
     expect(response.status).toBe(200);
     const body = (await response.json()) as {
       apiVersion: number;
@@ -72,7 +64,5 @@ describe('metrics payload', () => {
     expect(body.rssBytes).toBe(body.mainRssBytes);
     expect(body.bots).toHaveLength(2);
     expect(body.bots[0].heapUsedBytes).toBe(20_000_000);
-
-    await app.close();
   });
 });

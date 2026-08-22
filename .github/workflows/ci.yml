@@ -1,0 +1,315 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev]
+    tags:
+      - "runner-js-v*"
+      - "v*"
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  packages: write
+  security-events: write
+
+env:
+  GHCR_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/bot-creator-runner-js
+
+jobs:
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: TypeScript typecheck
+        run: bun run --bun tsc --noEmit
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run unit tests
+        run: bun test test/bot-*.test.ts test/canvas-*.test.ts test/discord-*.test.ts test/ffmpeg-*.test.ts test/json-*.test.ts test/log-*.test.ts test/managed-*.test.ts test/memory-*.test.ts test/resolve-*.test.ts test/scoped-*.test.ts test/script-*.test.ts test/voice-*.test.ts
+
+  api-integration-tests:
+    name: API integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run API integration tests
+        run: bun test test/http*.test.ts test/running-status.test.ts test/metrics-payload.test.ts
+
+  swagger-drift:
+    name: Swagger drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Verify schemas and contract tests
+        run: bun test test/js-bot-config.test.ts test/command-options.test.ts test/intent-mapper.test.ts
+
+  source-security:
+    name: Source security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
+
+  codeql:
+    name: CodeQL
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+
+  container-build-scan:
+    name: Container build and scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build local container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          load: true
+          tags: local/runner-js:${{ github.sha }}
+
+      - name: Run Trivy container vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: local/runner-js:${{ github.sha }}
+          format: 'table'
+          exit-code: '0'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+  compile-binaries:
+    name: Compile ${{ matrix.artifact }}
+    needs: [quality, unit-tests, api-integration-tests, swagger-drift, source-security, codeql, container-build-scan]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            compile_script: compile:linux-x64
+            artifact: bot-creator-runner-js-linux-x64
+          - runner: ubuntu-24.04-arm
+            compile_script: compile:linux-arm64
+            artifact: bot-creator-runner-js-linux-arm64
+          - runner: windows-latest
+            compile_script: compile:win-x64
+            artifact: bot-creator-runner-js-win.exe
+          - runner: macos-latest
+            compile_script: compile:macos-arm64
+            artifact: bot-creator-runner-js-macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Build binary
+        run: bun run ${{ matrix.compile_script }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: build/${{ matrix.artifact }}
+
+  auto-release:
+    name: Auto Release & SemVer Tag
+    needs: [compile-binaries]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Flatten binaries
+        run: |
+          mkdir -p release
+          find artifacts -type f \( \
+            -name 'bot-creator-runner-js-linux-x64' -o \
+            -name 'bot-creator-runner-js-linux-arm64' -o \
+            -name 'bot-creator-runner-js-win.exe' -o \
+            -name 'bot-creator-runner-js-macos-arm64' \
+            \) -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Compute SemVer Tag
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          else
+            LAST_TAG=$(git tag --list 'runner-js-v*' --sort=-v:refname | head -n1 || echo "")
+            if [ -z "$LAST_TAG" ]; then
+              TAG="runner-js-v0.5.${{ github.run_number }}"
+            else
+              BASE=${LAST_TAG#runner-js-v}
+              MAJOR=$(echo $BASE | cut -d. -f1)
+              MINOR=$(echo $BASE | cut -d. -f2)
+              PATCH=$(echo $BASE | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              TAG="runner-js-v${MAJOR}.${MINOR}.${PATCH}"
+            fi
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=${TAG#runner-js-v}" >> "$GITHUB_OUTPUT"
+          echo "Calculated tag: $TAG"
+
+      - name: Create Git Tag & Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Release ${{ steps.version.outputs.tag }}
+          files: release/*
+          generate_release_notes: true
+
+  publish-image:
+    name: Publish immutable image
+    needs: [auto-release]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=${{ needs.auto-release.outputs.tag }}
+            type=raw,value=${{ needs.auto-release.outputs.version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  ci-success:
+    name: ci-success
+    needs:
+      - quality
+      - unit-tests
+      - api-integration-tests
+      - swagger-drift
+      - source-security
+      - codeql
+      - container-build-scan
+      - auto-release
+      - publish-image
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check pipeline results
+        run: |
+          if [[ "${{ needs.quality.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.api-integration-tests.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.swagger-drift.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.source-security.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.codeql.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ needs.container-build-scan.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master") ]]; then
+            if [[ "${{ needs.auto-release.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.publish-image.result }}" != "success" ]]; then exit 1; fi
+          fi
+          echo "All required CI checks passed successfully."

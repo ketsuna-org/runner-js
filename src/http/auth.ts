@@ -1,24 +1,29 @@
-import type { FastifyRequest } from 'fastify';
+import type { MiddlewareHandler } from 'hono';
 
 import { isRunnerLoopbackHost, normalizeRunnerApiToken } from '../config/env.js';
 
-export function createAuthHook(apiToken: string, webHost: string) {
+export function createAuthMiddleware(apiToken: string, webHost: string): MiddlewareHandler {
   const normalizedToken = normalizeRunnerApiToken(apiToken);
 
-  return async function authHook(request: FastifyRequest): Promise<void> {
-    if (!requiresAuthentication(request.url, request.method, normalizedToken, webHost)) {
-      return;
+  return async (c, next) => {
+    const path = c.req.path;
+    const method = c.req.method;
+
+    if (!requiresAuthentication(path, method, normalizedToken, webHost)) {
+      return next();
     }
 
-    const header = request.headers.authorization;
+    const header = c.req.header('authorization');
     if (!header?.startsWith('Bearer ')) {
-      throw createUnauthorizedError();
+      return c.json({ error: 'Missing or invalid bearer token.' }, 401);
     }
 
     const provided = normalizeRunnerApiToken(header.slice('Bearer '.length));
     if (provided !== normalizedToken) {
-      throw createUnauthorizedError();
+      return c.json({ error: 'Missing or invalid bearer token.' }, 401);
     }
+
+    return next();
   };
 }
 
@@ -46,12 +51,4 @@ export function requiresAuthentication(
   }
 
   return true;
-}
-
-function createUnauthorizedError(): Error & { statusCode: number } {
-  const error = new Error('Missing or invalid bearer token.') as Error & {
-    statusCode: number;
-  };
-  error.statusCode = 401;
-  return error;
 }

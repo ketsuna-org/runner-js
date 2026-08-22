@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { createHttpServer } from '../src/http/server.js';
 import { loadRunnerEnv } from '../src/config/env.js';
@@ -22,21 +22,16 @@ describe('HTTP server integration', () => {
     const runtime = await RuntimeController.create(env.dataDir, logStore, env);
     const app = createHttpServer({ env, runtime, logStore });
 
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const baseUrl = `http://127.0.0.1:${port}`;
-
-    const health = await fetch(`${baseUrl}/health`);
+    const health = await app.request('/health');
     expect(health.status).toBe(200);
     expect(await health.json()).toEqual({ ok: true });
 
-    const info = await fetch(`${baseUrl}/`);
+    const info = await app.request('/');
     expect(info.status).toBe(200);
     const infoBody = (await info.json()) as { engine?: string };
     expect(infoBody.engine).toBe('javascript');
 
-    const syncResponse = await fetch(`${baseUrl}/bots/sync`, {
+    const syncResponse = await app.request('/bots/sync', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -52,30 +47,30 @@ describe('HTTP server integration', () => {
     expect(syncResponse.status).toBe(200);
     expect(await syncResponse.json()).toEqual({ ok: true });
 
-    const bots = await fetch(`${baseUrl}/bots`);
+    const bots = await app.request('/bots');
     expect(bots.status).toBe(200);
     const botsBody = (await bots.json()) as { bots: Array<{ id: string }> };
     expect(botsBody.bots.some((bot) => bot.id === 'http-bot')).toBe(true);
 
     logStore.append('info', 'hello from bot', 'http-bot');
 
-    const botLogs = await fetch(`${baseUrl}/bots/http-bot/logs?limit=10`);
+    const botLogs = await app.request('/bots/http-bot/logs?limit=10');
     expect(botLogs.status).toBe(200);
     const botLogsBody = (await botLogs.json()) as { lines: string[] };
     expect(botLogsBody.lines.some((line) => line.includes('hello from bot'))).toBe(true);
 
-    const botMetrics = await fetch(`${baseUrl}/bots/http-bot/metrics`);
+    const botMetrics = await app.request('/bots/http-bot/metrics');
     expect(botMetrics.status).toBe(200);
     const botMetricsBody = (await botMetrics.json()) as { bots: Array<{ botId: string }> };
     expect(botMetricsBody.bots).toHaveLength(1);
     expect(botMetricsBody.bots[0]?.botId).toBe('http-bot');
 
-    const botStatus = await fetch(`${baseUrl}/bots/http-bot/status`);
+    const botStatus = await app.request('/bots/http-bot/status');
     expect(botStatus.status).toBe(200);
     const botStatusBody = (await botStatus.json()) as { bot: { botId: string } };
     expect(botStatusBody.bot.botId).toBe('http-bot');
 
-    const runningStatus = await fetch(`${baseUrl}/bots/running-status`);
+    const runningStatus = await app.request('/bots/running-status');
     expect(runningStatus.status).toBe(200);
     const runningStatusBody = (await runningStatus.json()) as {
       bots: Record<string, { connected: boolean; state: string }>;
@@ -83,7 +78,6 @@ describe('HTTP server integration', () => {
     expect(runningStatusBody.bots).toEqual({});
     expect(runningStatusBody.bots['http-bot']).toBeUndefined();
 
-    await app.close();
     await runtime.dispose();
   });
 
@@ -102,14 +96,9 @@ describe('HTTP server integration', () => {
     const logStore = new LogStore(env.logFile);
     const runtime = await RuntimeController.create(env.dataDir, logStore, env);
     const app = createHttpServer({ env, runtime, logStore });
-
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const baseUrl = `http://127.0.0.1:${port}`;
     const botId = 'bot-variables';
 
-    const syncResponse = await fetch(`${baseUrl}/bots/sync`, {
+    const syncResponse = await app.request('/bots/sync', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -131,33 +120,33 @@ describe('HTTP server integration', () => {
     });
     expect(syncResponse.status).toBe(200);
 
-    const globals = await fetch(`${baseUrl}/bots/${botId}/variables/global`);
+    const globals = await app.request(`/bots/${botId}/variables/global`);
     expect(globals.status).toBe(200);
     const globalsBody = (await globals.json()) as { variables: Record<string, unknown> };
     expect(globalsBody.variables.foo).toBe('bar');
 
-    const setGlobal = await fetch(`${baseUrl}/bots/${botId}/variables/global/set`, {
+    const setGlobal = await app.request(`/bots/${botId}/variables/global/set`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ key: 'hello', value: 42 }),
     });
     expect(setGlobal.status).toBe(200);
 
-    const globalsAfterSet = await fetch(`${baseUrl}/bots/${botId}/variables/global`);
+    const globalsAfterSet = await app.request(`/bots/${botId}/variables/global`);
     const globalsAfterSetBody = (await globalsAfterSet.json()) as {
       variables: Record<string, unknown>;
     };
     expect(globalsAfterSetBody.variables.hello).toBe(42);
 
-    const defs = await fetch(`${baseUrl}/bots/${botId}/variables/scoped-definitions`);
+    const defs = await app.request(`/bots/${botId}/variables/scoped-definitions`);
     expect(defs.status).toBe(200);
     const defsBody = (await defs.json()) as { definitions: unknown[] };
     expect(defsBody.definitions).toHaveLength(1);
 
     await runtime.variableStore.setScopedVariable(botId, 'user', 'u1', 'coins', 99);
 
-    const scopedValues = await fetch(
-      `${baseUrl}/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
+    const scopedValues = await app.request(
+      `/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
     );
     expect(scopedValues.status).toBe(200);
     const scopedValuesBody = (await scopedValues.json()) as {
@@ -165,7 +154,7 @@ describe('HTTP server integration', () => {
     };
     expect(scopedValuesBody.values.u1).toBe(99);
 
-    const setScoped = await fetch(`${baseUrl}/bots/${botId}/variables/scoped-values/set`, {
+    const setScoped = await app.request(`/bots/${botId}/variables/scoped-values/set`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -177,18 +166,18 @@ describe('HTTP server integration', () => {
     });
     expect(setScoped.status).toBe(200);
 
-    const scopedAfterSet = await fetch(
-      `${baseUrl}/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
+    const scopedAfterSet = await app.request(
+      `/bots/${botId}/variables/scoped-values?scope=user&key=coins`,
     );
     const scopedAfterSetBody = (await scopedAfterSet.json()) as {
       values: Record<string, unknown>;
     };
     expect(scopedAfterSetBody.values.u2).toBe(12);
 
-    const poolConfig = await fetch(`${baseUrl}/pool/config`);
+    const poolConfig = await app.request('/pool/config');
     expect(poolConfig.status).toBe(200);
 
-    const patchPool = await fetch(`${baseUrl}/pool/config`, {
+    const patchPool = await app.request('/pool/config', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ max_bots: 25 }),
@@ -197,7 +186,6 @@ describe('HTTP server integration', () => {
     const patchPoolBody = (await patchPool.json()) as { max_bots: number };
     expect(patchPoolBody.max_bots).toBe(25);
 
-    await app.close();
     await runtime.dispose();
   });
 });

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, mock, spyOn, vi } from 'bun:test';
 
 import { ManagedVariableStore } from '../src/runtime/managed-variable-store.js';
 

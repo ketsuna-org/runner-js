@@ -1,16 +1,28 @@
 import type { JsBotConfig } from '../config/js-bot-config.js';
 
+const sanitizedConfigCache = new WeakMap<object, Record<string, unknown>>();
+
 /**
  * Returns a plain config object safe to expose to user scripts:
  * strips token / webhook secrets and redacts nested sensitive keys.
  */
 export function sanitizeConfigForScript(config: JsBotConfig): Record<string, unknown> {
+  if (config == null || typeof config !== 'object') {
+    return {};
+  }
+  const cached = sanitizedConfigCache.get(config);
+  if (cached) {
+    return cached;
+  }
+
   const { token: _token, inboundWebhooks, ...safeConfig } = config;
   const sanitized: Record<string, unknown> = {
     ...safeConfig,
     inboundWebhooks: (inboundWebhooks ?? []).map(({ secret: _secret, ...webhook }) => webhook),
   };
-  return copyHostValue(sanitized, { redactSensitive: true }) as Record<string, unknown>;
+  const result = copyHostValue(sanitized, { redactSensitive: true }) as Record<string, unknown>;
+  sanitizedConfigCache.set(config, result);
+  return result;
 }
 
 function copyHostValue(

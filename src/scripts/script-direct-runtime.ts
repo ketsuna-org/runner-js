@@ -25,12 +25,18 @@ function createConsoleProxy(logger: ScriptLogger): Console {
   } as Console;
 }
 
+const tokenSafeClientProxies = new WeakMap<object, unknown>();
+
 /** Prevent direct-mode scripts from reading Discord/API tokens. */
 function createTokenSafeClientProxy(client: ScriptExecutionContext['client']): unknown {
   if (client == null || typeof client !== 'object') {
     return client;
   }
-  return new Proxy(client as object, {
+  const cached = tokenSafeClientProxies.get(client);
+  if (cached) {
+    return cached;
+  }
+  const proxy = new Proxy(client as object, {
     get(target, property, receiver) {
       if (property === 'token') {
         return undefined;
@@ -57,6 +63,45 @@ function createTokenSafeClientProxy(client: ScriptExecutionContext['client']): u
       return Reflect.getOwnPropertyDescriptor(target, property);
     },
   });
+  tokenSafeClientProxies.set(client, proxy);
+  return proxy;
+}
+
+const SCOPE_PARAM_NAMES = [
+  'client',
+  'config',
+  'variables',
+  'interaction',
+  'message',
+  'member',
+  'guild',
+  'channel',
+  'webhook',
+  'db',
+  'console',
+  'fetch',
+  'require',
+  'setTimeout',
+  'clearTimeout',
+] as const;
+
+type CompiledScriptFn = (...args: unknown[]) => Promise<unknown>;
+const SCRIPT_CACHE_MAX = 500;
+const compiledScriptCache = new Map<string, CompiledScriptFn>();
+
+function getOrCompileScript(trimmedScript: string): CompiledScriptFn {
+  let fn = compiledScriptCache.get(trimmedScript);
+  if (!fn) {
+    fn = new AsyncFunction(...SCOPE_PARAM_NAMES, trimmedScript) as CompiledScriptFn;
+    if (compiledScriptCache.size >= SCRIPT_CACHE_MAX) {
+      const oldest = compiledScriptCache.keys().next().value;
+      if (oldest !== undefined) {
+        compiledScriptCache.delete(oldest);
+      }
+    }
+    compiledScriptCache.set(trimmedScript, fn);
+  }
+  return fn;
 }
 
 export class ScriptDirectRuntime implements ScriptRuntime {
@@ -71,38 +116,40 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       return undefined;
     }
 
-    const scope = {
-      client: createTokenSafeClientProxy(context.client),
-      config: sanitizeConfigForScript(context.config),
-      variables: context.variables,
-      interaction: context.interaction,
-      message: context.message,
-      member: context.member,
-      guild: context.guild,
-      channel: context.channel,
-      webhook: context.webhook ?? null,
-      // ScriptDb uses #private fields; config/store are not enumerable.
-      db: context.db,
-      console: createConsoleProxy(logger),
-      fetch: globalThis.fetch.bind(globalThis),
-      require: moduleRequire,
+    const fn = getOrCompileScript(trimmed);
+    const execution = fn(
+      createTokenSafeClientProxy(context.client),
+      sanitizeConfigForScript(context.config),
+      context.variables,
+      context.interaction,
+      context.message,
+      context.member,
+      context.guild,
+      context.channel,
+      context.webhook ?? null,
+      context.db,
+      createConsoleProxy(logger),
+      globalThis.fetch.bind(globalThis),
+      moduleRequire,
       setTimeout,
       clearTimeout,
-    };
+    );
 
-    const scopeKeys = Object.keys(scope);
-    const scopeValues = Object.values(scope);
-    const fn = new AsyncFunction(...scopeKeys, trimmed);
-    const execution = fn(...scopeValues);
-
-    return Promise.race([
-      execution,
-      new Promise<never>((_, reject) => {
-        setTimeout(() => {
-          reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
-        }, timeoutMs);
-      }),
-    ]);
+    let timeoutTimer: NodeJS.Timeout | undefined;
+    try {
+      return await Promise.race([
+        execution,
+        new Promise<never>((_, reject) => {
+          timeoutTimer = setTimeout(() => {
+            reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timeoutTimer !== undefined) {
+        clearTimeout(timeoutTimer);
+      }
+    }
   }
 
   dispose(): void {

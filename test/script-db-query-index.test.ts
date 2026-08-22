@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, mock, spyOn, vi } from 'bun:test';
 
 import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import { ScriptDb } from '../src/scripts/script-db.js';

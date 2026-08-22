@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'bun:test';
 
 import type { JsBotConfig } from '../src/config/js-bot-config.js';
 import { DiscordTokenUnauthorizedError } from '../src/discord/discord-auth-errors.js';
@@ -165,7 +165,7 @@ describe('BotSupervisor', () => {
     expect(state.state).toBe('error');
     expect(state.lastError).toBe('Discord session invalidated');
 
-    await vi.advanceTimersByTimeAsync(2500);
+    await vi.advanceTimersByTime(2500);
 
     expect(createdParams).toHaveLength(2);
     expect(runners[1].start).toHaveBeenCalledTimes(1);
@@ -186,7 +186,7 @@ describe('BotSupervisor', () => {
     expect(state.state).toBe('stopped');
     expect(state.lastError).toContain('Disallowed intents');
 
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTime(4000);
     expect(createdParams).toHaveLength(1);
   });
 
@@ -200,7 +200,7 @@ describe('BotSupervisor', () => {
     createdParams[0].onFatalDisconnect('Discord session invalidated');
 
     expect(supervisor.getState('bot-1').state).toBe('error');
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTime(4000);
     expect(createdParams).toHaveLength(1);
   });
 
@@ -212,7 +212,7 @@ describe('BotSupervisor', () => {
     createdParams[0].onFatalDisconnect('Discord session invalidated');
     await supervisor.stopBot('bot-1');
 
-    await vi.advanceTimersByTimeAsync(4000);
+    await vi.advanceTimersByTime(4000);
     expect(createdParams).toHaveLength(1);
     expect(supervisor.getState('bot-1').state).toBe('stopped');
   });
@@ -273,7 +273,7 @@ describe('BotSupervisor', () => {
     });
 
     await supervisor.startBot('bot-1', '');
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTime(5000);
 
     const state = supervisor.getState('bot-1');
     expect(state.guildCount).toBe(7);

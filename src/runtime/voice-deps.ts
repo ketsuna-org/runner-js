@@ -1,7 +1,4 @@
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-
-const moduleRequire = createRequire(fileURLToPath(import.meta.url));
+import * as voice from '@discordjs/voice';
 
 export type VoiceDependencyStatus = {
   available: boolean;
@@ -19,13 +16,18 @@ export function getVoiceDependencyStatus(): VoiceDependencyStatus {
   }
 
   try {
-    const voice = moduleRequire('@discordjs/voice') as typeof import('@discordjs/voice');
-    const report = voice.generateDependencyReport();
-    let davey = /@snazzah\/davey:\s*(?!not found)\S+/i.test(report);
+    let report: string | undefined;
+    try {
+      report = voice.generateDependencyReport();
+    } catch {
+      report = undefined;
+    }
+
+    let davey = report ? /@snazzah\/davey:\s*(?!not found)\S+/i.test(report) : false;
 
     if (!davey) {
       try {
-        moduleRequire('@snazzah/davey');
+        require('@snazzah/davey');
         davey = true;
       } catch {
         davey = false;

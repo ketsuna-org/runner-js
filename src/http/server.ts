@@ -1,9 +1,9 @@
 import os from 'node:os';
 
-import Fastify, { type FastifyInstance } from 'fastify';
+import { Hono } from 'hono';
 
 import type { RunnerEnv } from '../config/env.js';
-import { createAuthHook } from './auth.js';
+import { createAuthMiddleware } from './auth.js';
 import type { RuntimeController } from '../runtime/runtime-controller.js';
 import type { LogStore } from '../runtime/log-store.js';
 import {
@@ -18,86 +18,105 @@ export interface HttpServerDeps {
   logStore: LogStore;
 }
 
-export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
-  const app = Fastify({ logger: false });
+export class HttpError extends Error {
+  statusCode: number;
 
-  app.addHook('onRequest', async (request, reply) => {
-    reply.header('access-control-allow-origin', '*');
-    reply.header('access-control-allow-methods', 'GET, POST, PATCH, OPTIONS');
-    reply.header(
+  constructor(statusCode: number, message: string) {
+    super(message);
+    this.statusCode = statusCode;
+    Object.setPrototypeOf(this, HttpError.prototype);
+  }
+}
+
+export function createHttpServer(deps: HttpServerDeps): Hono {
+  const app = new Hono();
+
+  // CORS and Cache-Control middleware
+  app.use('*', async (c, next) => {
+    c.header('access-control-allow-origin', '*');
+    c.header('access-control-allow-methods', 'GET, POST, PATCH, OPTIONS');
+    c.header(
       'access-control-allow-headers',
       'content-type, authorization, x-bot-webhook-secret, x-webhook-secret',
     );
-    reply.header('cache-control', 'no-store');
+    c.header('cache-control', 'no-store');
 
-    if (request.method === 'OPTIONS') {
-      return reply.code(204).send();
+    if (c.req.method === 'OPTIONS') {
+      return c.body(null, 204);
     }
+    return next();
   });
 
-  app.addHook('onRequest', createAuthHook(deps.env.apiToken, deps.env.webHost));
+  // Auth middleware
+  app.use('*', createAuthMiddleware(deps.env.apiToken, deps.env.webHost));
 
-  app.setErrorHandler((error, _request, reply) => {
+  // Error handler
+  app.onError((error, c) => {
     const err = error as Error & { statusCode?: number };
     const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500;
-    reply.code(statusCode).send({
-      error: err.message ?? 'Internal server error',
+    return c.json(
+      {
+        error: err.message ?? 'Internal server error',
+      },
+      statusCode as 400 | 401 | 404 | 409 | 500,
+    );
+  });
+
+  app.get('/', (c) =>
+    c.json({
+      name: 'Bot Creator JS Runner',
+      version: deps.env.version,
+      engine: 'javascript',
+      capabilities: ['js-native', 'in-process'],
+    }),
+  );
+
+  app.get('/health', (c) => c.json({ ok: true }));
+
+  app.get('/status', (c) => c.json(buildStatusPayload(deps.runtime)));
+
+  app.get('/metrics', (c) => c.json(buildMetricsPayload(deps.runtime)));
+
+  app.get('/bots/:id/metrics', (c) => {
+    const botId = c.req.param('id');
+    return c.json(buildBotMetricsPayload(deps.runtime, botId));
+  });
+
+  app.get('/logs', (c) => {
+    const limitQuery = c.req.query('limit');
+    const limit = Number.parseInt(limitQuery ?? '200', 10);
+    return c.json({ lines: deps.logStore.tail(Number.isFinite(limit) ? limit : 200) });
+  });
+
+  app.get('/bots/:id/logs', (c) => {
+    const botId = c.req.param('id');
+    const limitQuery = c.req.query('limit');
+    const limit = Number.parseInt(limitQuery ?? '200', 10);
+    return c.json({
+      lines: deps.logStore.tailForBot(botId, Number.isFinite(limit) ? limit : 200),
     });
   });
 
-  app.get('/', async () => ({
-    name: 'Bot Creator JS Runner',
-    version: deps.env.version,
-    engine: 'javascript',
-    capabilities: ['js-native', 'in-process'],
-  }));
-
-  app.get('/health', async () => ({ ok: true }));
-
-  app.get('/status', async () => buildStatusPayload(deps.runtime));
-
-  app.get('/metrics', async () => buildMetricsPayload(deps.runtime));
-
-  app.get('/bots/:id/metrics', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    return buildBotMetricsPayload(deps.runtime, botId);
-  });
-
-  app.get('/logs', async (request) => {
-    const query = request.query as { limit?: string };
-    const limit = Number.parseInt(query.limit ?? '200', 10);
-    return { lines: deps.logStore.tail(Number.isFinite(limit) ? limit : 200) };
-  });
-
-  app.get('/bots/:id/logs', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const query = request.query as { limit?: string };
-    const limit = Number.parseInt(query.limit ?? '200', 10);
-    return {
-      lines: deps.logStore.tailForBot(botId, Number.isFinite(limit) ? limit : 200),
-    };
-  });
-
-  app.get('/bots/:id/status', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    return {
+  app.get('/bots/:id/status', (c) => {
+    const botId = c.req.param('id');
+    return c.json({
       apiVersion: 2,
       bot: buildBotStatePayload(deps.runtime, botId),
-    };
+    });
   });
 
-  app.get('/bots', async () => {
+  app.get('/bots', async (c) => {
     const entries = await deps.runtime.botStore.listAll();
-    return {
+    return c.json({
       bots: entries.map((entry) => ({
         id: entry.id,
         name: entry.name,
         syncedAt: entry.syncedAt,
       })),
-    };
+    });
   });
 
-  app.get('/bots/running-status', async () => {
+  app.get('/bots/running-status', (c) => {
     const bots: Record<
       string,
       {
@@ -121,15 +140,20 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
         lastError: state.lastError,
       };
     }
-    return { bots };
+    return c.json({ bots });
   });
 
-  app.post('/bots/sync', async (request) => {
-    const body = request.body as {
+  app.post('/bots/sync', async (c) => {
+    let body: {
       botId?: string;
       botName?: string;
       config?: Record<string, unknown>;
-    };
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      throw badRequest('Missing or invalid JSON body.');
+    }
 
     const botId = (body.botId ?? '').trim();
     if (!botId) {
@@ -143,21 +167,26 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     try {
       await deps.runtime.syncBot(botId, (body.botName ?? '').trim(), body.config);
       deps.logStore.append('info', `Synced bot ${botId}`, botId);
-      return { ok: true };
+      return c.json({ ok: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw badRequest(`Invalid config: ${message}`);
     }
   });
 
-  app.post('/bots/:id/start', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body = (request.body as { botName?: string } | undefined) ?? {};
+  app.post('/bots/:id/start', async (c) => {
+    const botId = c.req.param('id');
+    let body: { botName?: string } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
 
     try {
       await deps.runtime.startBot(botId, (body.botName ?? '').trim());
       deps.logStore.append('info', `Started bot ${botId}`, botId);
-      return buildStatusPayload(deps.runtime);
+      return c.json(buildStatusPayload(deps.runtime));
     } catch (error) {
       if (
         error instanceof Error &&
@@ -172,32 +201,44 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     }
   });
 
-  app.post('/bots/:id/stop', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.post('/bots/:id/stop', async (c) => {
+    const botId = c.req.param('id');
     await deps.runtime.stopBot(botId);
     deps.logStore.append('info', `Stopped bot ${botId}`, botId);
-    return buildStatusPayload(deps.runtime);
+    return c.json(buildStatusPayload(deps.runtime));
   });
 
-  app.post('/bots/:id/reload', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body = (request.body as { config?: Record<string, unknown> } | undefined) ?? {};
+  app.post('/bots/:id/reload', async (c) => {
+    const botId = c.req.param('id');
+    let body: { config?: Record<string, unknown> } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
 
     try {
       const reloaded = await deps.runtime.reloadBot(botId, body.config);
-      return { ok: true, reloaded };
+      return c.json({ ok: true, reloaded });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       throw badRequest(`Invalid config: ${message}`);
     }
   });
 
-  app.get('/pool/config', async () => ({
-    max_bots: deps.env.poolMaxBots,
-  }));
+  app.get('/pool/config', (c) =>
+    c.json({
+      max_bots: deps.env.poolMaxBots,
+    }),
+  );
 
-  app.patch('/pool/config', async (request) => {
-    const body = (request.body as { max_bots?: number | string } | undefined) ?? {};
+  app.patch('/pool/config', async (c) => {
+    let body: { max_bots?: number | string } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const parsed =
       typeof body.max_bots === 'number'
         ? body.max_bots
@@ -207,73 +248,92 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     }
     deps.env.poolMaxBots = parsed;
     deps.runtime.setMaxBots(parsed);
-    return { max_bots: deps.env.poolMaxBots };
+    return c.json({ max_bots: deps.env.poolMaxBots });
   });
 
-  app.post('/pool/drain', async () => {
+  app.post('/pool/drain', async (c) => {
     const stopped = await deps.runtime.drainAllBots();
     deps.logStore.append('info', `Drained ${stopped} bot(s)`);
-    return { stopped };
+    return c.json({ stopped });
   });
 
-  app.get('/bots/:id/variables/global', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.get('/bots/:id/variables/global', async (c) => {
+    const botId = c.req.param('id');
     const variables = await deps.runtime.getMergedGlobalVariables(botId);
-    return { botId, variables };
+    return c.json({ botId, variables });
   });
 
-  app.post('/bots/:id/variables/global/set', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body = (request.body as { key?: string; value?: unknown }) ?? {};
+  app.post('/bots/:id/variables/global/set', async (c) => {
+    const botId = c.req.param('id');
+    let body: { key?: string; value?: unknown } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const key = (body.key ?? '').trim();
     if (!key) {
       throw badRequest('Missing key.');
     }
     await deps.runtime.upsertGlobalVariable(botId, key, body.value);
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.post('/bots/:id/variables/global/rename', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body = (request.body as { oldKey?: string; newKey?: string }) ?? {};
+  app.post('/bots/:id/variables/global/rename', async (c) => {
+    const botId = c.req.param('id');
+    let body: { oldKey?: string; newKey?: string } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const oldKey = (body.oldKey ?? '').trim();
     const newKey = (body.newKey ?? '').trim();
     if (!oldKey || !newKey) {
       throw badRequest('Missing oldKey or newKey.');
     }
     await deps.runtime.renameGlobalVariable(botId, oldKey, newKey);
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.post('/bots/:id/variables/global/remove', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body = (request.body as { key?: string }) ?? {};
+  app.post('/bots/:id/variables/global/remove', async (c) => {
+    const botId = c.req.param('id');
+    let body: { key?: string } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const key = (body.key ?? '').trim();
     if (!key) {
       throw badRequest('Missing key.');
     }
     await deps.runtime.removeGlobalVariable(botId, key);
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.get('/bots/:id/variables/scoped-definitions', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.get('/bots/:id/variables/scoped-definitions', async (c) => {
+    const botId = c.req.param('id');
     const entry = await deps.runtime.requireBotEntry(botId);
-    return {
+    return c.json({
       botId,
       definitions: entry.config.scopedVariableDefinitions,
-    };
+    });
   });
 
-  app.post('/bots/:id/variables/scoped-definitions/set', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body =
-      (request.body as {
-        scope?: string;
-        key?: string;
-        defaultValue?: unknown;
-        valueType?: string;
-      }) ?? {};
+  app.post('/bots/:id/variables/scoped-definitions/set', async (c) => {
+    const botId = c.req.param('id');
+    let body: {
+      scope?: string;
+      key?: string;
+      defaultValue?: unknown;
+      valueType?: string;
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const scope = (body.scope ?? '').trim();
     const key = normalizeScopedStorageKey((body.key ?? '').toString());
     if (!scope || !key) {
@@ -286,17 +346,21 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       body.defaultValue,
       (body.valueType ?? 'string').toString(),
     );
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.post('/bots/:id/variables/scoped-definitions/remove', async (request) => {
-    const botId = (request.params as { id: string }).id;
-    const body =
-      (request.body as {
-        key?: string;
-        scope?: string;
-        purgeStoredValues?: boolean;
-      }) ?? {};
+  app.post('/bots/:id/variables/scoped-definitions/remove', async (c) => {
+    const botId = c.req.param('id');
+    let body: {
+      key?: string;
+      scope?: string;
+      purgeStoredValues?: boolean;
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const key = normalizeScopedStorageKey((body.key ?? '').toString());
     if (!key) {
       throw badRequest('Missing key.');
@@ -308,15 +372,14 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       scope || undefined,
       body.purgeStoredValues === true,
     );
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.get('/bots/:id/variables/scoped-values', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.get('/bots/:id/variables/scoped-values', async (c) => {
+    const botId = c.req.param('id');
     const entry = await deps.runtime.requireBotEntry(botId);
-    const query = request.query as { scope?: string; key?: string };
-    const scope = (query.scope ?? '').trim();
-    const keyRaw = (query.key ?? '').trim();
+    const scope = (c.req.query('scope') ?? '').trim();
+    const keyRaw = (c.req.query('key') ?? '').trim();
     if (!scope || !keyRaw) {
       throw badRequest('Missing scope or key query parameter.');
     }
@@ -367,18 +430,23 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       }
     }
 
-    return { botId, scope, key: storageKey, values };
+    return c.json({ botId, scope, key: storageKey, values });
   });
 
-  app.post('/bots/:id/variables/scoped-values/set', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.post('/bots/:id/variables/scoped-values/set', async (c) => {
+    const botId = c.req.param('id');
     await deps.runtime.requireBotEntry(botId);
-    const body = (request.body as {
+    let body: {
       scope?: string;
       key?: string;
       contextId?: string;
       value?: unknown;
-    }) ?? {};
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const scope = (body.scope ?? '').trim();
     const keyRaw = (body.key ?? '').trim();
     const contextId = (body.contextId ?? '').trim();
@@ -393,17 +461,22 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       storageKey,
       body.value,
     );
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.post('/bots/:id/variables/scoped-values/remove', async (request) => {
-    const botId = (request.params as { id: string }).id;
+  app.post('/bots/:id/variables/scoped-values/remove', async (c) => {
+    const botId = c.req.param('id');
     await deps.runtime.requireBotEntry(botId);
-    const body = (request.body as {
+    let body: {
       scope?: string;
       key?: string;
       contextId?: string;
-    }) ?? {};
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      body = {};
+    }
     const scope = (body.scope ?? '').trim();
     const keyRaw = (body.key ?? '').trim();
     const contextId = (body.contextId ?? '').trim();
@@ -417,11 +490,12 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
       contextId,
       storageKey,
     );
-    return { ok: true };
+    return c.json({ ok: true });
   });
 
-  app.post('/bots/:id/inbound/:pathKey', async (request) => {
-    const { id: botId, pathKey } = request.params as { id: string; pathKey: string };
+  app.post('/bots/:id/inbound/:pathKey', async (c) => {
+    const botId = c.req.param('id');
+    const pathKey = c.req.param('pathKey');
     const entry = await deps.runtime.botStore.load(botId);
     if (!entry) {
       throw notFound(`Bot "${botId}" not found.`);
@@ -439,9 +513,9 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
 
     const expectedSecret = (webhook.secret ?? '').trim();
     const providedSecret = (
-      (request.headers['x-bot-webhook-secret'] as string | undefined) ??
-      (request.headers['x-webhook-secret'] as string | undefined) ??
-      (request.query as { secret?: string }).secret ??
+      c.req.header('x-bot-webhook-secret') ??
+      c.req.header('x-webhook-secret') ??
+      c.req.query('secret') ??
       ''
     ).trim();
 
@@ -454,20 +528,31 @@ export function createHttpServer(deps: HttpServerDeps): FastifyInstance {
     }
 
     const headers: Record<string, string> = {};
-    for (const [key, value] of Object.entries(request.headers)) {
+    for (const [key, value] of Object.entries(c.req.header())) {
       if (typeof value === 'string') {
         headers[key] = value;
       }
     }
 
-    await deps.runtime.triggerInboundWebhook(botId, pathKey, request.body, headers);
+    let parsedBody: unknown = undefined;
+    try {
+      parsedBody = await c.req.json();
+    } catch {
+      try {
+        parsedBody = await c.req.text();
+      } catch {
+        parsedBody = undefined;
+      }
+    }
 
-    return {
+    await deps.runtime.triggerInboundWebhook(botId, pathKey, parsedBody, headers);
+
+    return c.json({
       ok: true,
       botId,
       path: pathKey,
       handlerId: webhook.id,
-    };
+    });
   });
 
   return app;
@@ -498,9 +583,6 @@ function serializeBotRuntimeState(state: ReturnType<RuntimeController['listRunti
 
 function buildMetricsPayload(runtime: RuntimeController) {
   const memory = process.memoryUsage();
-  // Single-process runner: bots have no dedicated processes, so per-bot
-  // rssBytes are null and this sums to 0. The apiVersion 2 shape is kept
-  // stable for the Go manager (rssBytes = mainRssBytes + totalWorkerRssBytes).
   const totalWorkerRssBytes = runtime.aggregateWorkerRssBytes();
   return {
     apiVersion: 2,
@@ -560,28 +642,20 @@ function readCpuPercent(): number | null {
   return Number((((totalDelta - idleDelta) / totalDelta) * 100).toFixed(2));
 }
 
-function badRequest(message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number };
-  error.statusCode = 400;
-  return error;
+function badRequest(message: string): HttpError {
+  return new HttpError(400, message);
 }
 
-function conflict(message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number };
-  error.statusCode = 409;
-  return error;
+function conflict(message: string): HttpError {
+  return new HttpError(409, message);
 }
 
-function notFound(message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number };
-  error.statusCode = 404;
-  return error;
+function notFound(message: string): HttpError {
+  return new HttpError(404, message);
 }
 
-function unauthorized(message: string): Error & { statusCode: number } {
-  const error = new Error(message) as Error & { statusCode: number };
-  error.statusCode = 401;
-  return error;
+function unauthorized(message: string): HttpError {
+  return new HttpError(401, message);
 }
 
 function isMissingOrEmpty(value: unknown): boolean {

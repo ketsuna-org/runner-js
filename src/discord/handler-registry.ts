@@ -39,6 +39,7 @@ export class HandlerRegistry {
   private readonly inFlightInteractions = new Set<string>();
   private readonly handledInteractions = new Set<string>();
   private autocompleteBindings: AutocompleteBinding[] = [];
+  private readonly scriptLogger: ScriptLogger;
 
   constructor(
     private readonly client: Client,
@@ -47,7 +48,15 @@ export class HandlerRegistry {
     private readonly executor: ScriptExecutor,
     private readonly variableStore: VariableDatabase,
     private readonly emitLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void,
-  ) {}
+  ) {
+    this.scriptLogger = {
+      log: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
+      info: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
+      warn: (...args: unknown[]) => this.emitLog('warn', args.map(String).join(' ')),
+      error: (...args: unknown[]) => this.emitLog('error', args.map(String).join(' ')),
+      debug: (...args: unknown[]) => this.emitLog('debug', args.map(String).join(' ')),
+    };
+  }
 
   mount(): void {
     this.clear();
@@ -317,7 +326,6 @@ export class HandlerRegistry {
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
   ): Promise<void> {
-    const logger = this.createLogger();
     const member = await resolveScriptMember(partial.message, partial.member ?? null);
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
@@ -356,7 +364,7 @@ export class HandlerRegistry {
           channel: (partial.channel as never) ?? null,
           webhook: partial.webhook,
         },
-        logger,
+        this.scriptLogger,
         this.config.scriptTimeoutMs,
       );
     } catch (error) {
@@ -390,18 +398,11 @@ export class HandlerRegistry {
     this.handledInteractions.add(interactionId);
 
     if (this.handledInteractions.size > 500) {
-      this.handledInteractions.clear();
+      const oldest = this.handledInteractions.keys().next().value;
+      if (oldest !== undefined) {
+        this.handledInteractions.delete(oldest);
+      }
     }
-  }
-
-  private createLogger(): ScriptLogger {
-    return {
-      log: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
-      info: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
-      warn: (...args: unknown[]) => this.emitLog('warn', args.map(String).join(' ')),
-      error: (...args: unknown[]) => this.emitLog('error', args.map(String).join(' ')),
-      debug: (...args: unknown[]) => this.emitLog('debug', args.map(String).join(' ')),
-    };
   }
 }
 

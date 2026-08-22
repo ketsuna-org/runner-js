@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock, spyOn, vi } from 'bun:test';
 
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
@@ -154,6 +154,18 @@ describe('ScriptDirectRuntime', () => {
     expect(result.dbConfig).toBeUndefined();
     expect(result.dbToken).toBeUndefined();
     expect(result.webhookSecret).toBeUndefined();
+    executor.dispose();
+  });
+
+  it('reuses compiled script cache for fast repeated execution', async () => {
+    const executor = createDirectExecutor();
+    const script = 'return variables.val * 2;';
+
+    const r1 = await executor.execute(script, { client: {} as never, config: { token: 'x' } as never, variables: { val: 10 } }, createLogger());
+    const r2 = await executor.execute(script, { client: {} as never, config: { token: 'x' } as never, variables: { val: 25 } }, createLogger());
+
+    expect(r1).toBe(20);
+    expect(r2).toBe(50);
     executor.dispose();
   });
 });

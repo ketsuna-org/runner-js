@@ -27,7 +27,7 @@ export function deserializeVariableValue(raw: string, type: string): unknown {
       return null;
     case 'json':
       try {
-        return normalizeVariableValue(JSON.parse(raw));
+        return JSON.parse(raw);
       } catch {
         return raw;
       }

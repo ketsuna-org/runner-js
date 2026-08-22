@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, mock, spyOn, vi } from 'bun:test';
 
 import { ScriptExecutor } from '../src/scripts/script-executor.js';
 
@@ -35,7 +35,7 @@ describe('canvas getContext', () => {
     executor.dispose();
   });
 
-  it.skipIf(process.platform === 'win32')(
+  ((process.platform === 'win32') ? it.skip : it)(
     'supports synchronous createCanvas and getContext',
     async () => {
     const executor = new ScriptExecutor(5000);
@@ -88,7 +88,7 @@ describe('canvas getContext', () => {
     },
   );
 
-  it.skipIf(process.platform === 'win32')(
+  ((process.platform === 'win32') ? it.skip : it)(
     'works when createCanvas and getContext are awaited',
     async () => {
     const executor = new ScriptExecutor(5000);

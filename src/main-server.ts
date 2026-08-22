@@ -29,20 +29,24 @@ export async function startMainServer(): Promise<void> {
   const runtime = await RuntimeController.create(env.dataDir, logStore, env);
   const app = createHttpServer({ env, runtime, logStore });
 
+  const server = Bun.serve({
+    fetch: app.fetch,
+    port: env.webPort,
+    hostname: env.webHost,
+  });
+
   const shutdown = async (signal: string) => {
     logStore.append('info', `Shutting down (${signal})...`);
     await runtime.dispose();
-    await app.close();
+    server.stop(true);
     process.exit(0);
   };
 
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 
-  await app.listen({ host: env.webHost, port: env.webPort });
   const listenUrl = `http://${env.webHost}:${env.webPort}`;
   logStore.append('info', `Runner JS listening on ${listenUrl}`);
-  // PKG builds have no visible console by default; echo startup for local testing.
   console.log(`[runner-js] Listening on ${listenUrl}`);
   console.log(`[runner-js] Logs: ${env.logFile}`);
   console.log(`[runner-js] Health: ${listenUrl}/health`);

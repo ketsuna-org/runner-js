@@ -184,32 +184,41 @@ export async function buildScriptVariables(
     return variables;
   }
 
-  for (const definition of config.scopedVariableDefinitions) {
-    const scope = String(definition.scope ?? '').trim();
-    const storageKey = normalizeScopedStorageKey(String(definition.key ?? '').trim());
-    if (!scope || !storageKey) {
-      continue;
-    }
-
-    let contextId: string;
-    try {
-      contextId = resolveScopedContextId(scope, ctx);
-    } catch {
-      continue;
-    }
-
-    let value = await store.getScopedVariable(botId, scope, contextId, storageKey);
-    if (value == null) {
-      const legacyKey = toScopedReferenceKey(storageKey);
-      if (legacyKey !== storageKey) {
-        value = await store.getScopedVariable(botId, scope, contextId, legacyKey);
+  const resolvedEntries = await Promise.all(
+    config.scopedVariableDefinitions.map(async (definition) => {
+      const scope = String(definition.scope ?? '').trim();
+      const storageKey = normalizeScopedStorageKey(String(definition.key ?? '').trim());
+      if (!scope || !storageKey) {
+        return null;
       }
-    }
-    if (value == null && definition['defaultValue'] != null) {
-      value = definition['defaultValue'];
-    }
-    if (value != null) {
-      applyVariableAlias(variables, storageKey, value);
+
+      let contextId: string;
+      try {
+        contextId = resolveScopedContextId(scope, ctx);
+      } catch {
+        return null;
+      }
+
+      let value = await store.getScopedVariable(botId, scope, contextId, storageKey);
+      if (value == null) {
+        const legacyKey = toScopedReferenceKey(storageKey);
+        if (legacyKey !== storageKey) {
+          value = await store.getScopedVariable(botId, scope, contextId, legacyKey);
+        }
+      }
+      if (value == null && definition['defaultValue'] != null) {
+        value = definition['defaultValue'];
+      }
+      if (value != null) {
+        return { storageKey, value };
+      }
+      return null;
+    }),
+  );
+
+  for (const entry of resolvedEntries) {
+    if (entry) {
+      applyVariableAlias(variables, entry.storageKey, entry.value);
     }
   }
 

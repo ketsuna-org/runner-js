@@ -1,6 +1,6 @@
-import { describe, expect, it, afterEach } from 'vitest';
+import { describe, expect, it, afterEach } from 'bun:test';
 
-import { LibsqlVariableStore } from '../src/runtime/libsql-variable-store.js';
+import { BunSqliteVariableStore } from '../src/runtime/bun-sqlite-variable-store.js';
 import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import { ScriptDb } from '../src/scripts/script-db.js';
 
@@ -38,7 +38,7 @@ describe('ScriptDb', () => {
     variables: Record<string, unknown> = {},
     configOverride: typeof config = config,
   ) {
-    store = new LibsqlVariableStore(':memory:', { inMemory: true });
+    store = new BunSqliteVariableStore(':memory:', { inMemory: true });
     await store.init();
     return new ScriptDb('bot-1', configOverride, store, ctx, variables);
   }

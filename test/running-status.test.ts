@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { createHttpServer } from '../src/http/server.js';
 import type { RuntimeController } from '../src/runtime/runtime-controller.js';
@@ -7,8 +7,6 @@ import type { RunnerEnv } from '../src/config/env.js';
 
 describe('running-status endpoint', () => {
   it('reports connected only for bots in the supervisor state map', async () => {
-    // Single-process runner: per-bot rssBytes/pid are null; heapUsedBytes
-    // reflects the process V8 heap.
     const runtime = {
       listRuntimeStates: () => [
         {
@@ -48,12 +46,7 @@ describe('running-status endpoint', () => {
       logStore: { tail: () => [], tailForBot: () => [] } as unknown as LogStore,
     });
 
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const baseUrl = `http://127.0.0.1:${port}`;
-
-    const response = await fetch(`${baseUrl}/bots/running-status`);
+    const response = await app.request('/bots/running-status');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       bots: {
@@ -77,8 +70,6 @@ describe('running-status endpoint', () => {
         },
       },
     });
-
-    await app.close();
   });
 
   it('reports metrics for error-state bots in running-status', async () => {
@@ -110,12 +101,7 @@ describe('running-status endpoint', () => {
       logStore: { tail: () => [], tailForBot: () => [] } as unknown as LogStore,
     });
 
-    await app.listen({ host: '127.0.0.1', port: 0 });
-    const address = app.server.address();
-    const port = typeof address === 'object' && address ? address.port : 0;
-    const baseUrl = `http://127.0.0.1:${port}`;
-
-    const response = await fetch(`${baseUrl}/bots/running-status`);
+    const response = await app.request('/bots/running-status');
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({
       bots: {
@@ -130,7 +116,5 @@ describe('running-status endpoint', () => {
         },
       },
     });
-
-    await app.close();
   });
 });

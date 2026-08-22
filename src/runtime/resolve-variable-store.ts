@@ -1,7 +1,7 @@
 import path from 'node:path';
 
+import { BunSqliteVariableStore } from './bun-sqlite-variable-store.js';
 import { JsonVariableStore } from './json-variable-store.js';
-import { LibsqlVariableStore } from './libsql-variable-store.js';
 import { ManagedVariableStore } from './managed-variable-store.js';
 import type { VariableDatabase } from './variable-database.js';
 
@@ -27,12 +27,12 @@ export async function resolveVariableStore(
 
   const variablesDir = resolveVariablesDir(dataDir);
   try {
-    const libsql = new LibsqlVariableStore(variablesDir);
-    await libsql.init();
-    console.info(`[VariableStore] Using local libsql store at ${libsql.dbPath}`);
-    return libsql;
+    const sqlite = new BunSqliteVariableStore(variablesDir);
+    await sqlite.init();
+    console.info(`[VariableStore] Using local SQLite store at ${sqlite.dbPath}`);
+    return sqlite;
   } catch (error) {
-    console.warn('[VariableStore] libsql init failed, falling back to JSON:', error);
+    console.warn('[VariableStore] SQLite init failed, falling back to JSON:', error);
     console.info(`[VariableStore] Using JSON fallback at ${variablesDir}`);
     return new JsonVariableStore(variablesDir);
   }
