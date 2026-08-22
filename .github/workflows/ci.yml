@@ -67,7 +67,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Run runner integration tests
-        run: bun test test/runtime-api.test.ts test/ws-connection.test.ts test/ws-reconnect.test.ts
+        run: bun test ./test/http.integration.test.ts ./test/http-server.integration.test.ts ./test/script-direct-runtime.test.ts
 
   swagger-drift:
     name: Swagger drift
