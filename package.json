@@ -16,7 +16,6 @@
     "compile:macos-arm64": "bun build --compile --minify src/index.ts --outfile build/bot-creator-runner-js-macos-arm64"
   },
   "dependencies": {
-    "@discordjs/opus": "^0.10.0",
     "@discordjs/voice": "^0.19.2",
     "@snazzah/davey": "^0.1.9",
     "bufferutil": "^4.0.9",
