@@ -197,6 +197,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
+          pattern: 'bot-creator-runner-js-*'
           path: artifacts
 
       - name: Flatten binaries
