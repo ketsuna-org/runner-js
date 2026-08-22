@@ -24,11 +24,12 @@ COPY test ./test
 
 RUN bun test
 RUN bun run build
+RUN rm -rf node_modules && bun install --production --frozen-lockfile
 
 # Runtime stage
 FROM oven/bun:1-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
     libcairo2 \
     libpango-1.0-0 \
