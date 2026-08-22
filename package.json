@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "build": "bun build src/index.ts --target=bun --outdir=dist --packages=external",
     "test": "bun test",
     "test:watch": "bun test --watch",
     "compile:linux-x64": "bun build --compile --minify src/index.ts --outfile build/bot-creator-runner-js-linux-x64",
