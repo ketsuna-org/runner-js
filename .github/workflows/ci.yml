@@ -23,6 +23,7 @@ env:
 jobs:
   quality:
     name: Quality
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +48,7 @@ jobs:
 
   unit-tests:
     name: Unit tests
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,6 +73,7 @@ jobs:
 
   api-integration-tests:
     name: API integration tests
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +98,7 @@ jobs:
 
   swagger-drift:
     name: Swagger drift
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -123,6 +127,7 @@ jobs:
 
   source-security:
     name: Source security
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -138,6 +143,7 @@ jobs:
 
   container-build-scan:
     name: Container build and scan
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' && !startsWith(github.ref, 'refs/tags/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -166,7 +172,6 @@ jobs:
 
   compile-binaries:
     name: Compile Binaries (${{ matrix.target }})
-    needs: [quality, unit-tests, api-integration-tests, swagger-drift, source-security, container-build-scan]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags/'))
     runs-on: ${{ matrix.os }}
     strategy:
@@ -396,12 +401,14 @@ jobs:
     steps:
       - name: Check pipeline results
         run: |
-          if [[ "${{ needs.quality.result }}" != "success" ]]; then exit 1; fi
-          if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then exit 1; fi
-          if [[ "${{ needs.api-integration-tests.result }}" != "success" ]]; then exit 1; fi
-          if [[ "${{ needs.swagger-drift.result }}" != "success" ]]; then exit 1; fi
-          if [[ "${{ needs.source-security.result }}" != "success" ]]; then exit 1; fi
-          if [[ "${{ needs.container-build-scan.result }}" != "success" ]]; then exit 1; fi
+          if [[ "${{ github.event_name }}" == "pull_request" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ needs.quality.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.unit-tests.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.api-integration-tests.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.swagger-drift.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.source-security.result }}" != "success" ]]; then exit 1; fi
+            if [[ "${{ needs.container-build-scan.result }}" != "success" ]]; then exit 1; fi
+          fi
           if [[ "${{ github.event_name }}" == "push" && ("${{ github.ref }}" == "refs/heads/main" || "${{ github.ref }}" == "refs/heads/master") ]]; then
             if [[ "${{ needs.compile-binaries.result }}" != "success" ]]; then exit 1; fi
             if [[ "${{ needs.auto-release.result }}" != "success" ]]; then exit 1; fi
