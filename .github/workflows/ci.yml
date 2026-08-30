@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, master, dev]
+    branches: [main, master]
     tags:
       - "runner-js-v*"
       - "v*"
