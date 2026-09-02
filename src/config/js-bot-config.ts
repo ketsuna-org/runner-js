@@ -52,12 +52,27 @@ export const presenceSchema = z
 export const MAX_SCRIPT_TIMEOUT_MS = 15 * 60 * 1000;
 export const DEFAULT_SCRIPT_TIMEOUT_MS = MAX_SCRIPT_TIMEOUT_MS;
 
+export const databaseConfigSchema = z
+  .object({
+    type: z.enum(['none', 'postgres', 'mysql', 'mongo']).default('none'),
+    uri: z.string().optional(),
+    host: z.string().optional(),
+    port: z.union([z.number(), z.string()]).optional(),
+    database: z.string().optional(),
+    user: z.string().optional(),
+    password: z.string().optional(),
+    ssl: z.boolean().optional(),
+  })
+  .nullish()
+  .transform((val) => val ?? { type: 'none' as const });
+
 export const jsBotConfigSchema = z.object({
   token: z.string().min(1),
   intents: z.record(z.boolean()).default({}),
   prefix: z.string().optional(),
   autoRestart: z.boolean().default(true),
   presence: presenceSchema,
+  databaseConfig: databaseConfigSchema.default({ type: 'none' }),
   commands: z.array(commandHandlerSchema).nullish().transform((value) => value ?? []),
   events: z.array(eventHandlerSchema).nullish().transform((value) => value ?? []),
   scheduled: z.array(scheduledHandlerSchema).nullish().transform((value) => value ?? []),
@@ -79,6 +94,7 @@ export type CommandHandler = z.infer<typeof commandHandlerSchema>;
 export type EventHandler = z.infer<typeof eventHandlerSchema>;
 export type ScheduledHandler = z.infer<typeof scheduledHandlerSchema>;
 export type InboundWebhookHandler = z.infer<typeof inboundWebhookHandlerSchema>;
+export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
 export type JsBotConfig = z.infer<typeof jsBotConfigSchema>;
 
 export const botSyncPayloadSchema = z.object({

@@ -20,6 +20,7 @@ import type { ScriptLogger } from '../scripts/script-context.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
+import type { DatabaseHandles } from '../runtime/database-manager.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -40,6 +41,7 @@ export class HandlerRegistry {
   private readonly handledInteractions = new Set<string>();
   private autocompleteBindings: AutocompleteBinding[] = [];
   private readonly scriptLogger: ScriptLogger;
+  private databaseHandles?: DatabaseHandles;
 
   constructor(
     private readonly client: Client,
@@ -48,7 +50,9 @@ export class HandlerRegistry {
     private readonly executor: ScriptExecutor,
     private readonly variableStore: VariableDatabase,
     private readonly emitLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void,
+    databaseHandles?: DatabaseHandles,
   ) {
+    this.databaseHandles = databaseHandles;
     this.scriptLogger = {
       log: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
       info: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
@@ -165,8 +169,11 @@ export class HandlerRegistry {
     }
   }
 
-  updateConfig(config: JsBotConfig): void {
+  updateConfig(config: JsBotConfig, databaseHandles?: DatabaseHandles): void {
     this.config = config;
+    if (databaseHandles !== undefined) {
+      this.databaseHandles = databaseHandles;
+    }
     this.mount();
   }
 
@@ -357,6 +364,9 @@ export class HandlerRegistry {
           config: this.config,
           variables,
           db,
+          sql: this.databaseHandles?.sql,
+          pgsql: this.databaseHandles?.pgsql,
+          mongo: this.databaseHandles?.mongo,
           interaction: partial.interaction,
           message: partial.message,
           guild: partial.guild ?? null,
