@@ -208,4 +208,36 @@ describe('ScriptDb', () => {
       (entry) => entry.key === 'score' && entry.scope === 'guild',
     )).toBe(false);
   });
+
+  it('gets persisted value even when variable is not pre-declared in config (simulating post-sync)', async () => {
+    const mutableConfig = structuredClone(config);
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    // User sets dynamic variable in script
+    await db.user.set('level', 15);
+    expect(await db.user.get('level')).toBe(15);
+
+    // Simulate bot sync where the incoming UI config does NOT include 'level'
+    mutableConfig.scopedVariableDefinitions = [];
+
+    // Prior to fix, db.user.get('level') returned undefined and was reset to 0!
+    const retrieved = await db.user.get('level');
+    expect(retrieved).toBe(15);
+  });
+
+  it('deletes undeclared scoped variable without throwing', async () => {
+    const mutableConfig = structuredClone(config);
+    mutableConfig.scopedVariableDefinitions = [];
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.user.set('temp', 123);
+    expect(await db.user.get('temp')).toBe(123);
+
+    // Clear definition again
+    mutableConfig.scopedVariableDefinitions = [];
+
+    // Should not throw error
+    await db.user.delete('temp');
+    expect(await db.user.get('temp')).toBeUndefined();
+  });
 });

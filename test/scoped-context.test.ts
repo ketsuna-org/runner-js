@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   findScopedVariableDefinition,
+  mergeScopedVariableDefinitions,
   resolveContextIdForScope,
   resolveScopedContextId,
 } from '../src/runtime/scoped-context.js';
@@ -25,6 +26,23 @@ describe('scoped-context', () => {
     const definition = findScopedVariableDefinition(config, 'bc_score');
     expect(definition.scope).toBe('guild');
     expect(definition.key).toBe('score');
+  });
+
+  it('merges incoming and existing scoped variable definitions without duplicates', () => {
+    const incoming = [
+      { key: 'coins', scope: 'guildMember' },
+    ];
+    const existing = [
+      { key: 'coins', scope: 'guildMember', defaultValue: 0 },
+      { key: 'xp', scope: 'guildMember' },
+      { key: 'score', scope: 'guild' },
+    ];
+    const merged = mergeScopedVariableDefinitions(incoming, existing);
+    expect(merged).toEqual([
+      { key: 'coins', scope: 'guildMember' },
+      { key: 'xp', scope: 'guildMember' },
+      { key: 'score', scope: 'guild' },
+    ]);
   });
 
   it('resolves user and guildMember context ids', () => {

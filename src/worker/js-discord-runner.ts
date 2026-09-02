@@ -19,6 +19,7 @@ import { registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { applyPresence } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
+import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 
 export class JsDiscordRunner {
@@ -200,6 +201,10 @@ export class JsDiscordRunner {
   }
 
   async reload(config: JsBotConfig): Promise<void> {
+    config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
+      config.scopedVariableDefinitions,
+      this.config.scopedVariableDefinitions,
+    );
     const nextEffective = await this.resolveEffectiveIntents();
     const intentsChanged = !intentsMapsEqual(this.effectiveIntents, nextEffective);
     const tokenChanged = this.config.token.trim() !== config.token.trim();

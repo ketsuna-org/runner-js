@@ -69,6 +69,35 @@ export function ensureScopedVariableDefinition(
   return { scope: normalizedScope, key: storageKey };
 }
 
+export function mergeScopedVariableDefinitions(
+  incoming: Array<Record<string, unknown>>,
+  existing: Array<Record<string, unknown>>,
+): Array<Record<string, unknown>> {
+  const merged = [...incoming];
+  const seen = new Set(
+    incoming.map((def) => {
+      const k = normalizeScopedStorageKey(String(def['key'] ?? ''));
+      const s = String(def['scope'] ?? '').trim();
+      return `${s}:${k}`;
+    }),
+  );
+
+  for (const def of existing) {
+    const k = normalizeScopedStorageKey(String(def['key'] ?? ''));
+    const s = String(def['scope'] ?? '').trim();
+    if (!k || !s) {
+      continue;
+    }
+    const id = `${s}:${k}`;
+    if (!seen.has(id)) {
+      seen.add(id);
+      merged.push({ ...def });
+    }
+  }
+
+  return merged;
+}
+
 export interface DbTarget {
   /** Raw context id (user id, guild id, `guildId:userId`, message id, …). */
   contextId?: string;

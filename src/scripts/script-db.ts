@@ -178,12 +178,25 @@ export class ScriptDb {
     userId?: string,
     guildId?: string,
   ): Promise<unknown> {
-    const definition = this.findDefinitionForStorageScope(key, 'guildMember');
+    const scope = 'guildMember';
+    const target = this.guildMemberTarget(userId, guildId);
+    const contextId = resolveContextIdForScope(scope, this.#ctx, target);
+    const definition = this.findDefinitionForStorageScope(key, scope);
     if (!definition) {
+      const storageKey = normalizeScopedStorageKey(key.trim());
+      if (!storageKey) {
+        return undefined;
+      }
+      const stored = await this.readStoredScopedValue(
+        { scope, key: storageKey },
+        contextId,
+      );
+      if (stored !== undefined && stored !== null) {
+        ensureScopedVariableDefinition(this.#config, key, scope);
+        return stored;
+      }
       return undefined;
     }
-    const target = this.guildMemberTarget(userId, guildId);
-    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
     return this.readScopedValue(definition, contextId);
   }
 
@@ -192,20 +205,21 @@ export class ScriptDb {
     userId?: string,
     guildId?: string,
   ): Promise<void> {
-    const definition = this.findDefinitionForStorageScope(key, 'guildMember');
-    if (!definition) {
-      throw new Error(`Scoped variable "${key.trim()}" is not stored under guildMember.`);
+    const scope = 'guildMember';
+    const storageKey = normalizeScopedStorageKey(key.trim());
+    if (!storageKey) {
+      return;
     }
     const target = this.guildMemberTarget(userId, guildId);
-    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    const contextId = resolveContextIdForScope(scope, this.#ctx, target);
     await this.#store.removeScopedVariable(
       this.#botId,
-      definition.scope,
+      scope,
       contextId,
-      definition.key,
+      storageKey,
     );
-    if (this.isCurrentContext(definition.scope, contextId, target)) {
-      this.removeVariableAlias(definition.key);
+    if (this.isCurrentContext(scope, contextId, target)) {
+      this.removeVariableAlias(storageKey);
     }
   }
 
@@ -300,12 +314,24 @@ export class ScriptDb {
     id?: string,
   ): Promise<unknown> {
     const scope = this.resolveStorageScope(namespace);
+    const target = this.targetForId(namespace, id);
+    const contextId = resolveContextIdForScope(scope, this.#ctx, target);
     const definition = this.findDefinitionForStorageScope(key, scope);
     if (!definition) {
+      const storageKey = normalizeScopedStorageKey(key.trim());
+      if (!storageKey) {
+        return undefined;
+      }
+      const stored = await this.readStoredScopedValue(
+        { scope, key: storageKey },
+        contextId,
+      );
+      if (stored !== undefined && stored !== null) {
+        ensureScopedVariableDefinition(this.#config, key, scope);
+        return stored;
+      }
       return undefined;
     }
-    const target = this.targetForId(namespace, id);
-    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
     return this.readScopedValue(definition, contextId);
   }
 
@@ -315,20 +341,20 @@ export class ScriptDb {
     id?: string,
   ): Promise<void> {
     const scope = this.resolveStorageScope(namespace);
-    const definition = this.findDefinitionForStorageScope(key, scope);
-    if (!definition) {
-      throw new Error(`Scoped variable "${key.trim()}" is not stored under ${namespace}.`);
+    const storageKey = normalizeScopedStorageKey(key.trim());
+    if (!storageKey) {
+      return;
     }
     const target = this.targetForId(namespace, id);
-    const contextId = resolveContextIdForScope(definition.scope, this.#ctx, target);
+    const contextId = resolveContextIdForScope(scope, this.#ctx, target);
     await this.#store.removeScopedVariable(
       this.#botId,
-      definition.scope,
+      scope,
       contextId,
-      definition.key,
+      storageKey,
     );
-    if (this.isCurrentContext(definition.scope, contextId, target)) {
-      this.removeVariableAlias(definition.key);
+    if (this.isCurrentContext(scope, contextId, target)) {
+      this.removeVariableAlias(storageKey);
     }
   }
 

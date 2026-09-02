@@ -174,6 +174,43 @@ describe('HTTP server integration', () => {
     };
     expect(scopedAfterSetBody.values.u2).toBe(12);
 
+    // Test Manager rehydration format: scope_id & scope_aux_id on /scoped-values/set and /scoped/set
+    const setScopedGuildMember = await app.request(`/bots/${botId}/variables/scoped-values/set`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'guildMember',
+        key: 'xp',
+        scope_id: 'guild-1',
+        scope_aux_id: 'user-1',
+        value: 100,
+      }),
+    });
+    expect(setScopedGuildMember.status).toBe(200);
+
+    const setScopedAlias = await app.request(`/bots/${botId}/variables/scoped/set`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        scope: 'guildMember',
+        key: 'xp',
+        scope_id: 'guild-1',
+        scope_aux_id: 'user-2',
+        value: 200,
+      }),
+    });
+    expect(setScopedAlias.status).toBe(200);
+
+    const scopedGuildMember = await app.request(
+      `/bots/${botId}/variables/scoped-values?scope=guildMember&key=xp`,
+    );
+    expect(scopedGuildMember.status).toBe(200);
+    const scopedGuildMemberBody = (await scopedGuildMember.json()) as {
+      values: Record<string, unknown>;
+    };
+    expect(scopedGuildMemberBody.values['guild-1:user-1']).toBe(100);
+    expect(scopedGuildMemberBody.values['guild-1:user-2']).toBe(200);
+
     const poolConfig = await app.request('/pool/config');
     expect(poolConfig.status).toBe(200);
 
