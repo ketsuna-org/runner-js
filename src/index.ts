@@ -1,3 +1,4 @@
+import './runtime/bun-compat.js';
 import { startMainServer } from './main-server.js';
 import { logFfmpegStatus } from './runtime/ffmpeg-setup.js';
 import { logVoiceDependencyStatus } from './runtime/voice-deps.js';

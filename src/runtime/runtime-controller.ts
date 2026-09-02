@@ -6,6 +6,7 @@ import { BotStore } from './bot-store.js';
 import { BotSupervisor, type ManagedBotState } from './bot-supervisor.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
+import { mergeScopedVariableDefinitions } from './scoped-context.js';
 import type { VariableDatabase } from './variable-database.js';
 import { resolveVariableStore } from './resolve-variable-store.js';
 import type { VariableStoreEnv } from './resolve-variable-store.js';
@@ -70,6 +71,13 @@ export class RuntimeController {
 
   async syncBot(botId: string, botName: string, rawConfig: Record<string, unknown>): Promise<void> {
     const config = parseJsBotConfig(rawConfig);
+    const existing = await this.botStore.load(botId);
+    if (existing) {
+      config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
+        config.scopedVariableDefinitions,
+        existing.config.scopedVariableDefinitions,
+      );
+    }
     validateJsBotConfig(config);
     await this.botStore.save(botId, botName, config);
     this.processManager.clearTokenInvalid(botId);
@@ -90,6 +98,10 @@ export class RuntimeController {
         throw new Error(`Bot "${botId}" is not synced.`);
       }
       const config = parseJsBotConfig(rawConfig);
+      config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
+        config.scopedVariableDefinitions,
+        entry.config.scopedVariableDefinitions,
+      );
       validateJsBotConfig(config);
       await this.botStore.save(botId, entry.name, config);
     }

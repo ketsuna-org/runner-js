@@ -17,6 +17,9 @@ export interface ScriptExecutionContext {
     headers: Record<string, string>;
   };
   db?: import('./script-db.js').ScriptDb;
+  sql?: import('../runtime/database-manager.js').SqlInterface;
+  pgsql?: import('../runtime/database-manager.js').PgsqlInterface;
+  mongo?: import('../runtime/database-manager.js').MongoInterface;
 }
 
 export interface ScriptLogger {

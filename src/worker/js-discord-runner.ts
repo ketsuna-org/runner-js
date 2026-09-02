@@ -19,12 +19,15 @@ import { registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { applyPresence } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
+import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
+import { DatabaseManager } from '../runtime/database-manager.js';
 
 export class JsDiscordRunner {
   private client: Client | null = null;
   private registry: HandlerRegistry | null = null;
   private executor: ScriptExecutor | null = null;
+  private databaseManager: DatabaseManager | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
   private effectiveIntents: Record<string, boolean> = {};
@@ -148,6 +151,7 @@ export class JsDiscordRunner {
     );
 
     this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
+    this.databaseManager = new DatabaseManager(this.config.databaseConfig);
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
@@ -155,6 +159,7 @@ export class JsDiscordRunner {
       this.executor,
       this.variableStore,
       (level, message) => this.onLog(level, message),
+      this.databaseManager.handles,
     );
 
     this.mountGatewayLifecycleHandlers();
@@ -200,9 +205,20 @@ export class JsDiscordRunner {
   }
 
   async reload(config: JsBotConfig): Promise<void> {
+    config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
+      config.scopedVariableDefinitions,
+      this.config.scopedVariableDefinitions,
+    );
     const nextEffective = await this.resolveEffectiveIntents();
     const intentsChanged = !intentsMapsEqual(this.effectiveIntents, nextEffective);
     const tokenChanged = this.config.token.trim() !== config.token.trim();
+    const dbConfigChanged =
+      JSON.stringify(this.config.databaseConfig) !== JSON.stringify(config.databaseConfig);
+
+    if (dbConfigChanged) {
+      await this.databaseManager?.dispose();
+      this.databaseManager = new DatabaseManager(config.databaseConfig);
+    }
 
     this.config = config;
 
@@ -216,7 +232,7 @@ export class JsDiscordRunner {
       return;
     }
 
-    this.registry.updateConfig(config);
+    this.registry.updateConfig(config, this.databaseManager?.handles);
     applyPresence(this.client, config);
     await registerSlashCommands(this.client, config.token, config.commands ?? []);
   }
@@ -237,6 +253,8 @@ export class JsDiscordRunner {
     this.registry = null;
     this.executor?.dispose();
     this.executor = null;
+    await this.databaseManager?.dispose();
+    this.databaseManager = null;
 
     if (this.client) {
       await this.client.destroy();

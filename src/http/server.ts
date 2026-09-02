@@ -433,23 +433,18 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     return c.json({ botId, scope, key: storageKey, values });
   });
 
-  app.post('/bots/:id/variables/scoped-values/set', async (c) => {
-    const botId = c.req.param('id');
+  const handleScopedValueSet = async (c: import('hono').Context) => {
+    const botId = c.req.param('id') ?? '';
     await deps.runtime.requireBotEntry(botId);
-    let body: {
-      scope?: string;
-      key?: string;
-      contextId?: string;
-      value?: unknown;
-    } = {};
+    let body: Record<string, unknown> = {};
     try {
       body = (await c.req.json()) ?? {};
     } catch {
       body = {};
     }
-    const scope = (body.scope ?? '').trim();
-    const keyRaw = (body.key ?? '').trim();
-    const contextId = (body.contextId ?? '').trim();
+    const scope = String(body.scope ?? '').trim();
+    const keyRaw = String(body.key ?? '').trim();
+    const contextId = resolveContextIdFromBody(scope, body);
     if (!scope || !keyRaw || !contextId) {
       throw badRequest('Missing scope, key, or contextId.');
     }
@@ -462,24 +457,23 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       body.value,
     );
     return c.json({ ok: true });
-  });
+  };
 
-  app.post('/bots/:id/variables/scoped-values/remove', async (c) => {
-    const botId = c.req.param('id');
+  app.post('/bots/:id/variables/scoped-values/set', handleScopedValueSet);
+  app.post('/bots/:id/variables/scoped/set', handleScopedValueSet);
+
+  const handleScopedValueRemove = async (c: import('hono').Context) => {
+    const botId = c.req.param('id') ?? '';
     await deps.runtime.requireBotEntry(botId);
-    let body: {
-      scope?: string;
-      key?: string;
-      contextId?: string;
-    } = {};
+    let body: Record<string, unknown> = {};
     try {
       body = (await c.req.json()) ?? {};
     } catch {
       body = {};
     }
-    const scope = (body.scope ?? '').trim();
-    const keyRaw = (body.key ?? '').trim();
-    const contextId = (body.contextId ?? '').trim();
+    const scope = String(body.scope ?? '').trim();
+    const keyRaw = String(body.key ?? '').trim();
+    const contextId = resolveContextIdFromBody(scope, body);
     if (!scope || !keyRaw || !contextId) {
       throw badRequest('Missing scope, key, or contextId.');
     }
@@ -491,7 +485,10 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       storageKey,
     );
     return c.json({ ok: true });
-  });
+  };
+
+  app.post('/bots/:id/variables/scoped-values/remove', handleScopedValueRemove);
+  app.post('/bots/:id/variables/scoped/remove', handleScopedValueRemove);
 
   app.post('/bots/:id/inbound/:pathKey', async (c) => {
     const botId = c.req.param('id');
@@ -689,4 +686,27 @@ function defaultValueFor(
     return defaultValue;
   }
   return null;
+}
+
+function resolveContextIdFromBody(scope: string, body: Record<string, unknown>): string {
+  const direct = typeof body.contextId === 'string' ? body.contextId.trim() : '';
+  if (direct) {
+    return direct;
+  }
+  const scopeId = (
+    (typeof body.scope_id === 'string' ? body.scope_id : '') ||
+    (typeof body.scopeId === 'string' ? body.scopeId : '')
+  ).trim();
+  const scopeAuxId = (
+    (typeof body.scope_aux_id === 'string' ? body.scope_aux_id : '') ||
+    (typeof body.scopeAuxId === 'string' ? body.scopeAuxId : '')
+  ).trim();
+
+  if (scope === 'guildMember') {
+    if (scopeId && scopeAuxId) {
+      return `${scopeId}:${scopeAuxId}`;
+    }
+    return scopeId;
+  }
+  return scopeId;
 }
