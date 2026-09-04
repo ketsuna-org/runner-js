@@ -15,9 +15,10 @@ export function sanitizeConfigForScript(config: JsBotConfig): Record<string, unk
     return cached;
   }
 
-  const { token: _token, inboundWebhooks, ...safeConfig } = config;
+  const { token: _token, inboundWebhooks, databaseConfig, ...safeConfig } = config;
   const sanitized: Record<string, unknown> = {
     ...safeConfig,
+    databaseConfig: databaseConfig ? { type: databaseConfig.type || 'none' } : { type: 'none' },
     inboundWebhooks: (inboundWebhooks ?? []).map(({ secret: _secret, ...webhook }) => webhook),
   };
   const result = copyHostValue(sanitized, { redactSensitive: true }) as Record<string, unknown>;
