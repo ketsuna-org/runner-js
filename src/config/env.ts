@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
+import packageJson from '../../package.json' with { type: 'json' };
+
 export interface RunnerEnv {
   webHost: string;
   webPort: number;
@@ -21,7 +23,14 @@ function envOrDefault(key: string, fallback: string): string {
   return value.length > 0 ? value : fallback;
 }
 
-function resolveVersion(): string {
+// The bundled package.json is imported statically so Bun inlines it into the
+// compiled binary. This is required because `bun build --compile` runs from a
+// virtual filesystem ($bunfs/root/...) where `../../package.json` does not
+// exist, so a runtime readFileSync() would always fail and report 'unknown'.
+const bundledVersion: string =
+  typeof packageJson.version === 'string' ? packageJson.version : '';
+
+function versionFromPackageFile(): string {
   try {
     const pkgPath = path.join(
       path.dirname(fileURLToPath(import.meta.url)),
@@ -30,10 +39,34 @@ function resolveVersion(): string {
       'package.json',
     );
     const pkg = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: string };
-    return pkg.version ?? 'unknown';
+    return typeof pkg.version === 'string' ? pkg.version : '';
   } catch {
-    return 'unknown';
+    return '';
   }
+}
+
+function resolveVersion(): string {
+  // 1. Build/runtime override, useful to pin a version without rebuilding.
+  const fromEnv = (process.env.BOT_CREATOR_RUNNER_VERSION ?? '').trim();
+  if (fromEnv.length > 0) {
+    return fromEnv;
+  }
+
+  // 2. Version bundled at compile time from package.json (works in --compile).
+  if (bundledVersion.length > 0) {
+    return bundledVersion;
+  }
+
+  // 3. Read package.json from disk when running from source.
+  const fromFile = versionFromPackageFile();
+  if (fromFile.length > 0) {
+    return fromFile;
+  }
+
+  // 4. Last resort: the version genuinely cannot be determined. We return a
+  // stable sentinel instead of throwing so the runner still starts and the
+  // health endpoint stays reachable for diagnostics.
+  return 'unknown';
 }
 
 export function isManagedRunner(
