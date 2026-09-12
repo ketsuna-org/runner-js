@@ -7,7 +7,7 @@ const log = (level: 'info' | 'warn' | 'error' | 'debug', message: string) => {
   console[level === 'info' || level === 'debug' ? 'log' : 'warn'](`[runner] ${message}`);
 };
 logFfmpegStatus(log);
-logVoiceDependencyStatus(log);
+await logVoiceDependencyStatus(log);
 
 startMainServer().catch((error) => {
   console.error('[FATAL]', error);

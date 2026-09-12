@@ -24,7 +24,12 @@ describe('HTTP server integration', () => {
 
     const health = await app.request('/health');
     expect(health.status).toBe(200);
-    expect(await health.json()).toEqual({ ok: true });
+    expect(await health.json()).toEqual({
+      ok: true,
+      version: env.version,
+      engine: 'javascript',
+      runtime: 'bun',
+    });
 
     const info = await app.request('/');
     expect(info.status).toBe(200);

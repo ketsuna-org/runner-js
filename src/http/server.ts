@@ -71,7 +71,14 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     }),
   );
 
-  app.get('/health', (c) => c.json({ ok: true }));
+  app.get('/health', (c) =>
+    c.json({
+      ok: true,
+      version: deps.env.version,
+      engine: 'javascript',
+      runtime: 'bun',
+    }),
+  );
 
   app.get('/status', (c) => c.json(buildStatusPayload(deps.runtime)));
 
