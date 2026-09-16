@@ -64,4 +64,21 @@ describe('JsBotConfig', () => {
     validateJsBotConfig(nil);
     expect(nil.commands).toEqual([]);
   });
+
+  it('parses command aliases correctly', () => {
+    const config = parseJsBotConfig({
+      token: 'test-token',
+      commands: [
+        {
+          id: 'cmd-1',
+          type: 'command',
+          name: 'help',
+          aliases: ['h', 'aide', 'halp'],
+          script: 'true;',
+        },
+      ],
+    });
+
+    expect(config.commands[0]?.aliases).toEqual(['h', 'aide', 'halp']);
+  });
 });

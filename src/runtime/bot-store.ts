@@ -29,6 +29,7 @@ interface PersistedBotEntry {
 
 export class BotStore {
   private readonly meta = new Map<string, BotStoreMeta>();
+  private readonly memoryConfigs = new Map<string, JsBotConfig>();
   private hydrated = false;
 
   constructor(private readonly storeDir: string) {}
@@ -39,6 +40,19 @@ export class BotStore {
 
   private fileForBot(botId: string): string {
     return path.join(this.storeDir, `${this.safeBotId(botId)}.json`);
+  }
+
+  private sanitizeForStorage(config: JsBotConfig): JsBotConfig {
+    const { token: _token, databaseConfig, inboundWebhooks, ...safeConfig } = config;
+    return {
+      ...safeConfig,
+      token: '',
+      databaseConfig: databaseConfig ? { type: databaseConfig.type || 'none' } : { type: 'none' },
+      inboundWebhooks: (inboundWebhooks ?? []).map(({ secret: _secret, ...wh }) => ({
+        ...wh,
+        secret: '',
+      })),
+    };
   }
 
   private async ensureHydrated(): Promise<void> {
@@ -82,11 +96,16 @@ export class BotStore {
     await this.ensureHydrated();
     await mkdir(this.storeDir, { recursive: true });
 
+    // Store complete runtime config in volatile RAM
+    this.memoryConfigs.set(botId, config);
+
+    // Persist ZERO secrets on disk
+    const sanitizedConfig = this.sanitizeForStorage(config);
     const entry: PersistedBotEntry = {
       id: botId,
       name: botName.trim() || botId,
       syncedAt: new Date().toISOString(),
-      config,
+      config: sanitizedConfig,
     };
     await writeFile(this.fileForBot(botId), JSON.stringify(entry), 'utf8');
     this.meta.set(botId, {
@@ -104,6 +123,16 @@ export class BotStore {
       if (!parsed.config) {
         return null;
       }
+      let config = parseJsBotConfig(parsed.config);
+      // Merge with in-memory secrets if active
+      const mem = this.memoryConfigs.get(botId);
+      if (mem) {
+        config = {
+          ...config,
+          token: mem.token || config.token,
+          databaseConfig: mem.databaseConfig || config.databaseConfig,
+        };
+      }
       const entry: RunnerBotEntry = {
         id: typeof parsed.id === 'string' && parsed.id.trim() ? parsed.id.trim() : botId,
         name:
@@ -114,7 +143,7 @@ export class BotStore {
           typeof parsed.syncedAt === 'string' && parsed.syncedAt.length > 0
             ? parsed.syncedAt
             : new Date().toISOString(),
-        config: parseJsBotConfig(parsed.config),
+        config,
       };
       this.meta.set(botId, {
         id: entry.id,
@@ -125,6 +154,7 @@ export class BotStore {
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         this.meta.delete(botId);
+        this.memoryConfigs.delete(botId);
         return null;
       }
       throw error;
