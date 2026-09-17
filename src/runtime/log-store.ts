@@ -24,14 +24,21 @@ export class LogStore {
     await this.hydrateFromFile();
   }
 
+  private static readonly MAX_LOG_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
   private async hydrateFromFile(): Promise<void> {
     try {
       const raw = await readFile(this.logFile, 'utf8');
       const lines = raw.split('\n').filter((line) => line.trim().length > 0);
       const slice = lines.slice(-this.maxLines);
+      const now = Date.now();
       for (const line of slice) {
         const parsed = parseStoredLogLine(line);
         if (parsed) {
+          const logTime = new Date(parsed.ts).getTime();
+          if (Number.isFinite(logTime) && now - logTime > LogStore.MAX_LOG_AGE_MS) {
+            continue; // Skip logs older than 7 days TTL
+          }
           this.lines.push(parsed);
         }
       }

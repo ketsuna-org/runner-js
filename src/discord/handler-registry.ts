@@ -69,7 +69,14 @@ export class HandlerRegistry {
       if (command.enabled === false) {
         continue;
       }
-      this.commandMap.set(command.name.trim().toLowerCase(), command);
+      const primaryName = command.name.trim().toLowerCase();
+      this.commandMap.set(primaryName, command);
+      for (const alias of command.aliases ?? []) {
+        const cleanAlias = alias.trim().toLowerCase();
+        if (cleanAlias && !this.commandMap.has(cleanAlias)) {
+          this.commandMap.set(cleanAlias, command);
+        }
+      }
       this.autocompleteBindings.push(
         ...collectAutocompleteBindings(
           command.name.trim().toLowerCase(),

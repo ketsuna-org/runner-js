@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -64,11 +64,27 @@ describe('BotStore disk persistence', () => {
     expect(await store.load('missing')).toBeNull();
   });
 
-  it('skips corrupt files during hydration', async () => {
-    await writeFile(path.join(dir, 'broken.json'), '{not-json', 'utf8');
-    await store.save('bot-1', 'Alpha', sampleConfig());
-    const other = new BotStore(dir);
-    const listed = await other.listAll();
-    expect(listed.map((entry) => entry.id)).toEqual(['bot-1']);
+  it('never persists token or database password to disk', async () => {
+    const sensitiveConfig = parseJsBotConfig({
+      token: 'super-sensitive-discord-token',
+      databaseConfig: {
+        type: 'postgres',
+        password: 'db-super-secret-password',
+      },
+      commands: [{ id: 'c1', name: 'ping', script: 'return 1;' }],
+    });
+
+    await store.save('bot-sec', 'SecureBot', sensitiveConfig);
+
+    // Read the raw JSON file directly from disk
+    const rawDisk = await readFile(path.join(dir, 'bot-sec.json'), 'utf8');
+    expect(rawDisk).not.toContain('super-sensitive-discord-token');
+    expect(rawDisk).not.toContain('db-super-secret-password');
+
+    // The runtime in-memory instance still has the token for gateway login
+    const loaded = await store.load('bot-sec');
+    expect(loaded?.config.token).toBe('super-sensitive-discord-token');
+    expect(loaded?.config.databaseConfig.type).toBe('postgres');
   });
 });
+

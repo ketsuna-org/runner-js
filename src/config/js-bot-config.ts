@@ -13,6 +13,7 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
   /** Discord application command type: chatInput | user | message */
   discordType: z.enum(['chatInput', 'user', 'message']).default('chatInput'),
   options: z.array(z.record(z.unknown())).default([]),
+  aliases: z.array(z.string()).default([]),
 });
 
 export const eventHandlerSchema = handlerBaseSchema.extend({
@@ -67,7 +68,7 @@ export const databaseConfigSchema = z
   .transform((val) => val ?? { type: 'none' as const });
 
 export const jsBotConfigSchema = z.object({
-  token: z.string().min(1),
+  token: z.string().default(''),
   intents: z.record(z.boolean()).default({}),
   prefix: z.string().optional(),
   autoRestart: z.boolean().default(true),

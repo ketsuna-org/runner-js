@@ -12,9 +12,14 @@ describe('LogStore', () => {
     const logFile = path.join(dir, 'runner.log');
 
     try {
+      const now = new Date();
+      const recentTs = new Date(now.getTime() - 1000 * 60).toISOString();
+      const expiredTs = new Date(now.getTime() - 8 * 24 * 3600 * 1000).toISOString();
+
       await writeFile(
         logFile,
-        '[2026-01-01T00:00:00.000Z] [INFO] [bot:bot-a] command executed\n',
+        `[${expiredTs}] [INFO] [bot:bot-a] old expired log\n` +
+          `[${recentTs}] [INFO] [bot:bot-a] command executed\n`,
         'utf8',
       );
 
@@ -22,7 +27,7 @@ describe('LogStore', () => {
       await store.init();
 
       expect(store.tailForBot('bot-a', 10)).toEqual([
-        '[2026-01-01T00:00:00.000Z] [INFO] command executed',
+        `[${recentTs}] [INFO] command executed`,
       ]);
       expect(store.tailForBot('bot-b', 10)).toEqual([]);
     } finally {
