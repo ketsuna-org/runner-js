@@ -230,4 +230,76 @@ describe('HTTP server integration', () => {
 
     await runtime.dispose();
   });
+
+  it('supports command delta sync and delete', async () => {
+    const dataDir = './data/test-http-commands';
+    const logFile = './data/test-http/logs/runner.log';
+    const env = {
+      ...loadRunnerEnv(),
+      dataDir,
+      logFile,
+      webHost: '127.0.0.1',
+      webPort: 0,
+      apiToken: '',
+    };
+
+    const logStore = new LogStore(env.logFile);
+    const runtime = await RuntimeController.create(env.dataDir, logStore, env);
+    const app = createHttpServer({ env, runtime, logStore });
+
+    const botId = 'cmd-delta-bot';
+    await app.request('/bots/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        botId,
+        botName: 'Command Delta Bot',
+        config: {
+          token: 'test-token',
+          commands: [],
+        },
+      }),
+    });
+
+    // 1. Sync a new command
+    const syncCmdRes = await app.request(`/bots/${botId}/commands/sync`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        commandId: 'cmd-ping',
+        command: {
+          id: 'cmd-ping',
+          name: 'ping',
+          description: 'Ping pong command',
+          script: 'reply("pong");',
+        },
+      }),
+    });
+    expect(syncCmdRes.status).toBe(200);
+    const syncCmdBody = (await syncCmdRes.json()) as { ok: boolean; commandId: string };
+    expect(syncCmdBody.ok).toBe(true);
+    expect(syncCmdBody.commandId).toBe('cmd-ping');
+
+    // Verify command is in bot config
+    const entryAfterSync = await runtime.botStore.load(botId);
+    expect(entryAfterSync?.config.commands?.length).toBe(1);
+    expect(entryAfterSync?.config.commands?.[0].name).toBe('ping');
+
+    // 2. Delete the command
+    const delCmdRes = await app.request(`/bots/${botId}/commands/delete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        commandId: 'cmd-ping',
+      }),
+    });
+    expect(delCmdRes.status).toBe(200);
+    const delCmdBody = (await delCmdRes.json()) as { ok: boolean; commandId: string };
+    expect(delCmdBody.ok).toBe(true);
+
+    const entryAfterDel = await runtime.botStore.load(botId);
+    expect(entryAfterDel?.config.commands?.length).toBe(0);
+
+    await runtime.dispose();
+  });
 });

@@ -1,6 +1,6 @@
 import { Client, Events } from 'discord.js';
 
-import type { JsBotConfig } from '../config/js-bot-config.js';
+import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   buildEffectiveIntentsMap,
   buildSafeFallbackIntentsMap,
@@ -235,6 +235,47 @@ export class JsDiscordRunner {
     this.registry.updateConfig(config, this.databaseManager?.handles);
     applyPresence(this.client, config);
     await registerSlashCommands(this.client, config.token, config.commands ?? []);
+  }
+
+  async upsertCommand(command: CommandHandler): Promise<void> {
+    const nextCommands = (this.config.commands ?? []).filter((c) => c.id !== command.id);
+    nextCommands.push(command);
+    this.config = { ...this.config, commands: nextCommands };
+
+    if (!this.registry) {
+      return;
+    }
+
+    this.registry.upsertCommand(command);
+
+    if (this.client) {
+      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? []).catch(
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.onLog('error', `Failed to register slash commands after command update: ${message}`);
+        },
+      );
+    }
+  }
+
+  async deleteCommand(commandId: string): Promise<void> {
+    const nextCommands = (this.config.commands ?? []).filter((c) => c.id !== commandId);
+    this.config = { ...this.config, commands: nextCommands };
+
+    if (!this.registry) {
+      return;
+    }
+
+    this.registry.deleteCommand(commandId);
+
+    if (this.client) {
+      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? []).catch(
+        (error: unknown) => {
+          const message = error instanceof Error ? error.message : String(error);
+          this.onLog('error', `Failed to register slash commands after command delete: ${message}`);
+        },
+      );
+    }
   }
 
   async triggerWebhook(

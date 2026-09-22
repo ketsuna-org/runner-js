@@ -233,6 +233,80 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     }
   });
 
+  app.post('/bots/:id/commands/sync', async (c) => {
+    const botId = c.req.param('id');
+    let body: {
+      commandId?: string;
+      command?: Record<string, unknown>;
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      throw badRequest('Missing or invalid JSON body.');
+    }
+
+    const rawCommand = body.command;
+    if (!rawCommand || typeof rawCommand !== 'object') {
+      throw badRequest('Missing or invalid command payload.');
+    }
+
+    const commandId = (body.commandId ?? (rawCommand as { id?: string }).id ?? '').toString().trim();
+    if (!commandId) {
+      throw badRequest('Missing commandId.');
+    }
+
+    try {
+      const parsed = await deps.runtime.upsertCommand(botId, rawCommand, commandId);
+      deps.logStore.append('info', `Synced command "${parsed.name}" (${parsed.id}) for bot ${botId}`, botId);
+      return c.json({
+        ok: true,
+        botId,
+        commandId: parsed.id,
+        running: deps.runtime.isBotRunning(botId),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('not found')) {
+        throw notFound(message);
+      }
+      throw badRequest(`Invalid command: ${message}`);
+    }
+  });
+
+  app.post('/bots/:id/commands/delete', async (c) => {
+    const botId = c.req.param('id');
+    let body: {
+      commandId?: string;
+    } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      throw badRequest('Missing or invalid JSON body.');
+    }
+
+    const commandId = (body.commandId ?? '').toString().trim();
+    if (!commandId) {
+      throw badRequest('Missing commandId.');
+    }
+
+    try {
+      await deps.runtime.deleteCommand(botId, commandId);
+      deps.logStore.append('info', `Deleted command "${commandId}" for bot ${botId}`, botId);
+      return c.json({
+        ok: true,
+        botId,
+        commandId,
+        running: deps.runtime.isBotRunning(botId),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('not found')) {
+        throw notFound(message);
+      }
+      throw badRequest(`Failed to delete command: ${message}`);
+    }
+  });
+
   app.get('/pool/config', (c) =>
     c.json({
       max_bots: deps.env.poolMaxBots,

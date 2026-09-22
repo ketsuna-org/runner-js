@@ -1,5 +1,9 @@
-import type { JsBotConfig } from '../config/js-bot-config.js';
-import { parseJsBotConfig, validateJsBotConfig } from '../config/js-bot-config.js';
+import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
+import {
+  commandHandlerSchema,
+  parseJsBotConfig,
+  validateJsBotConfig,
+} from '../config/js-bot-config.js';
 import path from 'node:path';
 import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
@@ -107,6 +111,63 @@ export class RuntimeController {
     }
 
     return this.processManager.reloadBot(botId);
+  }
+
+  async upsertCommand(
+    botId: string,
+    rawCommand: Record<string, unknown>,
+    commandId?: string,
+  ): Promise<CommandHandler> {
+    await this.requireBotEntry(botId);
+    const parsed = commandHandlerSchema.parse({
+      ...rawCommand,
+      id: (commandId ?? rawCommand.id ?? '').toString().trim() || (rawCommand.name ?? '').toString().trim(),
+    });
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const existingCommands = config.commands ?? [];
+      const index = existingCommands.findIndex(
+        (c) => c.id === parsed.id || c.name.toLowerCase() === parsed.name.toLowerCase(),
+      );
+      const nextCommands = [...existingCommands];
+      if (index >= 0) {
+        nextCommands[index] = parsed;
+      } else {
+        nextCommands.push(parsed);
+      }
+      return {
+        ...config,
+        commands: nextCommands,
+      };
+    });
+
+    if (this.isBotRunning(botId)) {
+      await this.processManager.upsertCommand(botId, parsed);
+    }
+
+    return parsed;
+  }
+
+  async deleteCommand(botId: string, commandId: string): Promise<void> {
+    await this.requireBotEntry(botId);
+    const normalizedId = commandId.trim();
+    if (!normalizedId) {
+      throw new Error('Missing command ID.');
+    }
+
+    await this.botStore.updateConfig(botId, (config) => {
+      const nextCommands = (config.commands ?? []).filter(
+        (c) => c.id !== normalizedId && c.name.toLowerCase() !== normalizedId.toLowerCase(),
+      );
+      return {
+        ...config,
+        commands: nextCommands,
+      };
+    });
+
+    if (this.isBotRunning(botId)) {
+      await this.processManager.deleteCommand(botId, normalizedId);
+    }
   }
 
   async triggerInboundWebhook(
