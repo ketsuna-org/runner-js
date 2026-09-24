@@ -184,6 +184,57 @@ export class HandlerRegistry {
     this.mount();
   }
 
+  upsertCommand(command: CommandHandler): void {
+    this.deleteCommand(command.id, command.name);
+
+    if (command.enabled === false) {
+      return;
+    }
+
+    const primaryName = command.name.trim().toLowerCase();
+    this.commandMap.set(primaryName, command);
+    for (const alias of command.aliases ?? []) {
+      const cleanAlias = alias.trim().toLowerCase();
+      if (cleanAlias && !this.commandMap.has(cleanAlias)) {
+        this.commandMap.set(cleanAlias, command);
+      }
+    }
+
+    this.autocompleteBindings.push(
+      ...collectAutocompleteBindings(
+        primaryName,
+        (command.options ?? []).filter(
+          (option): option is Record<string, unknown> =>
+            typeof option === 'object' && option !== null,
+        ),
+      ),
+    );
+  }
+
+  deleteCommand(commandId?: string, commandName?: string): void {
+    const cleanName = commandName?.trim().toLowerCase();
+    const cleanId = commandId?.trim();
+
+    for (const [key, cmd] of this.commandMap.entries()) {
+      const matchesId = Boolean(cleanId && cmd.id === cleanId);
+      const matchesName = Boolean(cleanName && cmd.name.trim().toLowerCase() === cleanName);
+      const matchesAlias = Boolean(
+        cleanName && (cmd.aliases ?? []).some((a) => a.trim().toLowerCase() === cleanName),
+      );
+
+      if (matchesId || matchesName || matchesAlias) {
+        this.commandMap.delete(key);
+      }
+    }
+
+    this.autocompleteBindings = this.autocompleteBindings.filter((binding) => {
+      if (cleanName && binding.commandName.trim().toLowerCase() === cleanName) {
+        return false;
+      }
+      return true;
+    });
+  }
+
   getWebhookHandler(pathKey: string): InboundWebhookHandler | undefined {
     return this.webhookMap.get(pathKey.trim().toLowerCase());
   }

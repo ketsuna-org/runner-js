@@ -1,4 +1,4 @@
-import type { JsBotConfig } from '../config/js-bot-config.js';
+import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordTokenUnauthorized,
@@ -30,6 +30,8 @@ export interface BotRunnerHandle {
   start(): Promise<void>;
   stop(): Promise<void>;
   reload(config: JsBotConfig): Promise<void>;
+  upsertCommand?(command: CommandHandler): Promise<void>;
+  deleteCommand?(commandId: string): Promise<void>;
   triggerWebhook(
     pathKey: string,
     payload: unknown,
@@ -303,6 +305,28 @@ export class BotSupervisor {
       });
     }
     return true;
+  }
+
+  async upsertCommand(botId: string, command: CommandHandler): Promise<void> {
+    if (!this.isRunning(botId)) {
+      return;
+    }
+    const bot = this.bots.get(botId);
+    if (!bot) {
+      return;
+    }
+    await bot.runner.upsertCommand?.(command);
+  }
+
+  async deleteCommand(botId: string, commandId: string): Promise<void> {
+    if (!this.isRunning(botId)) {
+      return;
+    }
+    const bot = this.bots.get(botId);
+    if (!bot) {
+      return;
+    }
+    await bot.runner.deleteCommand?.(commandId);
   }
 
   async triggerInboundWebhook(
