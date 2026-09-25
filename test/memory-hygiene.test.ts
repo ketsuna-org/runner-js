@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 
-import { readResponseBodyCapped } from '../src/runtime/memory-hygiene.js';
+import {
+  createCappedFetch,
+  readResponseBodyCapped,
+} from '../src/runtime/memory-hygiene.js';
 
 describe('readResponseBodyCapped', () => {
   it('rejects early when Content-Length exceeds the limit', async () => {
@@ -45,5 +48,55 @@ describe('readResponseBodyCapped', () => {
     await expect(readResponseBodyCapped(response, 25)).rejects.toThrow(
       /exceeds 25 byte limit/,
     );
+  });
+});
+
+describe('createCappedFetch', () => {
+  const bigBody = 'x'.repeat(200);
+
+  it('caps text(), json() and arrayBuffer() at the limit', async () => {
+    const fakeFetch = (async () => new Response(bigBody)) as unknown as typeof fetch;
+    const capped = createCappedFetch(fakeFetch, 50);
+
+    await expect(capped('http://example.test').then((r) => r.text())).rejects.toThrow(
+      /exceeds 50 byte limit/,
+    );
+    await expect(capped('http://example.test').then((r) => r.json())).rejects.toThrow(
+      /exceeds 50 byte limit/,
+    );
+    await expect(
+      capped('http://example.test').then((r) => r.arrayBuffer()),
+    ).rejects.toThrow(/exceeds 50 byte limit/);
+  });
+
+  it('lets a body under the limit through, unchanged', async () => {
+    const fakeFetch = (async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        headers: { 'content-type': 'application/json' },
+      })) as unknown as typeof fetch;
+    const capped = createCappedFetch(fakeFetch, 1024);
+
+    const response = await capped('http://example.test');
+    expect(await response.json()).toEqual({ ok: true });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('application/json');
+  });
+
+  it('refuses clone(), whose body would bypass the cap', async () => {
+    const fakeFetch = (async () => new Response('hello')) as unknown as typeof fetch;
+    const capped = createCappedFetch(fakeFetch, 1024);
+
+    const response = await capped('http://example.test');
+    expect(() => response.clone()).toThrow(/clone\(\) is disabled/);
+  });
+
+  // La portée du garde-fou, dite franchement : ce n'est PAS un bac à sable.
+  it('does not cap the raw body stream (documented limit, not a sandbox)', async () => {
+    const fakeFetch = (async () => new Response(bigBody)) as unknown as typeof fetch;
+    const capped = createCappedFetch(fakeFetch, 50);
+
+    const response = await capped('http://example.test');
+    const raw = await new Response(response.body).text();
+    expect(raw.length).toBe(200);
   });
 });

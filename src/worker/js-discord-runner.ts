@@ -15,6 +15,7 @@ import {
   isDiscordGatewayFatalClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
+import type { CommandSyncReport } from '../discord/application-command-sync.js';
 import { registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { applyPresence } from '../discord/presence.js';
@@ -171,12 +172,12 @@ export class JsDiscordRunner {
         'info',
         `Discord client ready as ${client.user?.tag ?? client.user?.username ?? 'unknown'} (${this.guildCount} server(s))`,
       );
-      void registerSlashCommands(client, this.config.token, this.config.commands ?? []).catch(
-        (error: unknown) => {
+      void registerSlashCommands(client, this.config.token, this.config.commands ?? [])
+        .then((report) => this.onLog('info', describeCommandSync(report)))
+        .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
           this.onLog('error', `Failed to register slash commands: ${message}`);
-        },
-      );
+        });
     });
 
     this.client.on('error', (error: Error) => {
@@ -234,7 +235,12 @@ export class JsDiscordRunner {
 
     this.registry.updateConfig(config, this.databaseManager?.handles);
     applyPresence(this.client, config);
-    await registerSlashCommands(this.client, config.token, config.commands ?? []);
+    const report = await registerSlashCommands(
+      this.client,
+      config.token,
+      config.commands ?? [],
+    );
+    this.onLog('info', describeCommandSync(report));
   }
 
   async upsertCommand(command: CommandHandler): Promise<void> {
@@ -249,12 +255,12 @@ export class JsDiscordRunner {
     this.registry.upsertCommand(command);
 
     if (this.client) {
-      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? []).catch(
-        (error: unknown) => {
+      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? [])
+        .then((report) => this.onLog('info', describeCommandSync(report)))
+        .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
           this.onLog('error', `Failed to register slash commands after command update: ${message}`);
-        },
-      );
+        });
     }
   }
 
@@ -269,12 +275,12 @@ export class JsDiscordRunner {
     this.registry.deleteCommand(commandId);
 
     if (this.client) {
-      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? []).catch(
-        (error: unknown) => {
+      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? [])
+        .then((report) => this.onLog('info', describeCommandSync(report)))
+        .catch((error: unknown) => {
           const message = error instanceof Error ? error.message : String(error);
           this.onLog('error', `Failed to register slash commands after command delete: ${message}`);
-        },
-      );
+        });
     }
   }
 
@@ -323,4 +329,24 @@ export class JsDiscordRunner {
       guildCount: this.guildCount,
     };
   }
+}
+
+/**
+ * One log line per registration, saying WHAT happened.
+ *
+ * "No commands in Discord" is otherwise diagnosed by hand in the bot log: a bot
+ * whose configuration carries no command reports "already up to date (0
+ * unchanged)", which is not the same thing as a registration failure — and the
+ * old version logged nothing at all on success.
+ */
+function describeCommandSync(report: CommandSyncReport): string {
+  const changed = report.created.length + report.updated.length + report.removed.length;
+  if (changed === 0) {
+    return `Slash commands already up to date (${report.unchanged.length} unchanged).`;
+  }
+  return (
+    `Slash commands synced: ${report.created.length} created, ` +
+    `${report.updated.length} updated, ${report.removed.length} removed, ` +
+    `${report.unchanged.length} unchanged.`
+  );
 }

@@ -590,6 +590,20 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     }
 
     const expectedSecret = (webhook.secret ?? '').trim();
+    // FAIL CLOSED. A webhook without a secret used to be accepted without any
+    // check at all: the secret was the only credential of this route (auth.ts
+    // deliberately skips the Bearer token for /inbound/), so an empty secret
+    // meant "anyone who can reach this port can run the bot's script" — in a
+    // process that hosts EVERY bot of the node. The configuration can reach
+    // that state on its own: bot-store.ts strips secrets before writing the
+    // config to disk, so a restarted runner that has not been re-pushed yet
+    // holds an empty secret. Refusing is louder and reversible; accepting
+    // silently is neither.
+    if (expectedSecret.length === 0) {
+      throw unauthorized(
+        'Inbound webhook has no secret configured; set one before calling this route.',
+      );
+    }
     const providedSecret = (
       c.req.header('x-bot-webhook-secret') ??
       c.req.header('x-webhook-secret') ??
@@ -597,7 +611,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       ''
     ).trim();
 
-    if (expectedSecret.length > 0 && providedSecret !== expectedSecret) {
+    if (providedSecret !== expectedSecret) {
       throw unauthorized('Invalid webhook secret.');
     }
 
