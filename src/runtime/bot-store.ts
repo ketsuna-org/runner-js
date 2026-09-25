@@ -131,6 +131,21 @@ export class BotStore {
           ...config,
           token: mem.token || config.token,
           databaseConfig: mem.databaseConfig || config.databaseConfig,
+          // Les secrets de webhook sont retirés du disque par
+          // `sanitizeForStorage` et n'étaient PAS restaurés ici : `load()`
+          // rendait donc toujours `secret: ''`, ce qui faisait de la vérification
+          // de `/inbound/` une vérification morte — n'importe qui pouvait appeler
+          // le webhook, avec ou sans secret.
+          inboundWebhooks: config.inboundWebhooks.map((webhook) => {
+            const source = mem.inboundWebhooks?.find(
+              (candidate) =>
+                candidate.id === webhook.id ||
+                (candidate.path.length > 0 && candidate.path === webhook.path),
+            );
+            return source && source.secret.length > 0
+              ? { ...webhook, secret: source.secret }
+              : webhook;
+          }),
         };
       }
       const entry: RunnerBotEntry = {

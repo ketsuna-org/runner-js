@@ -302,4 +302,63 @@ describe('HTTP server integration', () => {
 
     await runtime.dispose();
   });
+
+  // Le secret du webhook est le SEUL contrôle d'accès de cette route : `auth.ts`
+  // saute volontairement le jeton Bearer pour /inbound/. Sans secret, la route
+  // était donc OUVERTE — et cette configuration s'atteint toute seule, puisque
+  // `bot-store.ts` retire les secrets du fichier de config sur disque (un runner
+  // redémarré et pas encore re-poussé porte un secret vide).
+  it('refuses an inbound webhook without a secret, and checks the secret otherwise', async () => {
+    const env = {
+      ...loadRunnerEnv(),
+      dataDir: './data/test-http-inbound',
+      logFile: './data/test-http-inbound/logs/runner.log',
+      webHost: '127.0.0.1',
+      webPort: 0,
+      apiToken: '',
+    };
+
+    const logStore = new LogStore(env.logFile);
+    const runtime = await RuntimeController.create(env.dataDir, logStore, env);
+    const app = createHttpServer({ env, runtime, logStore });
+
+    const sync = await app.request('/bots/sync', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        botId: 'inbound-bot',
+        botName: 'Inbound Bot',
+        config: {
+          token: 'test-token',
+          commands: [],
+          inboundWebhooks: [
+            { id: 'wh_open', path: 'sans-secret', secret: '', script: 'console.log(1);' },
+            { id: 'wh_secret', path: 'avec-secret', secret: 's3cret', script: 'console.log(1);' },
+          ],
+        },
+      }),
+    });
+    expect(sync.status).toBe(200);
+
+    const post = (path: string, headers: Record<string, string> = {}) =>
+      app.request(path, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...headers },
+        body: '{}',
+      });
+
+    const sansSecret = await post('/bots/inbound-bot/inbound/sans-secret');
+    expect(sansSecret.status).toBe(401);
+    expect(await sansSecret.text()).toContain('no secret');
+
+    const mauvaisSecret = await post('/bots/inbound-bot/inbound/avec-secret', {
+      'x-bot-webhook-secret': 'faux',
+    });
+    expect(mauvaisSecret.status).toBe(401);
+
+    // Le bon secret passe la porte ; le bot n'est pas démarré, donc 409 — c'est
+    // bien la preuve que le refus précédent venait du secret, pas du démarrage.
+    const bonSecret = await post('/bots/inbound-bot/inbound/avec-secret?secret=s3cret');
+    expect(bonSecret.status).toBe(409);
+  });
 });

@@ -3,6 +3,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { runnerPackageRoot } from '../config/env.js';
+import { createCappedFetch } from '../runtime/memory-hygiene.js';
 import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import type { ScriptRuntime } from './script-runtime.js';
@@ -24,6 +25,8 @@ function createConsoleProxy(logger: ScriptLogger): Console {
     debug: (...args: unknown[]) => logger.debug(...args),
   } as Console;
 }
+
+const cappedFetch = createCappedFetch(globalThis.fetch.bind(globalThis));
 
 const tokenSafeClientProxies = new WeakMap<object, unknown>();
 
@@ -135,7 +138,9 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       context.pgsql,
       context.mongo,
       createConsoleProxy(logger),
-      globalThis.fetch.bind(globalThis),
+      // Bounded: the node hosts EVERY bot of the process, so an unbounded
+      // script-side download is not a mistake local to the bot that made it.
+      cappedFetch,
       moduleRequire,
       setTimeout,
       clearTimeout,
