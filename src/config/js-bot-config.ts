@@ -14,6 +14,13 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
   discordType: z.enum(['chatInput', 'user', 'message']).default('chatInput'),
   options: z.array(z.record(z.unknown())).default([]),
   aliases: z.array(z.string()).default([]),
+  /**
+   * Discord `default_member_permissions` (a bitfield as text, e.g. "8" for
+   * administrator). Optional on purpose: an undeclared permission means "do not
+   * touch what Discord already has", which is what keeps a command restricted to
+   * administrators from being reopened to everyone at the next registration.
+   */
+  defaultMemberPermissions: z.union([z.string(), z.number()]).optional(),
 });
 
 export const eventHandlerSchema = handlerBaseSchema.extend({
