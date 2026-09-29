@@ -16,7 +16,7 @@ import {
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
 import type { CommandSyncReport } from '../discord/application-command-sync.js';
-import { registerSlashCommands } from '../discord/command-registerer.js';
+import { commandRegistrationsEqual, registerSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { applyPresence } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
@@ -206,6 +206,7 @@ export class JsDiscordRunner {
   }
 
   async reload(config: JsBotConfig): Promise<void> {
+    const registrationChanged = !commandRegistrationsEqual(this.config.commands ?? [], config.commands ?? []);
     config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
       config.scopedVariableDefinitions,
       this.config.scopedVariableDefinitions,
@@ -235,6 +236,7 @@ export class JsDiscordRunner {
 
     this.registry.updateConfig(config, this.databaseManager?.handles);
     applyPresence(this.client, config);
+    if (!registrationChanged) return;
     const report = await registerSlashCommands(
       this.client,
       config.token,
@@ -246,6 +248,7 @@ export class JsDiscordRunner {
   async upsertCommand(command: CommandHandler): Promise<void> {
     const nextCommands = (this.config.commands ?? []).filter((c) => c.id !== command.id);
     nextCommands.push(command);
+    const registrationChanged = !commandRegistrationsEqual(this.config.commands ?? [], nextCommands);
     this.config = { ...this.config, commands: nextCommands };
 
     if (!this.registry) {
@@ -254,7 +257,7 @@ export class JsDiscordRunner {
 
     this.registry.upsertCommand(command);
 
-    if (this.client) {
+    if (this.client && registrationChanged) {
       void registerSlashCommands(this.client, this.config.token, this.config.commands ?? [])
         .then((report) => this.onLog('info', describeCommandSync(report)))
         .catch((error: unknown) => {
