@@ -50,6 +50,23 @@ export function toDiscordCommand(command: CommandHandler): DesiredApplicationCom
   return { type, name: command.name };
 }
 
+/** Execution changes do not require even a Discord registration lookup. */
+export function commandRegistrationsEqual(before: CommandHandler[], after: CommandHandler[]): boolean {
+  const canonical = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(canonical);
+    if (value !== null && typeof value === 'object') {
+      return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, entry]) => [key, canonical(entry)]));
+    }
+    return value;
+  };
+  const signature = (commands: CommandHandler[]) => JSON.stringify(canonical(commands
+    .filter((command) => command.enabled !== false)
+    .map(toDiscordCommand)
+    .sort((a, b) => a.type - b.type || a.name.localeCompare(b.name))));
+  return signature(before) === signature(after);
+}
+
 /**
  * Aligns Discord's application commands with the bot's configuration.
  *

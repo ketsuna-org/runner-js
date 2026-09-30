@@ -35,7 +35,6 @@ export class HandlerRegistry {
   private readonly disposers: HandlerDisposer[] = [];
   private readonly scheduledTimers: NodeJS.Timeout[] = [];
   private readonly commandMap = new Map<string, CommandHandler>();
-  private readonly eventMap = new Map<string, EventHandler>();
   private readonly webhookMap = new Map<string, InboundWebhookHandler>();
   private readonly inFlightInteractions = new Set<string>();
   private readonly handledInteractions = new Set<string>();
@@ -92,7 +91,6 @@ export class HandlerRegistry {
       if (event.enabled === false) {
         continue;
       }
-      this.eventMap.set(event.name.trim(), event);
       this.attachEvent(event);
     }
 
@@ -267,7 +265,6 @@ export class HandlerRegistry {
     this.scheduledTimers.length = 0;
 
     this.commandMap.clear();
-    this.eventMap.clear();
     this.webhookMap.clear();
     this.autocompleteBindings = [];
   }

@@ -127,13 +127,14 @@ export function validateJsBotConfig(config: JsBotConfig): void {
     commandNames.add(key);
   }
 
-  const eventNames = new Set<string>();
+  // Several independent handlers may subscribe to the same Discord event.
+  // Their IDs, rather than the event name, distinguish the handlers.
+  const eventIds = new Set<string>();
   for (const event of config.events ?? []) {
-    const key = event.name.trim();
-    if (eventNames.has(key)) {
-      throw new Error(`Duplicate event handler: ${event.name}`);
+    if (eventIds.has(event.id)) {
+      throw new Error(`Duplicate event handler ID: ${event.id}`);
     }
-    eventNames.add(key);
+    eventIds.add(event.id);
   }
 
   const webhookPaths = new Set<string>();

@@ -45,6 +45,10 @@ describe('HTTP server integration', () => {
         config: {
           token: 'test-token',
           commands: [],
+          events: [
+            { id: 'buttons', name: 'interactionCreate', script: 'true;' },
+            { id: 'menus', name: 'interactionCreate', script: 'true;' },
+          ],
         },
       }),
     });

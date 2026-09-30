@@ -6,6 +6,26 @@ import {
 } from '../src/config/js-bot-config.js';
 
 describe('JsBotConfig', () => {
+  it('accepts independent handlers for the same event', () => {
+    const config = parseJsBotConfig({
+      events: [
+        { id: 'buttons', name: 'interactionCreate', script: 'true;' },
+        { id: 'menus', name: 'interactionCreate', script: 'true;' },
+      ],
+    });
+    expect(() => validateJsBotConfig(config)).not.toThrow();
+    expect(config.events).toHaveLength(2);
+  });
+
+  it('rejects duplicate event identities', () => {
+    const config = parseJsBotConfig({
+      events: [
+        { id: 'same', name: 'interactionCreate', script: 'true;' },
+        { id: 'same', name: 'messageCreate', script: 'true;' },
+      ],
+    });
+    expect(() => validateJsBotConfig(config)).toThrow(/Duplicate event handler ID/);
+  });
   it('parses a minimal valid config', () => {
     const config = parseJsBotConfig({
       token: 'test-token',
