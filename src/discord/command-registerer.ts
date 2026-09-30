@@ -44,10 +44,18 @@ export function toDiscordCommand(command: CommandHandler): DesiredApplicationCom
     if (permissions !== undefined && permissions !== null && `${permissions}`.length > 0) {
       payload.default_member_permissions = `${permissions}`;
     }
+    if (command.contexts !== undefined) payload.contexts = command.contexts;
+    if (command.integrationTypes !== undefined) payload.integration_types = command.integrationTypes;
     return payload;
   }
   // Context menu commands have no description/options.
-  return { type, name: command.name };
+  return {
+    type, name: command.name,
+    ...(command.defaultMemberPermissions !== undefined
+      ? { default_member_permissions: `${command.defaultMemberPermissions}` } : {}),
+    ...(command.contexts !== undefined ? { contexts: command.contexts } : {}),
+    ...(command.integrationTypes !== undefined ? { integration_types: command.integrationTypes } : {}),
+  };
 }
 
 /** Execution changes do not require even a Discord registration lookup. */

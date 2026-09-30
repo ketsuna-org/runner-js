@@ -24,7 +24,7 @@ describe('execution-only command updates', () => {
   it('detects publication changes and ignores list ordering', () => {
     const before = command();
     for (const change of [{ name: 'find' }, { description: 'New' }, { enabled: false },
-      { defaultMemberPermissions: '8' }, { discordType: 'user' as const }]) {
+      { defaultMemberPermissions: '8' }, { contexts: [0] }, { integrationTypes: [0] }, { discordType: 'user' as const }]) {
       expect(commandRegistrationsEqual([before], [command(change)])).toBe(false);
     }
     const second = command({ id: 'second', name: 'ping' });
