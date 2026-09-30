@@ -21,6 +21,8 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
    * administrators from being reopened to everyone at the next registration.
    */
   defaultMemberPermissions: z.union([z.string(), z.number()]).optional(),
+  contexts: z.array(z.number().int().min(0).max(2)).max(3).optional(),
+  integrationTypes: z.array(z.number().int().min(0).max(1)).max(2).optional(),
 });
 
 export const eventHandlerSchema = handlerBaseSchema.extend({

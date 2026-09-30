@@ -12,6 +12,8 @@ export interface DesiredApplicationCommand {
   description?: string;
   options?: unknown[];
   default_member_permissions?: string;
+  contexts?: number[];
+  integration_types?: number[];
 }
 
 /** The subset of `@discordjs/rest`'s REST this module needs (so tests can fake it). */
