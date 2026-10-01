@@ -1,6 +1,6 @@
 import { ApplicationCommandType, REST, type Client } from 'discord.js';
 
-import type { CommandHandler } from '../config/js-bot-config.js';
+import { supportsSlash, type CommandHandler } from '../config/js-bot-config.js';
 import {
   applyCommandDiff,
   type CommandRest,
@@ -69,7 +69,7 @@ export function commandRegistrationsEqual(before: CommandHandler[], after: Comma
     return value;
   };
   const signature = (commands: CommandHandler[]) => JSON.stringify(canonical(commands
-    .filter((command) => command.enabled !== false)
+    .filter((command) => command.enabled !== false && supportsSlash(command))
     .map(toDiscordCommand)
     .sort((a, b) => a.type - b.type || a.name.localeCompare(b.name))));
   return signature(before) === signature(after);
@@ -93,7 +93,7 @@ export async function registerSlashCommands(
   }
 
   const desired = commands
-    .filter((command) => command.enabled !== false)
+    .filter((command) => command.enabled !== false && supportsSlash(command))
     .map((command) => toDiscordCommand(command));
 
   return applyCommandDiff(rest, client.user.id, desired);
