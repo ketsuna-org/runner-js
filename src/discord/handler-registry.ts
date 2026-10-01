@@ -8,12 +8,14 @@ import {
   type Message,
 } from 'discord.js';
 
-import type {
-  CommandHandler,
-  EventHandler,
-  InboundWebhookHandler,
-  JsBotConfig,
-  ScheduledHandler,
+import {
+  supportsSlash,
+  supportsPrefix,
+  type CommandHandler,
+  type EventHandler,
+  type InboundWebhookHandler,
+  type JsBotConfig,
+  type ScheduledHandler,
 } from '../config/js-bot-config.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
@@ -34,6 +36,7 @@ type HandlerDisposer = () => void;
 export class HandlerRegistry {
   private readonly disposers: HandlerDisposer[] = [];
   private readonly scheduledTimers: NodeJS.Timeout[] = [];
+  private readonly prefixMap = new Map<string, CommandHandler>();
   private readonly commandMap = new Map<string, CommandHandler>();
   private readonly webhookMap = new Map<string, InboundWebhookHandler>();
   private readonly inFlightInteractions = new Set<string>();
@@ -68,23 +71,7 @@ export class HandlerRegistry {
       if (command.enabled === false) {
         continue;
       }
-      const primaryName = command.name.trim().toLowerCase();
-      this.commandMap.set(primaryName, command);
-      for (const alias of command.aliases ?? []) {
-        const cleanAlias = alias.trim().toLowerCase();
-        if (cleanAlias && !this.commandMap.has(cleanAlias)) {
-          this.commandMap.set(cleanAlias, command);
-        }
-      }
-      this.autocompleteBindings.push(
-        ...collectAutocompleteBindings(
-          command.name.trim().toLowerCase(),
-          (command.options ?? []).filter(
-            (option): option is Record<string, unknown> =>
-              typeof option === 'object' && option !== null,
-          ),
-        ),
-      );
+      this.addCommand(command);
     }
 
     for (const event of this.config.events ?? []) {
@@ -156,7 +143,7 @@ export class HandlerRegistry {
           return;
         }
 
-        const handler = this.commandMap.get(commandName);
+        const handler = this.prefixMap.get(commandName);
         if (!handler) {
           return;
         }
@@ -189,42 +176,45 @@ export class HandlerRegistry {
       return;
     }
 
+    this.addCommand(command);
+  }
+
+  private addCommand(command: CommandHandler): void {
     const primaryName = command.name.trim().toLowerCase();
-    this.commandMap.set(primaryName, command);
-    for (const alias of command.aliases ?? []) {
-      const cleanAlias = alias.trim().toLowerCase();
-      if (cleanAlias && !this.commandMap.has(cleanAlias)) {
-        this.commandMap.set(cleanAlias, command);
+    if (supportsPrefix(command)) {
+      const prefixName = command.prefixName ||
+        String(command.data?.legacyPrefixOverride ?? command.legacyPrefixOverride ?? '') || primaryName;
+      this.prefixMap.set(prefixName.trim().toLowerCase(), command);
+      const aliases = command.aliases.length ? command.aliases :
+        command.legacyAliases ?? (Array.isArray(command.data?.legacyAliases) ? command.data.legacyAliases : []);
+      for (const alias of aliases) {
+        if (typeof alias !== 'string') continue;
+        const cleanAlias = alias.trim().toLowerCase();
+        if (cleanAlias && !this.prefixMap.has(cleanAlias)) this.prefixMap.set(cleanAlias, command);
       }
     }
-
-    this.autocompleteBindings.push(
-      ...collectAutocompleteBindings(
-        primaryName,
-        (command.options ?? []).filter(
-          (option): option is Record<string, unknown> =>
-            typeof option === 'object' && option !== null,
-        ),
-      ),
-    );
+    if (supportsSlash(command)) {
+      this.commandMap.set(primaryName, command);
+      this.autocompleteBindings.push(...collectAutocompleteBindings(primaryName,
+        (command.options ?? []).filter((option): option is Record<string, unknown> =>
+          typeof option === 'object' && option !== null)));
+    }
   }
 
   deleteCommand(commandId?: string, commandName?: string): void {
     const cleanName = commandName?.trim().toLowerCase();
     const cleanId = commandId?.trim();
 
-    for (const [key, cmd] of this.commandMap.entries()) {
-      const matchesId = Boolean(cleanId && cmd.id === cleanId);
-      const matchesName = Boolean(cleanName && cmd.name.trim().toLowerCase() === cleanName);
-      const matchesAlias = Boolean(
-        cleanName && (cmd.aliases ?? []).some((a) => a.trim().toLowerCase() === cleanName),
-      );
-
-      if (matchesId || matchesName || matchesAlias) {
-        this.commandMap.delete(key);
+    for (const map of [this.commandMap, this.prefixMap]) {
+      for (const [key, cmd] of map.entries()) {
+        const matchesId = Boolean(cleanId && cmd.id === cleanId);
+        const matchesName = Boolean(cleanName && cmd.name.trim().toLowerCase() === cleanName);
+        const matchesAlias = Boolean(
+          cleanName && (cmd.aliases ?? []).some((alias) => alias.trim().toLowerCase() === cleanName),
+        );
+        if (matchesId || matchesName || matchesAlias) map.delete(key);
       }
     }
-
     this.autocompleteBindings = this.autocompleteBindings.filter((binding) => {
       if (cleanName && binding.commandName.trim().toLowerCase() === cleanName) {
         return false;
@@ -265,6 +255,7 @@ export class HandlerRegistry {
     this.scheduledTimers.length = 0;
 
     this.commandMap.clear();
+    this.prefixMap.clear();
     this.webhookMap.clear();
     this.autocompleteBindings = [];
   }

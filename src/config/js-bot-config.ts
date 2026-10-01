@@ -12,6 +12,13 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
   description: z.string().default(''),
   /** Discord application command type: chatInput | user | message */
   discordType: z.enum(['chatInput', 'user', 'message']).default('chatInput'),
+  triggerType: z.enum(['prefix', 'slash', 'hybrid', 'none']).optional(),
+  prefixName: z.string().optional(),
+  data: z.record(z.unknown()).optional(),
+  legacyModeEnabled: z.boolean().optional(),
+  legacyLocalOnly: z.boolean().optional(),
+  legacyPrefixOverride: z.string().optional(),
+  legacyAliases: z.array(z.string()).optional(),
   options: z.array(z.record(z.unknown())).default([]),
   aliases: z.array(z.string()).default([]),
   /**
@@ -147,4 +154,23 @@ export function validateJsBotConfig(config: JsBotConfig): void {
     }
     webhookPaths.add(key);
   }
+}
+
+// Invocation mode is independent from Discord's application-command type.
+// Historical handlers with no flags supported both routes.
+export function commandTriggerType(command: CommandHandler): 'prefix' | 'slash' | 'hybrid' | 'none' {
+  if (command.triggerType) return command.triggerType;
+  const data = command.data ?? {};
+  const declared = data.triggerType;
+  if (declared === 'prefix' || declared === 'slash' || declared === 'hybrid' || declared === 'none') return declared;
+  if ((data.legacyModeEnabled ?? command.legacyModeEnabled) === true) return 'prefix';
+  if ((data.legacyLocalOnly ?? command.legacyLocalOnly) === true || data.localOnly === true) return 'none';
+  if ((data.legacyModeEnabled ?? command.legacyModeEnabled) === false) return 'slash';
+  return 'hybrid';
+}
+export function supportsSlash(command: CommandHandler): boolean {
+  return ['slash', 'hybrid'].includes(commandTriggerType(command));
+}
+export function supportsPrefix(command: CommandHandler): boolean {
+  return ['prefix', 'hybrid'].includes(commandTriggerType(command));
 }
