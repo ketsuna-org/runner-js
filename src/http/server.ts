@@ -1,6 +1,7 @@
 import os from 'node:os';
 
 import { Hono } from 'hono';
+import { ZodError } from 'zod';
 
 import type { RunnerEnv } from '../config/env.js';
 import { createAuthMiddleware } from './auth.js';
@@ -176,8 +177,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       deps.logStore.append('info', `Synced bot ${botId}`, botId);
       return c.json({ ok: true });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw badRequest(`Invalid config: ${message}`);
+      throw configError(error);
     }
   });
 
@@ -228,8 +228,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       const reloaded = await deps.runtime.reloadBot(botId, body.config);
       return c.json({ ok: true, reloaded });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      throw badRequest(`Invalid config: ${message}`);
+      throw configError(error);
     }
   });
 
@@ -804,4 +803,35 @@ function resolveContextIdFromBody(scope: string, body: Record<string, unknown>):
     return scopeId;
   }
   return scopeId;
+}
+
+
+const STORAGE_ERROR_CODES = new Set(['ENOSPC', 'EACCES', 'EROFS', 'EIO', 'EMFILE', 'EPERM']);
+
+/** One readable line per problem ("commands[1].script: Required") instead of the raw issue array. */
+export function describeZodError(error: ZodError): string {
+  return error.issues
+    .map((issue) => {
+      const where = issue.path
+        .map((part, index) => (typeof part === 'number' ? `[${part}]` : index === 0 ? part : `.${part}`))
+        .join('');
+      return where ? `${where}: ${issue.message}` : issue.message;
+    })
+    .join('; ');
+}
+
+/**
+ * A bad config is the caller's fault (400). A disk or permission failure while saving is the runner's
+ * own problem and must not be reported as "Invalid config".
+ */
+function configError(error: unknown): Error {
+  if (error instanceof ZodError) {
+    return badRequest(`Invalid config: ${describeZodError(error)}`);
+  }
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  if (typeof code === 'string' && STORAGE_ERROR_CODES.has(code)) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return badRequest(`Invalid config: ${message}`);
 }
