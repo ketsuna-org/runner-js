@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -107,7 +107,11 @@ export class BotStore {
       syncedAt: new Date().toISOString(),
       config: sanitizedConfig,
     };
-    await writeFile(this.fileForBot(botId), JSON.stringify(entry), 'utf8');
+    // Atomic: a crash or a full disk mid-write must not leave a truncated file that blocks every later sync.
+    const target = this.fileForBot(botId);
+    const temporary = `${target}.${process.pid}.tmp`;
+    await writeFile(temporary, JSON.stringify(entry), 'utf8');
+    await rename(temporary, target);
     this.meta.set(botId, {
       id: entry.id,
       name: entry.name,

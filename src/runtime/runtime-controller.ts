@@ -75,7 +75,9 @@ export class RuntimeController {
 
   async syncBot(botId: string, botName: string, rawConfig: Record<string, unknown>): Promise<void> {
     const config = parseJsBotConfig(rawConfig);
-    const existing = await this.botStore.load(botId);
+    // A stored file we can no longer read (truncated, older schema) must not block replacing it with the
+    // new, valid config: treat it as absent.
+    const existing = await this.botStore.load(botId).catch(() => null);
     if (existing) {
       config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
         config.scopedVariableDefinitions,
