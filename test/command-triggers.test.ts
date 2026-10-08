@@ -47,7 +47,7 @@ describe('mixed/restored command invocation types', () => {
     const executions: string[] = [];
     const errors: string[] = [];
     const executor = { execute: async (script: string, context: ScriptExecutionContext) => {
-      executions.push(`${script}:${context.message ? 'prefix' : 'slash'}`);
+      executions.push(`${script}:${context.interaction ? 'slash' : 'prefix'}`);
     } } as unknown as ScriptExecutor;
     const registry = new HandlerRegistry(client as unknown as Client, mixedConfig(), 'bot', executor,
       { getGlobalVariables: async () => ({}) } as VariableDatabase,

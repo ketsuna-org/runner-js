@@ -31,7 +31,7 @@ const cappedFetch = createCappedFetch(globalThis.fetch.bind(globalThis));
 const tokenSafeClientProxies = new WeakMap<object, unknown>();
 
 /** Prevent direct-mode scripts from reading Discord/API tokens. */
-function createTokenSafeClientProxy(client: ScriptExecutionContext['client']): unknown {
+export function createTokenSafeClientProxy(client: ScriptExecutionContext['client']): unknown {
   if (client == null || typeof client !== 'object') {
     return client;
   }
