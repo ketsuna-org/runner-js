@@ -275,7 +275,7 @@ export class RuntimeController {
     key: string,
     scope: string,
     defaultValue: unknown,
-    valueType = 'string',
+    valueType?: string,
   ): Promise<void> {
     const normalizedKey = normalizeScopedStorageKey(key);
     const normalizedScope = scope.trim();
@@ -285,17 +285,20 @@ export class RuntimeController {
 
     await this.botStore.updateConfig(botId, (config) => {
       const defs = config.scopedVariableDefinitions.map((entry) => ({ ...entry }));
-      const next = {
-        key: normalizedKey,
-        scope: normalizedScope,
-        defaultValue,
-        valueType,
-      };
       const index = defs.findIndex(
         (entry) =>
           normalizeScopedStorageKey(String(entry.key ?? '')) === normalizedKey &&
           String(entry.scope ?? '').trim() === normalizedScope,
       );
+      // Un client qui ne connaît pas le type (le Studio) ne doit pas rétrograder
+      // un nombre ou un booléen en chaîne en éditant sa valeur par défaut.
+      const previousType = index >= 0 ? String(defs[index]!.valueType ?? '') : '';
+      const next = {
+        key: normalizedKey,
+        scope: normalizedScope,
+        defaultValue,
+        valueType: valueType ?? (previousType || 'string'),
+      };
       if (index >= 0) {
         defs[index] = next;
       } else {
