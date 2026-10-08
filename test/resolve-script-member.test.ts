@@ -60,3 +60,30 @@ describe('resolveScriptMember', () => {
     expect(result).toBeNull();
   });
 });
+
+describe('upgradeInteractionMember', () => {
+  it('replaces a raw API member by a fetched GuildMember', async () => {
+    const real = { roles: { add: () => undefined } };
+    const interaction = {
+      guildId: 'g',
+      guild: { members: { fetch: async () => real } },
+      user: { id: 'u' },
+    };
+    const { upgradeInteractionMember } = await import('../src/discord/handler-registry.js');
+    const raw = { roles: ['1'] };
+    const result = await upgradeInteractionMember({} as never, interaction as never, raw);
+    expect(result).toBe(real);
+  });
+  it('keeps a member that already has roles.add, and falls back on failure', async () => {
+    const { upgradeInteractionMember } = await import('../src/discord/handler-registry.js');
+    const ok = { roles: { add: () => undefined } };
+    expect(await upgradeInteractionMember({} as never, { guildId: 'g' } as never, ok)).toBe(ok);
+    const raw = { roles: ['1'] };
+    const failing = {
+      guildId: 'g',
+      guild: { members: { fetch: async () => { throw new Error('x'); } } },
+      user: { id: 'u' },
+    };
+    expect(await upgradeInteractionMember({} as never, failing as never, raw)).toBe(raw);
+  });
+});
