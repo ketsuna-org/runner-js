@@ -128,9 +128,16 @@ export class RuntimeController {
 
     await this.botStore.updateConfig(botId, (config) => {
       const existingCommands = config.commands ?? [];
-      const index = existingCommands.findIndex(
-        (c) => c.id === parsed.id || c.name.toLowerCase() === parsed.name.toLowerCase(),
-      );
+      // L'identifiant d'abord : renommer B en « a » alors qu'une commande A porte
+      // déjà ce nom remplaçait A (match par nom) et laissait B en double. Avec
+      // l'id prioritaire, la collision de noms est refusée par la validation.
+      const byId = existingCommands.findIndex((c) => c.id === parsed.id);
+      const index =
+        byId >= 0
+          ? byId
+          : existingCommands.findIndex(
+              (c) => c.name.toLowerCase() === parsed.name.toLowerCase(),
+            );
       const nextCommands = [...existingCommands];
       if (index >= 0) {
         nextCommands[index] = parsed;
@@ -268,7 +275,7 @@ export class RuntimeController {
     key: string,
     scope: string,
     defaultValue: unknown,
-    valueType = 'string',
+    valueType?: string,
   ): Promise<void> {
     const normalizedKey = normalizeScopedStorageKey(key);
     const normalizedScope = scope.trim();
@@ -278,17 +285,20 @@ export class RuntimeController {
 
     await this.botStore.updateConfig(botId, (config) => {
       const defs = config.scopedVariableDefinitions.map((entry) => ({ ...entry }));
-      const next = {
-        key: normalizedKey,
-        scope: normalizedScope,
-        defaultValue,
-        valueType,
-      };
       const index = defs.findIndex(
         (entry) =>
           normalizeScopedStorageKey(String(entry.key ?? '')) === normalizedKey &&
           String(entry.scope ?? '').trim() === normalizedScope,
       );
+      // Un client qui ne connaît pas le type (le Studio) ne doit pas rétrograder
+      // un nombre ou un booléen en chaîne en éditant sa valeur par défaut.
+      const previousType = index >= 0 ? String(defs[index]!.valueType ?? '') : '';
+      const next = {
+        key: normalizedKey,
+        scope: normalizedScope,
+        defaultValue,
+        valueType: valueType ?? (previousType || 'string'),
+      };
       if (index >= 0) {
         defs[index] = next;
       } else {

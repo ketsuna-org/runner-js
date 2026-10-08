@@ -424,7 +424,8 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       key,
       scope,
       body.defaultValue,
-      (body.valueType ?? 'string').toString(),
+      // Absent : le type déjà enregistré est conservé (voir le contrôleur).
+      body.valueType === undefined ? undefined : String(body.valueType),
     );
     return c.json({ ok: true });
   });

@@ -87,3 +87,12 @@ describe('upgradeInteractionMember', () => {
     expect(await upgradeInteractionMember({} as never, failing as never, raw)).toBe(raw);
   });
 });
+
+describe('describeScriptSource', () => {
+  it('names the command, webhook or fallback that triggered a script', async () => {
+    const { describeScriptSource } = await import('../src/discord/handler-registry.js');
+    expect(describeScriptSource({ interaction: { commandName: 'ping' } as never })).toBe('command /ping');
+    expect(describeScriptSource({ webhook: { path: '/h' } })).toBe('inbound webhook /h');
+    expect(describeScriptSource({})).toBe('event or scheduled handler');
+  });
+});

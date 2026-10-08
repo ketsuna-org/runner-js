@@ -55,11 +55,11 @@ export class JsDiscordRunner {
     return this.executor?.getHeapUsedBytes() ?? null;
   }
 
-  private async resolveEffectiveIntents(): Promise<Record<string, boolean>> {
+  private async resolveEffectiveIntents(config: JsBotConfig = this.config): Promise<Record<string, boolean>> {
     const warnings: string[] = [];
     try {
-      const portalSync = await fetchPortalEnabledPrivilegedIntents(this.config.token);
-      const effective = buildEffectiveIntentsMap(this.config, portalSync.enabled, warnings);
+      const portalSync = await fetchPortalEnabledPrivilegedIntents(config.token);
+      const effective = buildEffectiveIntentsMap(config, portalSync.enabled, warnings);
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
       }
@@ -73,7 +73,7 @@ export class JsDiscordRunner {
               { cause: error },
             );
       }
-      const effective = buildSafeFallbackIntentsMap(this.config, warnings);
+      const effective = buildSafeFallbackIntentsMap(config, warnings);
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
       }
@@ -211,7 +211,9 @@ export class JsDiscordRunner {
       config.scopedVariableDefinitions,
       this.config.scopedVariableDefinitions,
     );
-    const nextEffective = await this.resolveEffectiveIntents();
+    // Les intents se résolvent sur la NOUVELLE configuration : avec l'ancienne,
+    // la comparaison portait sur elle-même et un changement n'était jamais vu.
+    const nextEffective = await this.resolveEffectiveIntents(config);
     const intentsChanged = !intentsMapsEqual(this.effectiveIntents, nextEffective);
     const tokenChanged = this.config.token.trim() !== config.token.trim();
     const dbConfigChanged =

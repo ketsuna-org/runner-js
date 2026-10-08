@@ -440,7 +440,11 @@ export class HandlerRegistry {
         );
         return;
       }
-      this.emitLog('error', `Handler script failed: ${message}`);
+      // Sans la source ni la pile, « Handler script failed: x is not a function »
+      // ne dit ni quelle commande, ni quelle ligne.
+      const source = describeScriptSource(partial);
+      const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
+      this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
     }
   }
 
@@ -504,6 +508,20 @@ export async function upgradeInteractionMember<M>(
   } catch {
     return member;
   }
+}
+
+/** Ce qui a déclenché le script, pour les journaux d'erreur. */
+export function describeScriptSource(partial: {
+  interaction?: Interaction;
+  message?: Message;
+  webhook?: { path: string };
+}): string {
+  const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
+  if (interaction?.commandName) return `command /${interaction.commandName}`;
+  if (interaction?.customId) return `component ${interaction.customId}`;
+  if (partial.webhook) return `inbound webhook ${partial.webhook.path}`;
+  if (partial.message) return 'message handler';
+  return 'event or scheduled handler';
 }
 
 export async function resolveScriptMember(
