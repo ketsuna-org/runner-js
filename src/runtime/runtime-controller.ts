@@ -128,9 +128,16 @@ export class RuntimeController {
 
     await this.botStore.updateConfig(botId, (config) => {
       const existingCommands = config.commands ?? [];
-      const index = existingCommands.findIndex(
-        (c) => c.id === parsed.id || c.name.toLowerCase() === parsed.name.toLowerCase(),
-      );
+      // L'identifiant d'abord : renommer B en « a » alors qu'une commande A porte
+      // déjà ce nom remplaçait A (match par nom) et laissait B en double. Avec
+      // l'id prioritaire, la collision de noms est refusée par la validation.
+      const byId = existingCommands.findIndex((c) => c.id === parsed.id);
+      const index =
+        byId >= 0
+          ? byId
+          : existingCommands.findIndex(
+              (c) => c.name.toLowerCase() === parsed.name.toLowerCase(),
+            );
       const nextCommands = [...existingCommands];
       if (index >= 0) {
         nextCommands[index] = parsed;

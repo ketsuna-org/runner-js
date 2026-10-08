@@ -215,7 +215,7 @@ export class BotSupervisor {
       if (tokenInvalid) {
         this.tokenInvalidBots.add(botId);
       }
-      this.options.logStore.append('info', `Bot start failed: ${message}`, botId);
+      this.options.logStore.append('error', `Bot start failed: ${message}`, botId);
       const current = this.states.get(botId);
       if (current) {
         this.states.set(botId, {
@@ -291,7 +291,24 @@ export class BotSupervisor {
       return false;
     }
 
-    await bot.runner.reload(entry.config);
+    try {
+      await bot.runner.reload(entry.config);
+    } catch (error) {
+      // reload() peut avoir détruit le client (reconnexion échouée) : le bot ne
+      // tourne plus, et l'état « running » restait affiché sans aucune erreur.
+      const message = error instanceof Error ? error.message : String(error);
+      this.options.logStore.append('error', `Bot reload failed: ${message}`, botId);
+      const failed = this.states.get(botId);
+      if (failed) {
+        this.states.set(botId, {
+          ...failed,
+          state: 'error',
+          lastError: message,
+          lastSeenAt: new Date().toISOString(),
+        });
+      }
+      throw error;
+    }
 
     const current = this.states.get(botId);
     if (current) {

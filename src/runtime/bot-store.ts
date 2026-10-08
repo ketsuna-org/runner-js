@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -109,7 +110,7 @@ export class BotStore {
     };
     // Atomic: a crash or a full disk mid-write must not leave a truncated file that blocks every later sync.
     const target = this.fileForBot(botId);
-    const temporary = `${target}.${process.pid}.tmp`;
+    const temporary = `${target}.${process.pid}.${randomUUID()}.tmp`;
     await writeFile(temporary, JSON.stringify(entry), 'utf8');
     await rename(temporary, target);
     this.meta.set(botId, {
@@ -184,7 +185,9 @@ export class BotStore {
     await this.ensureHydrated();
     const entries: RunnerBotEntry[] = [];
     for (const botId of this.meta.keys()) {
-      const entry = await this.load(botId);
+      // Un fichier corrompu ou d'un ancien schéma ne doit pas faire échouer la
+      // liste de TOUS les bots.
+      const entry = await this.load(botId).catch(() => null);
       if (entry) {
         entries.push(entry);
       }
@@ -192,7 +195,25 @@ export class BotStore {
     return entries.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  async updateConfig(
+  private readonly updateQueues = new Map<string, Promise<unknown>>();
+
+  /** Sérialise les lire-modifier-écrire d'un même bot : deux appels simultanés
+   *  partaient du même état et le dernier écrasait le premier. */
+  updateConfig(
+    botId: string,
+    transform: (config: JsBotConfig) => JsBotConfig,
+  ): Promise<RunnerBotEntry> {
+    const previous = this.updateQueues.get(botId) ?? Promise.resolve();
+    const run = previous.catch(() => undefined).then(() => this.applyUpdate(botId, transform));
+    this.updateQueues.set(botId, run);
+    const cleanup = () => {
+      if (this.updateQueues.get(botId) === run) this.updateQueues.delete(botId);
+    };
+    run.then(cleanup, cleanup);
+    return run;
+  }
+
+  private async applyUpdate(
     botId: string,
     transform: (config: JsBotConfig) => JsBotConfig,
   ): Promise<RunnerBotEntry> {
