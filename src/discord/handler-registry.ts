@@ -379,7 +379,11 @@ export class HandlerRegistry {
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
   ): Promise<void> {
-    const member = await resolveScriptMember(partial.message, partial.member ?? null);
+    const member = await upgradeInteractionMember(
+      this.client,
+      partial.interaction,
+      await resolveScriptMember(partial.message, partial.member ?? null),
+    );
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
       message: partial.message,
@@ -476,6 +480,30 @@ function isInteraction(value: unknown): value is Interaction {
 
 function isUnknownInteractionError(message: string): boolean {
   return message.includes('Unknown interaction');
+}
+
+/**
+ * A slash-command interaction carries a RAW API member (`roles` is an array of
+ * ids) when the guild is not cached; `member.roles.add(...)` then throws and a
+ * role command silently did nothing. Swap it for a real GuildMember when we can.
+ */
+export async function upgradeInteractionMember<M>(
+  client: { guilds: { fetch: (id: string) => Promise<Guild> } },
+  interaction: Interaction | undefined,
+  member: M,
+): Promise<M | GuildMember> {
+  const roles = (member as { roles?: unknown } | null)?.roles as
+    | { add?: unknown }
+    | undefined;
+  if (!interaction?.guildId || !member || typeof roles?.add === 'function') {
+    return member;
+  }
+  try {
+    const guild = interaction.guild ?? (await client.guilds.fetch(interaction.guildId));
+    return await guild.members.fetch(interaction.user.id);
+  } catch {
+    return member;
+  }
 }
 
 export async function resolveScriptMember(
