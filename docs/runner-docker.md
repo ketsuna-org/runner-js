@@ -24,3 +24,19 @@ docker build -t bot-creator-runner-js .
 ## API
 
 `GET /` returns `engine: "javascript"` for auto-detection by the app.
+
+## Hybrid commands (prefix + slash): `message` / `interaction`
+
+In a hybrid command the same script runs for both routes:
+
+- prefix run: `message` is the real Discord message, `interaction` is `undefined`;
+- slash run: `interaction` is the real interaction and `message` is a
+  compatibility object (`message.isInteractionCompat === true`) supporting only
+  `reply(...)`, `channel.send(...)`, `author`, `member`, `guild`, `guildId`,
+  `channelId`, `id`, `client`. There is no `message.content`, `mentions`,
+  `delete()` or `edit()`. The first reply calls `interaction.reply` (or
+  `editReply` if deferred), later ones `followUp`.
+
+Recommended pattern: `const ctx = message ?? interaction; await ctx.reply('...')`.
+To detect the mode, test `interaction` (defined only for slash), not `message`.
+Pure slash and pure prefix commands are unchanged.

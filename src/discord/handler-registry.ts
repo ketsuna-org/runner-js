@@ -9,6 +9,7 @@ import {
 } from 'discord.js';
 
 import {
+  commandTriggerType,
   supportsSlash,
   supportsPrefix,
   type CommandHandler,
@@ -17,6 +18,7 @@ import {
   type JsBotConfig,
   type ScheduledHandler,
 } from '../config/js-bot-config.js';
+import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
 import { ScriptDb } from '../scripts/script-db.js';
@@ -122,6 +124,11 @@ export class HandlerRegistry {
           guild: interaction.guild,
           member: interaction.member,
           channel: interaction.channel,
+          // Hybrid command run from slash: give `message.reply(...)` & co. a target.
+          compatMessage:
+            interaction.isChatInputCommand() && commandTriggerType(handler) === 'hybrid'
+              ? createInteractionMessageCompat(interaction)
+              : undefined,
         });
       } finally {
         this.releaseInteraction(interaction.id);
@@ -373,6 +380,8 @@ export class HandlerRegistry {
     partial: {
       interaction?: Interaction;
       message?: Message;
+      /** Script-only `message` stand-in (hybrid slash); never used for scoping. */
+      compatMessage?: unknown;
       guild?: Message['guild'] | Interaction['guild'] | null;
       member?: Message['member'] | Interaction['member'] | null;
       channel?: Message['channel'] | Interaction['channel'] | null;
@@ -418,7 +427,7 @@ export class HandlerRegistry {
           pgsql: this.databaseHandles?.pgsql,
           mongo: this.databaseHandles?.mongo,
           interaction: partial.interaction,
-          message: partial.message,
+          message: (partial.message ?? partial.compatMessage) as Message | undefined,
           guild: partial.guild ?? null,
           member,
           channel: (partial.channel as never) ?? null,

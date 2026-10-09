@@ -15,10 +15,10 @@ afterEach(() => {
 });
 
 describe('runner version resolution', () => {
-  it('exposes the package.json version (0.5.0) and never "unknown" when run from source', () => {
+  it('exposes the package.json version (0.5.1) and never "unknown" when run from source', () => {
     const env = loadRunnerEnv();
 
-    expect(env.version).toBe('0.5.0');
+    expect(env.version).toBe('0.5.1');
     expect(env.version).not.toBe('unknown');
   });
 
@@ -35,7 +35,7 @@ describe('runner version resolution', () => {
 
     const env = loadRunnerEnv();
 
-    expect(env.version).toBe('0.5.0');
+    expect(env.version).toBe('0.5.1');
   });
 
   it('reports the resolved version on GET /health', async () => {
@@ -55,7 +55,7 @@ describe('runner version resolution', () => {
       engine?: string;
     };
     expect(body.ok).toBe(true);
-    expect(body.version).toBe('0.5.0');
+    expect(body.version).toBe('0.5.1');
     expect(body.version).not.toBe('unknown');
     expect(body.engine).toBe('javascript');
   });
