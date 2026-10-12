@@ -21,6 +21,7 @@ import {
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
+import { normalizeScriptMember, withScriptMember } from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -388,10 +389,12 @@ export class HandlerRegistry {
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
   ): Promise<void> {
-    const member = await upgradeInteractionMember(
-      this.client,
-      partial.interaction,
-      await resolveScriptMember(partial.message, partial.member ?? null),
+    const member = normalizeScriptMember(
+      await upgradeInteractionMember(
+        this.client,
+        partial.interaction,
+        await resolveScriptMember(partial.message, partial.member ?? null),
+      ),
     );
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
@@ -426,8 +429,16 @@ export class HandlerRegistry {
           sql: this.databaseHandles?.sql,
           pgsql: this.databaseHandles?.pgsql,
           mongo: this.databaseHandles?.mongo,
-          interaction: partial.interaction,
-          message: (partial.message ?? partial.compatMessage) as Message | undefined,
+          // Vues « script » : `interaction.member` / `message.member` portent le
+          // membre normalisé (PermissionsBitField) même hors cache.
+          interaction: partial.interaction
+            ? withScriptMember(partial.interaction, member)
+            : undefined,
+          message: (partial.message
+            ? withScriptMember(partial.message, member)
+            : partial.compatMessage
+              ? withScriptMember(partial.compatMessage as object, member)
+              : undefined) as Message | undefined,
           guild: partial.guild ?? null,
           member,
           channel: (partial.channel as never) ?? null,
