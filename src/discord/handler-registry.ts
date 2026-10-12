@@ -21,7 +21,11 @@ import {
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
-import { normalizeScriptMember, withScriptMember } from '../scripts/script-member.js';
+import {
+  normalizeScriptMember,
+  resolveScriptGuildChannel,
+  withScriptView,
+} from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -389,19 +393,31 @@ export class HandlerRegistry {
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
   ): Promise<void> {
+    // Cache minimal : guilde / salon peuvent manquer (threads évincés, guilde
+    // indisponible). Résolus à la demande (cache d'abord, un fetch sinon).
+    const origin = partial.interaction ?? partial.message;
+    const resolved = await resolveScriptGuildChannel(this.client, {
+      guild: partial.guild ?? origin?.guild ?? null,
+      channel: partial.channel ?? origin?.channel ?? null,
+      guildId: origin?.guildId,
+      channelId: origin?.channelId,
+    });
+    const scriptGuild = (resolved.guild ?? null) as Interaction['guild'];
+    const scriptChannel = (resolved.channel ?? null) as Interaction['channel'];
     const member = normalizeScriptMember(
       await upgradeInteractionMember(
         this.client,
         partial.interaction,
         await resolveScriptMember(partial.message, partial.member ?? null),
+        origin?.guildId ? scriptGuild : undefined,
       ),
     );
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
       message: partial.message,
-      guild: partial.guild ?? null,
+      guild: scriptGuild,
       member,
-      channel: partial.channel ?? null,
+      channel: scriptChannel,
     };
 
     try {
@@ -429,19 +445,31 @@ export class HandlerRegistry {
           sql: this.databaseHandles?.sql,
           pgsql: this.databaseHandles?.pgsql,
           mongo: this.databaseHandles?.mongo,
-          // Vues « script » : `interaction.member` / `message.member` portent le
-          // membre normalisé (PermissionsBitField) même hors cache.
+          // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
+          // et `channel` résolus, même hors cache.
           interaction: partial.interaction
-            ? withScriptMember(partial.interaction, member)
+            ? withScriptView(partial.interaction, {
+                member,
+                guild: scriptGuild,
+                channel: scriptChannel,
+              })
             : undefined,
           message: (partial.message
-            ? withScriptMember(partial.message, member)
+            ? withScriptView(partial.message, {
+                member,
+                guild: scriptGuild,
+                channel: scriptChannel,
+              })
             : partial.compatMessage
-              ? withScriptMember(partial.compatMessage as object, member)
+              ? withScriptView(partial.compatMessage as object, {
+                  member,
+                  guild: scriptGuild,
+                  channel: scriptChannel,
+                })
               : undefined) as Message | undefined,
-          guild: partial.guild ?? null,
+          guild: scriptGuild,
           member,
-          channel: (partial.channel as never) ?? null,
+          channel: scriptChannel as never,
           webhook: partial.webhook,
         },
         this.scriptLogger,
@@ -515,6 +543,8 @@ export async function upgradeInteractionMember<M>(
   client: { guilds: { fetch: (id: string) => Promise<Guild> } },
   interaction: Interaction | undefined,
   member: M,
+  /** Guilde déjà résolue (`null` = introuvable : pas de nouveau fetch). */
+  resolvedGuild?: Guild | null,
 ): Promise<M | GuildMember> {
   const roles = (member as { roles?: unknown } | null)?.roles as
     | { add?: unknown }
@@ -523,7 +553,13 @@ export async function upgradeInteractionMember<M>(
     return member;
   }
   try {
-    const guild = interaction.guild ?? (await client.guilds.fetch(interaction.guildId));
+    const guild =
+      resolvedGuild !== undefined
+        ? resolvedGuild
+        : (interaction.guild ?? (await client.guilds.fetch(interaction.guildId)));
+    if (!guild) {
+      return member;
+    }
     return await guild.members.fetch(interaction.user.id);
   } catch {
     return member;
