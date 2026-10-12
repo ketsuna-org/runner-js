@@ -1,65 +1,42 @@
 #!/bin/sh
-# Test suite for entrypoint.sh privilege escalation handling
-# Run with: sh test-entrypoint.sh
-
+# Test comportemental de entrypoint.sh dans l'image de base épinglée (nécessite Docker ; ignoré sinon).
+# Usage : sh test-entrypoint.sh
 set -e
+DIR="$(cd "$(dirname "$0")" && pwd)"
+IMAGE="$(sed -n 's/^FROM \(oven\/bun:[^ ]*\) AS builder$/\1/p' "$DIR/Dockerfile" | head -1)"
+if ! command -v docker >/dev/null 2>&1; then echo "docker absent : test ignoré"; exit 0; fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-ENTRYPOINT="$SCRIPT_DIR/entrypoint.sh"
+run() { # $1 = nom du scénario ; le reste = arguments de docker run
+  shift
+  docker run --rm "$@" -v "$DIR/entrypoint.sh:/app/entrypoint.sh:ro" -e BOT_CREATOR_WEB_PORT=8080 \
+    -e BOT_CREATOR_DATA_DIR=/bots -e BOT_CREATOR_RUNNER_LOG_FILE=/data/logs/runner.log \
+    --entrypoint sh "$IMAGE" -c '
+      apt-get update -qq >/dev/null && apt-get install -y -qq gosu >/dev/null 2>&1
+      mkdir -p /app/dist /bots /data
+      echo "console.log(\"APP uid=\" + process.getuid() + \" port=\" + process.env.BOT_CREATOR_WEB_PORT)" > /app/dist/index.js
+      '"$SETUP"'
+      '"${LAUNCH:-sh /app/entrypoint.sh}"
+}
 
-echo "Testing entrypoint.sh"
-echo "===================="
+fail() { echo "✗ $1"; exit 1; }
 
-# Test 1: Syntax check
-echo "Test 1: Shell syntax"
-if sh -n "$ENTRYPOINT"; then
-    echo "✓ entrypoint.sh has valid shell syntax"
-else
-    echo "✗ entrypoint.sh has syntax errors"
-    exit 1
-fi
+echo "Scénario 1 : volumes possédés par root, non accessibles à bun -> continue en root, ne plante pas"
+SETUP='chown root:root /bots /data; chmod 755 /bots /data;'
+out="$(run s1)"; echo "$out" | sed 's/^/   /'
+echo "$out" | grep -q "APP uid=0 port=8080" || fail "devait tourner en root avec l'environnement conservé"
+echo "$out" | grep -q "WARNING" || fail "avertissement attendu"
 
-# Test 2: Key functions are present
-echo "Test 2: Required checks in code"
-if grep -q "su -" "$ENTRYPOINT"; then
-    echo "✓ Privilege drop logic (su -) present"
-else
-    echo "✗ Missing privilege drop logic"
-    exit 1
-fi
+echo "Scénario 2 : volumes accessibles à bun -> cède la main à bun, environnement conservé"
+SETUP='chown -R bun:bun /bots /data;'
+out="$(run s2)"; echo "$out" | sed 's/^/   /'
+echo "$out" | grep -q "APP uid=1000 port=8080" || fail "devait tourner en bun (uid 1000) avec BOT_CREATOR_WEB_PORT"
 
-if grep -q "test -w" "$ENTRYPOINT"; then
-    echo "✓ Write permission checks present"
-else
-    echo "✗ Missing write permission checks"
-    exit 1
-fi
-
-if grep -q "BOT_CREATOR_DATA_DIR" "$ENTRYPOINT"; then
-    echo "✓ Data directory check present"
-else
-    echo "✗ Missing data directory check"
-    exit 1
-fi
-
-# Test 3: Entrypoint respects env vars
-echo "Test 3: Environment variable handling"
-if grep -q "APP_USER" "$ENTRYPOINT"; then
-    echo "✓ APP_USER configuration present"
-else
-    echo "✗ Missing APP_USER configuration"
-    exit 1
-fi
-
-# Test 4: Logging is implemented
-echo "Test 4: Logging implementation"
-if grep -q "\[entrypoint\]" "$ENTRYPOINT"; then
-    echo "✓ Logging messages present"
-else
-    echo "✗ Missing logging implementation"
-    exit 1
-fi
+echo "Scénario 3 : lancé directement en non-root (runAsUser) -> lance sans gosu"
+SETUP='chown -R bun:bun /bots /data;'
+LAUNCH='gosu bun sh /app/entrypoint.sh'
+out="$(LAUNCH="$LAUNCH" run s3)"; echo "$out" | sed 's/^/   /'
+echo "$out" | grep -q "non-root already" || fail "devait détecter qu'il est déjà non-root"
+echo "$out" | grep -q "APP uid=1000 port=8080" || fail "devait lancer l'application en uid 1000"
 
 echo ""
-echo "===================="
-echo "All tests passed ✓"
+echo "Tous les scénarios passent ✓"
