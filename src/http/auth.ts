@@ -43,7 +43,7 @@ export function requiresAuthentication(
   }
 
   const path = url.split('?')[0] ?? url;
-  if (path.includes('/inbound/') && method === 'POST') {
+  if (method === 'POST' && isInboundWebhookPath(path)) {
     return false;
   }
 
@@ -52,4 +52,29 @@ export function requiresAuthentication(
   }
 
   return true;
+}
+
+/**
+ * Webhook entrant : `POST /bots/:id/inbound/<clé>`, la seule route publique en écriture (son
+ * secret est vérifié par la route elle-même). Le chemin doit COMMENCER par `/bots/<id>/inbound/`
+ * avec une clé non vide : un `includes('/inbound/')` laissait passer sans jeton n'importe quel
+ * chemin portant ce fragment, y compris derrière un préfixe ou un `..` normalisé plus loin
+ * (MB-23, SEC-052).
+ */
+export function isInboundWebhookPath(path: string): boolean {
+  if (path.includes('\\') || path.includes('%')) {
+    return false;
+  }
+  const segments = path.split('/');
+  // ['', 'bots', '<id>', 'inbound', '<clé>', ...]
+  if (segments.length < 5 || segments[0] !== '' || segments[1] !== 'bots' || segments[3] !== 'inbound') {
+    return false;
+  }
+  const tail = segments.slice(2);
+  const lastIndex = tail.length - 1;
+  return tail.every((segment, index) => {
+    if (segment === '.' || segment === '..') return false;
+    if (segment === '') return index === lastIndex && index > 2;
+    return true;
+  });
 }

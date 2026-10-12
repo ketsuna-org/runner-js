@@ -13,4 +13,21 @@ describe('auth', () => {
       requiresAuthentication('/bots/1/inbound/hook', 'POST', 'secret', '0.0.0.0'),
     ).toBe(false);
   });
+
+  it('only skips the bearer token for a real inbound webhook path', () => {
+    const open = (path: string, method = 'POST') =>
+      !requiresAuthentication(path, method, 'secret', '0.0.0.0');
+    expect(open('/bots/1/inbound/hook')).toBe(true);
+    expect(open('/bots/1/inbound/a/b')).toBe(true);
+    // the old `includes('/inbound/')` let all of these through without a token
+    expect(open('/admin/inbound/x')).toBe(false);
+    expect(open('/bots/1/stop/inbound/x')).toBe(false);
+    expect(open('/bots/1/inbound/../stop')).toBe(false);
+    expect(open('/bots/1/inbound/%2e%2e/stop')).toBe(false);
+    expect(open('/bots/1/inbound//x')).toBe(false);
+    expect(open('/bots//inbound/x')).toBe(false);
+    expect(open('/bots/1/inbound/')).toBe(false);
+    expect(open('/bots/1/inbound/hook', 'GET')).toBe(false);
+    expect(open('/bots/1/inbound/hook', 'DELETE')).toBe(false);
+  });
 });
