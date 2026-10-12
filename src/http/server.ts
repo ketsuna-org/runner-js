@@ -12,6 +12,7 @@ import {
   toScopedReferenceKey,
 } from '../runtime/variable-keys.js';
 import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
+import { safeEqual } from './safe-equal.js';
 
 export interface HttpServerDeps {
   env: RunnerEnv;
@@ -611,7 +612,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       ''
     ).trim();
 
-    if (providedSecret !== expectedSecret) {
+    if (!safeEqual(providedSecret, expectedSecret)) {
       throw unauthorized('Invalid webhook secret.');
     }
 

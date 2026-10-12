@@ -1,4 +1,4 @@
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 export interface LogLine {
@@ -11,17 +11,35 @@ export interface LogLine {
 export class LogStore {
   private readonly lines: LogLine[] = [];
   private readonly maxLines: number;
+  private readonly maxFileBytes: number;
+  private fileBytes = 0;
+  // Writes are chained so lines keep their order and a rotation never races an append.
+  private writeQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly logFile: string,
     maxLines = 2000,
+    // The file used to grow forever on a long-lived node. Past this size it is moved to
+    // `<file>.1` (one generation kept, the previous `.1` is replaced).
+    maxFileBytes = 10 * 1024 * 1024,
   ) {
     this.maxLines = maxLines;
+    this.maxFileBytes = maxFileBytes;
   }
 
   async init(): Promise<void> {
     await mkdir(path.dirname(this.logFile), { recursive: true });
     await this.hydrateFromFile();
+    try {
+      this.fileBytes = (await stat(this.logFile)).size;
+    } catch {
+      this.fileBytes = 0;
+    }
+  }
+
+  /** Resolves once every queued write (and rotation) has reached the disk. */
+  flush(): Promise<void> {
+    return this.writeQueue;
   }
 
   private static readonly MAX_LOG_AGE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -64,8 +82,17 @@ export class LogStore {
       botId ? ` [bot:${botId}]` : ''
     } ${message}\n`;
 
-    void appendFile(this.logFile, formatted, 'utf8').catch(() => {
-      // ignore file write errors
+    this.writeQueue = this.writeQueue.then(async () => {
+      try {
+        if (this.maxFileBytes > 0 && this.fileBytes >= this.maxFileBytes) {
+          await rename(this.logFile, `${this.logFile}.1`);
+          this.fileBytes = 0;
+        }
+        await appendFile(this.logFile, formatted, 'utf8');
+        this.fileBytes += Buffer.byteLength(formatted);
+      } catch {
+        // ignore file write errors
+      }
     });
   }
 
