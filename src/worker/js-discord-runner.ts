@@ -4,6 +4,9 @@ import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   buildEffectiveIntentsMap,
   buildSafeFallbackIntentsMap,
+  describePortalSyncFailure,
+  getLastKnownPortalIntents,
+  rememberPortalIntents,
   fetchPortalEnabledPrivilegedIntents,
   intentsMapsEqual,
 } from '../discord/application-intent-sync.js';
@@ -59,6 +62,7 @@ export class JsDiscordRunner {
     const warnings: string[] = [];
     try {
       const portalSync = await fetchPortalEnabledPrivilegedIntents(config.token);
+      rememberPortalIntents(this.botId, portalSync.enabled);
       const effective = buildEffectiveIntentsMap(config, portalSync.enabled, warnings);
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
@@ -73,7 +77,10 @@ export class JsDiscordRunner {
               { cause: error },
             );
       }
-      const effective = buildSafeFallbackIntentsMap(config, warnings);
+      const effective = buildSafeFallbackIntentsMap(config, warnings, {
+        cause: describePortalSyncFailure(error),
+        lastKnown: getLastKnownPortalIntents(this.botId),
+      });
       for (const warning of warnings) {
         this.onLog('warn', `Intent warning: ${warning}`);
       }
