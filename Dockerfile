@@ -53,4 +53,13 @@ ENV BOT_CREATOR_WEB_PORT=8080
 VOLUME ["/bots", "/data"]
 EXPOSE 8080
 
-CMD ["bun", "dist/index.js"]
+# Copy tolerant entrypoint (handles privilege drop to bun user if directories are writable)
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+# Run as 'bun' user (non-root for security); entrypoint handles graceful fallback to root
+# if data directories are not accessible. For Kubernetes: set fsGroup and runAsUser to
+# ensure /bots and /data are writable by the bun user (UID 1000).
+USER bun
+
+ENTRYPOINT ["/app/entrypoint.sh"]
