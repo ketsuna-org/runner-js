@@ -156,6 +156,8 @@ async function fetchOnce<T>(
     return (await pending) as T | null;
   }
   const task = (async () => {
+    // laisse `inflight.set` s'exécuter avant tout `finally` (run() synchrone qui lève)
+    await Promise.resolve();
     try {
       return (await run()) ?? null;
     } catch {
