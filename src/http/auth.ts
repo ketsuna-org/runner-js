@@ -1,6 +1,7 @@
 import type { MiddlewareHandler } from 'hono';
 
 import { isRunnerLoopbackHost, normalizeRunnerApiToken } from '../config/env.js';
+import { safeEqual } from './safe-equal.js';
 
 export function createAuthMiddleware(apiToken: string, webHost: string): MiddlewareHandler {
   const normalizedToken = normalizeRunnerApiToken(apiToken);
@@ -19,7 +20,7 @@ export function createAuthMiddleware(apiToken: string, webHost: string): Middlew
     }
 
     const provided = normalizeRunnerApiToken(header.slice('Bearer '.length));
-    if (provided !== normalizedToken) {
+    if (!safeEqual(provided, normalizedToken)) {
       return c.json({ error: 'Missing or invalid bearer token.' }, 401);
     }
 
