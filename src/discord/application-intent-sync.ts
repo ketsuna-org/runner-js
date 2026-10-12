@@ -222,10 +222,12 @@ export async function fetchPortalEnabledPrivilegedIntents(
       if (attempt >= PORTAL_SYNC_MAX_ATTEMPTS) throw error;
 
       const backoff = PORTAL_SYNC_BASE_BACKOFF_MS * 2 ** (attempt - 1);
-      const waitMs = Math.min(
-        PORTAL_SYNC_MAX_WAIT_MS,
-        error.retryAfterSeconds != null ? error.retryAfterSeconds * 1000 : backoff,
-      );
+      const retryAfterMs =
+        error.retryAfterSeconds != null ? error.retryAfterSeconds * 1000 : null;
+      // Retry-After trop long : réessayer plus tôt redonnerait un 429, on
+      // abandonne tout de suite avec la cause.
+      if (retryAfterMs != null && retryAfterMs > PORTAL_SYNC_MAX_WAIT_MS) throw error;
+      const waitMs = Math.max(backoff, retryAfterMs ?? 0);
       // Rester dans le budget global : si l'attente ne laisse pas de temps pour
       // une nouvelle tentative, on s'arrête ici avec la cause réelle.
       if (deadline - now() - waitMs <= 0) throw error;

@@ -198,6 +198,20 @@ describe('portal sync resilience', () => {
     expect(describePortalSyncFailure(caught)).toBe('HTTP 429, retry after 1s');
   });
 
+  it('gives up immediately when Retry-After exceeds the max wait', async () => {
+    const fn = mockSequence([
+      () => new Response('{}', { status: 429, headers: { 'Retry-After': '30' } }),
+    ]);
+    let caught: unknown;
+    try {
+      await fetchPortalEnabledPrivilegedIntents('token', noSleep);
+    } catch (error) {
+      caught = error;
+    }
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(describePortalSyncFailure(caught)).toBe('HTTP 429, retry after 30s');
+  });
+
   it('stays inside the global budget', async () => {
     let clock = 0;
     mockSequence([
@@ -219,6 +233,7 @@ describe('portal sync resilience', () => {
 
     expect(caught).toBeDefined();
     expect(clock).toBeLessThanOrEqual(15_000);
+    expect(clock).toBeGreaterThan(0);
   });
 
   it.each([401, 403])('does not retry on %i', async (status) => {
