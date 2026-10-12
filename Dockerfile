@@ -37,6 +37,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     libjpeg62-turbo \
     libgif7 \
     librsvg2-2 \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -53,13 +54,10 @@ ENV BOT_CREATOR_WEB_PORT=8080
 VOLUME ["/bots", "/data"]
 EXPOSE 8080
 
-# Copy tolerant entrypoint (handles privilege drop to bun user if directories are writable)
+# Entrypoint tolérant : démarre en root, cède la main à l'utilisateur `bun` si /bots et /data lui sont accessibles
+# en écriture (gosu), sinon continue en root avec un avertissement. PAS de `USER` ici : un `USER bun` empêcherait
+# l'entrypoint de lire des volumes déjà montés et possédés par root sur les runners déployés.
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
-
-# Run as 'bun' user (non-root for security); entrypoint handles graceful fallback to root
-# if data directories are not accessible. For Kubernetes: set fsGroup and runAsUser to
-# ensure /bots and /data are writable by the bun user (UID 1000).
-USER bun
 
 ENTRYPOINT ["/app/entrypoint.sh"]
