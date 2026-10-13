@@ -46,3 +46,24 @@ it('executes all enabled event handlers, isolates failures, and cleans up on rem
   registry.clear();
   expect(client.listenerCount('interactionCreate')).toBe(0);
 });
+
+it('answers an unanswered interaction when its script throws', async () => {
+  const { notifyScriptFailure, SCRIPT_FAILURE_NOTICE } = await import('../src/discord/handler-registry.js');
+  const calls: Array<[string, unknown]> = [];
+  const make = (state: { replied?: boolean; deferred?: boolean; repliable?: boolean }) => ({
+    replied: state.replied ?? false,
+    deferred: state.deferred ?? false,
+    isRepliable: () => state.repliable ?? true,
+    isAutocomplete: () => false,
+    reply: async (arg: unknown) => { calls.push(['reply', arg]); },
+    editReply: async (arg: unknown) => { calls.push(['editReply', arg]); },
+  });
+  await notifyScriptFailure(make({}) as never);
+  await notifyScriptFailure(make({ deferred: true }) as never);
+  await notifyScriptFailure(make({ replied: true }) as never);
+  await notifyScriptFailure(make({ repliable: false }) as never);
+  await notifyScriptFailure(undefined);
+  expect(calls.map(([kind]) => kind)).toEqual(['reply', 'editReply']);
+  expect((calls[0][1] as { content: string; ephemeral: boolean }).ephemeral).toBe(true);
+  expect((calls[1][1] as { content: string }).content).toBe(SCRIPT_FAILURE_NOTICE);
+});

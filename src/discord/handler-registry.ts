@@ -493,6 +493,7 @@ export class HandlerRegistry {
       const source = describeScriptSource(partial);
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
+      await notifyScriptFailure(partial.interaction);
     }
   }
 
@@ -528,6 +529,36 @@ function isInteraction(value: unknown): value is Interaction {
     value !== null &&
     ('isChatInputCommand' in value || 'isContextMenuCommand' in value || 'isButton' in value)
   );
+}
+
+/**
+ * A script that throws used to leave its interaction unanswered: Discord then shows
+ * "The application did not respond" (or a "thinking…" that never ends) and the bot's
+ * owner has nothing visible to debug from. Answer with a short ephemeral notice; the
+ * details stay in the bot logs, never in the channel.
+ */
+export const SCRIPT_FAILURE_NOTICE =
+  '❌ This command failed. The bot owner can read the details in the bot logs.';
+
+export async function notifyScriptFailure(interaction: Interaction | undefined): Promise<void> {
+  if (!interaction || typeof interaction.isRepliable !== 'function' || !interaction.isRepliable()) {
+    return;
+  }
+  if (typeof interaction.isAutocomplete === 'function' && interaction.isAutocomplete()) {
+    return;
+  }
+  try {
+    if (interaction.replied) {
+      return;
+    }
+    if (interaction.deferred) {
+      await interaction.editReply({ content: SCRIPT_FAILURE_NOTICE, embeds: [], components: [] });
+      return;
+    }
+    await interaction.reply({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+  } catch {
+    // Interaction expired or already answered elsewhere: nothing more to do.
+  }
 }
 
 function isUnknownInteractionError(message: string): boolean {
