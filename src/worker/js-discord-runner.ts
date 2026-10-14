@@ -18,8 +18,7 @@ import {
   isDiscordGatewayFatalClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
-import type { CommandSyncReport } from '../discord/application-command-sync.js';
-import { commandRegistrationsEqual, registerSlashCommands } from '../discord/command-registerer.js';
+import { discordRest, removeStaleSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
 import { applyPresence } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
@@ -179,12 +178,8 @@ export class JsDiscordRunner {
         'info',
         `Discord client ready as ${client.user?.tag ?? client.user?.username ?? 'unknown'} (${this.guildCount} server(s))`,
       );
-      void registerSlashCommands(client, this.config.token, this.config.commands ?? [])
-        .then((report) => this.onLog('info', describeCommandSync(report)))
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error);
-          this.onLog('error', `Failed to register slash commands: ${message}`);
-        });
+      // Les commandes sont publiées par le Manager (bot Cloud) ou l'application (bot local), jamais ici.
+      this.onLog('info', 'Slash commands are published by the Manager or the app; this runner only executes them.');
     });
 
     this.client.on('error', (error: Error) => {
@@ -213,7 +208,7 @@ export class JsDiscordRunner {
   }
 
   async reload(config: JsBotConfig): Promise<void> {
-    const registrationChanged = !commandRegistrationsEqual(this.config.commands ?? [], config.commands ?? []);
+    const previousCommands = this.config.commands ?? [];
     config.scopedVariableDefinitions = mergeScopedVariableDefinitions(
       config.scopedVariableDefinitions,
       this.config.scopedVariableDefinitions,
@@ -245,19 +240,31 @@ export class JsDiscordRunner {
 
     this.registry.updateConfig(config, this.databaseManager?.handles);
     applyPresence(this.client, config);
-    if (!registrationChanged) return;
-    const report = await registerSlashCommands(
-      this.client,
-      config.token,
-      config.commands ?? [],
-    );
-    this.onLog('info', describeCommandSync(report));
+    await this.propagateRemovals(previousCommands, config.commands ?? [], config.token);
+  }
+
+  /** Seule la suppression basique est propagée chez Discord : jamais de création ni de modification. */
+  private async propagateRemovals(
+    before: CommandHandler[],
+    after: CommandHandler[],
+    token: string,
+  ): Promise<void> {
+    if (!this.client) return;
+    try {
+      const removed = await removeStaleSlashCommands(this.client, before, after, discordRest(token));
+      if (removed.length > 0) {
+        this.onLog('info', `Slash commands removed from Discord: ${removed.join(', ')}.`);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.onLog('error', `Failed to remove slash commands from Discord: ${message}`);
+    }
   }
 
   async upsertCommand(command: CommandHandler): Promise<void> {
     const nextCommands = (this.config.commands ?? []).filter((c) => c.id !== command.id);
     nextCommands.push(command);
-    const registrationChanged = !commandRegistrationsEqual(this.config.commands ?? [], nextCommands);
+    const previousCommands = this.config.commands ?? [];
     this.config = { ...this.config, commands: nextCommands };
 
     if (!this.registry) {
@@ -266,18 +273,13 @@ export class JsDiscordRunner {
 
     this.registry.upsertCommand(command);
 
-    if (this.client && registrationChanged) {
-      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? [])
-        .then((report) => this.onLog('info', describeCommandSync(report)))
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error);
-          this.onLog('error', `Failed to register slash commands after command update: ${message}`);
-        });
-    }
+    // Un renommage retire l'ancien nom chez Discord ; le nouveau est publié par le Manager.
+    void this.propagateRemovals(previousCommands, nextCommands, this.config.token);
   }
 
   async deleteCommand(commandId: string): Promise<void> {
-    const nextCommands = (this.config.commands ?? []).filter((c) => c.id !== commandId);
+    const previousCommands = this.config.commands ?? [];
+    const nextCommands = previousCommands.filter((c) => c.id !== commandId);
     this.config = { ...this.config, commands: nextCommands };
 
     if (!this.registry) {
@@ -286,14 +288,7 @@ export class JsDiscordRunner {
 
     this.registry.deleteCommand(commandId);
 
-    if (this.client) {
-      void registerSlashCommands(this.client, this.config.token, this.config.commands ?? [])
-        .then((report) => this.onLog('info', describeCommandSync(report)))
-        .catch((error: unknown) => {
-          const message = error instanceof Error ? error.message : String(error);
-          this.onLog('error', `Failed to register slash commands after command delete: ${message}`);
-        });
-    }
+    void this.propagateRemovals(previousCommands, nextCommands, this.config.token);
   }
 
   async triggerWebhook(
@@ -351,14 +346,3 @@ export class JsDiscordRunner {
  * unchanged)", which is not the same thing as a registration failure — and the
  * old version logged nothing at all on success.
  */
-function describeCommandSync(report: CommandSyncReport): string {
-  const changed = report.created.length + report.updated.length + report.removed.length;
-  if (changed === 0) {
-    return `Slash commands already up to date (${report.unchanged.length} unchanged).`;
-  }
-  return (
-    `Slash commands synced: ${report.created.length} created, ` +
-    `${report.updated.length} updated, ${report.removed.length} removed, ` +
-    `${report.unchanged.length} unchanged.`
-  );
-}
