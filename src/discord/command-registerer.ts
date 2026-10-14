@@ -2,12 +2,23 @@ import { ApplicationCommandType, REST, type Client } from 'discord.js';
 
 import { supportsSlash, type CommandHandler } from '../config/js-bot-config.js';
 import {
-  applyCommandDiff,
+  commandKeyOf,
+  removeCommands,
+  type CommandKey,
   type CommandRest,
-  type CommandSyncReport,
-  type DesiredApplicationCommand,
 } from './application-command-sync.js';
 import { transformCommandOptionsForDiscord } from './command-options.js';
+
+/** La commande telle que Discord l'attend. Sert à détecter qu'une inscription a changé. */
+interface DesiredApplicationCommand {
+  type: number;
+  name: string;
+  description?: string;
+  options?: unknown[];
+  default_member_permissions?: string;
+  contexts?: number[];
+  integration_types?: number[];
+}
 
 const DISCORD_TYPE_MAP = {
   chatInput: ApplicationCommandType.ChatInput,
@@ -18,8 +29,8 @@ const DISCORD_TYPE_MAP = {
 /**
  * Builds the command Discord should expose for a local handler.
  *
- * `id` is NOT part of the payload: Discord assigns it and keeps it (see
- * `applyCommandDiff`). Sending the local id here was considered and rejected —
+ * `id` is NOT part of the payload: Discord assigns it and keeps it (the
+ * Manager or the app publish it, never this runner). Sending the local id here was considered and rejected —
  * an imported bot carries ids that are not Discord snowflakes, and a rejected
  * command used to invalidate the whole registration.
  */
@@ -75,26 +86,35 @@ export function commandRegistrationsEqual(before: CommandHandler[], after: Comma
   return signature(before) === signature(after);
 }
 
+/** Les clés (type, nom) des commandes que ce runner exposerait en slash. */
+export function slashCommandKeys(commands: CommandHandler[]): CommandKey[] {
+  return commands
+    .filter((command) => command.enabled !== false && supportsSlash(command))
+    .map((command) => toDiscordCommand(command))
+    .map((command) => ({ type: command.type, name: command.name }));
+}
+
 /**
- * Aligns Discord's application commands with the bot's configuration.
- *
- * Returns what actually changed, so a caller can tell "nothing to do" from
- * "N commands registered" — the previous version returned nothing at all, and
- * its failures were swallowed by a `.catch` at every call site.
+ * Propage la SUPPRESSION basique : les commandes slash présentes dans `before` et absentes de `after`
+ * sont retirées chez Discord. Un runner ne crée et ne modifie JAMAIS de commande (le Manager ou
+ * l'application en sont les auteurs) et ne supprime rien qu'il ne connaissait pas.
  */
-export async function registerSlashCommands(
+export async function removeStaleSlashCommands(
   client: Client,
-  token: string,
-  commands: CommandHandler[],
-  rest: CommandRest = new REST({ version: '10' }).setToken(token) as unknown as CommandRest,
-): Promise<CommandSyncReport> {
+  before: CommandHandler[],
+  after: CommandHandler[],
+  rest: CommandRest,
+): Promise<string[]> {
+  const kept = new Set(slashCommandKeys(after).map((key) => commandKeyOf(key)));
+  const stale = slashCommandKeys(before).filter((key) => !kept.has(commandKeyOf(key)));
+  // Rien n'a disparu : on ne touche même pas au client.
+  if (stale.length === 0) return [];
   if (!client.user) {
     throw new Error('Discord client is not ready.');
   }
+  return removeCommands(rest, client.user.id, stale);
+}
 
-  const desired = commands
-    .filter((command) => command.enabled !== false && supportsSlash(command))
-    .map((command) => toDiscordCommand(command));
-
-  return applyCommandDiff(rest, client.user.id, desired);
+export function discordRest(token: string): CommandRest {
+  return new REST({ version: '10' }).setToken(token) as unknown as CommandRest;
 }
