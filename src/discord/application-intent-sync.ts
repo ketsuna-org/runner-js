@@ -1,4 +1,4 @@
-import type { JsBotConfig } from '../config/js-bot-config.js';
+import { resolveCommandPrefix, type JsBotConfig } from '../config/js-bot-config.js';
 import { DiscordTokenUnauthorizedError } from './discord-auth-errors.js';
 import { PRIVILEGED_INTENT_KEYS, resolveRequiredIntentKeys } from './intent-resolver.js';
 
@@ -275,7 +275,7 @@ function configEventNames(config: JsBotConfig): string[] {
 }
 
 export function configHasLegacyPrefixCommands(config: JsBotConfig): boolean {
-  return Boolean(config.prefix?.trim());
+  return Boolean(resolveCommandPrefix(config));
 }
 
 export function buildEffectiveIntentsMap(

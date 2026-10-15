@@ -174,3 +174,21 @@ export function supportsSlash(command: CommandHandler): boolean {
 export function supportsPrefix(command: CommandHandler): boolean {
   return ['prefix', 'hybrid'].includes(commandTriggerType(command));
 }
+
+export const DEFAULT_COMMAND_PREFIX = '!';
+
+// Prefix commands must keep working when the config carries no `prefix` (the app only
+// writes one once the user saved the bot settings): fall back to the app default `!`
+// as soon as a command is explicitly prefix/hybrid, instead of silently ignoring them.
+export function resolveCommandPrefix(config: { prefix?: string; commands?: CommandHandler[] }): string {
+  const configured = config.prefix?.trim();
+  if (configured) return configured;
+  const hasExplicitPrefixCommand = (config.commands ?? []).some((command) => {
+    if (command.enabled === false) return false;
+    const data = command.data ?? {};
+    const declared = command.triggerType ?? data.triggerType;
+    if (declared === 'prefix' || declared === 'hybrid') return true;
+    return (data.legacyModeEnabled ?? command.legacyModeEnabled) === true;
+  });
+  return hasExplicitPrefixCommand ? DEFAULT_COMMAND_PREFIX : '';
+}
