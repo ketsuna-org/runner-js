@@ -3,8 +3,7 @@ import { EventEmitter } from 'node:events';
 import type { Client } from 'discord.js';
 import { parseJsBotConfig, commandTriggerType } from '../src/config/js-bot-config.js';
 import { HandlerRegistry } from '../src/discord/handler-registry.js';
-import { registerSlashCommands, commandRegistrationsEqual } from '../src/discord/command-registerer.js';
-import type { CommandRest } from '../src/discord/application-command-sync.js';
+import { slashCommandKeys, commandRegistrationsEqual } from '../src/discord/command-registerer.js';
 import type { ScriptExecutor } from '../src/scripts/script-executor.js';
 import type { ScriptExecutionContext } from '../src/scripts/script-context.js';
 import type { VariableDatabase } from '../src/runtime/variable-database.js';
@@ -24,20 +23,10 @@ function mixedConfig() {
 }
 
 describe('mixed/restored command invocation types', () => {
-  it('registers only slash/hybrid/context commands and removes old accidental prefix registrations', async () => {
-    const bodies: Record<string, unknown>[] = [];
-    const deletes: string[] = [];
-    const rest: CommandRest = {
-      get: async () => [{ id: 'obsolete-prefix-id', name: 'prefix', type: 1, description: 'prefix', options: [] }],
-      post: async (_route, options) => { bodies.push(options.body as Record<string, unknown>); return { id: String(bodies.length) }; },
-      patch: async () => { throw new Error('Unexpected patch'); },
-      delete: async (route) => { deletes.push(route); },
-    };
-    await registerSlashCommands({ user: { id: 'application' } } as Client, '', mixedConfig().commands, rest);
-    expect(bodies.map(body => [body.name, body.type])).toEqual([
+  it('exposes only slash/hybrid/context commands (the Manager publishes them, this runner never does)', () => {
+    expect(slashCommandKeys(mixedConfig().commands).map(key => [key.name, key.type])).toEqual([
       ['slash', 1], ['hybrid', 1], ['user', 2], ['message', 3], ['old', 1],
     ]);
-    expect(deletes[0]).toContain('obsolete-prefix-id');
     const original = mixedConfig().commands.find(command => command.id === 'hybrid')!;
     expect(commandRegistrationsEqual([original], [{ ...original, triggerType: 'prefix' }])).toBe(false);
   });

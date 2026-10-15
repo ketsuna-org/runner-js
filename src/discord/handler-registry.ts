@@ -21,6 +21,11 @@ import {
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
+import {
+  normalizeScriptMember,
+  resolveScriptGuildChannel,
+  withScriptView,
+} from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -388,17 +393,31 @@ export class HandlerRegistry {
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
   ): Promise<void> {
-    const member = await upgradeInteractionMember(
-      this.client,
-      partial.interaction,
-      await resolveScriptMember(partial.message, partial.member ?? null),
+    // Cache minimal : guilde / salon peuvent manquer (threads évincés, guilde
+    // indisponible). Résolus à la demande (cache d'abord, un fetch sinon).
+    const origin = partial.interaction ?? partial.message;
+    const resolved = await resolveScriptGuildChannel(this.client, {
+      guild: partial.guild ?? origin?.guild ?? null,
+      channel: partial.channel ?? origin?.channel ?? null,
+      guildId: origin?.guildId,
+      channelId: origin?.channelId,
+    });
+    const scriptGuild = (resolved.guild ?? null) as Interaction['guild'];
+    const scriptChannel = (resolved.channel ?? null) as Interaction['channel'];
+    const member = normalizeScriptMember(
+      await upgradeInteractionMember(
+        this.client,
+        partial.interaction,
+        await resolveScriptMember(partial.message, partial.member ?? null),
+        origin?.guildId ? scriptGuild : undefined,
+      ),
     );
     const scopedCtx: ScopedExecutionContext = {
       interaction: partial.interaction,
       message: partial.message,
-      guild: partial.guild ?? null,
+      guild: scriptGuild,
       member,
-      channel: partial.channel ?? null,
+      channel: scriptChannel,
     };
 
     try {
@@ -426,11 +445,31 @@ export class HandlerRegistry {
           sql: this.databaseHandles?.sql,
           pgsql: this.databaseHandles?.pgsql,
           mongo: this.databaseHandles?.mongo,
-          interaction: partial.interaction,
-          message: (partial.message ?? partial.compatMessage) as Message | undefined,
-          guild: partial.guild ?? null,
+          // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
+          // et `channel` résolus, même hors cache.
+          interaction: partial.interaction
+            ? withScriptView(partial.interaction, {
+                member,
+                guild: scriptGuild,
+                channel: scriptChannel,
+              })
+            : undefined,
+          message: (partial.message
+            ? withScriptView(partial.message, {
+                member,
+                guild: scriptGuild,
+                channel: scriptChannel,
+              })
+            : partial.compatMessage
+              ? withScriptView(partial.compatMessage as object, {
+                  member,
+                  guild: scriptGuild,
+                  channel: scriptChannel,
+                })
+              : undefined) as Message | undefined,
+          guild: scriptGuild,
           member,
-          channel: (partial.channel as never) ?? null,
+          channel: scriptChannel as never,
           webhook: partial.webhook,
         },
         this.scriptLogger,
@@ -454,6 +493,7 @@ export class HandlerRegistry {
       const source = describeScriptSource(partial);
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
+      await notifyScriptFailure(partial.interaction);
     }
   }
 
@@ -491,6 +531,36 @@ function isInteraction(value: unknown): value is Interaction {
   );
 }
 
+/**
+ * A script that throws used to leave its interaction unanswered: Discord then shows
+ * "The application did not respond" (or a "thinking…" that never ends) and the bot's
+ * owner has nothing visible to debug from. Answer with a short ephemeral notice; the
+ * details stay in the bot logs, never in the channel.
+ */
+export const SCRIPT_FAILURE_NOTICE =
+  '❌ This command failed. The bot owner can read the details in the bot logs.';
+
+export async function notifyScriptFailure(interaction: Interaction | undefined): Promise<void> {
+  if (!interaction || typeof interaction.isRepliable !== 'function' || !interaction.isRepliable()) {
+    return;
+  }
+  if (typeof interaction.isAutocomplete === 'function' && interaction.isAutocomplete()) {
+    return;
+  }
+  try {
+    if (interaction.replied) {
+      return;
+    }
+    if (interaction.deferred) {
+      await interaction.editReply({ content: SCRIPT_FAILURE_NOTICE, embeds: [], components: [] });
+      return;
+    }
+    await interaction.reply({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+  } catch {
+    // Interaction expired or already answered elsewhere: nothing more to do.
+  }
+}
+
 function isUnknownInteractionError(message: string): boolean {
   return message.includes('Unknown interaction');
 }
@@ -504,6 +574,8 @@ export async function upgradeInteractionMember<M>(
   client: { guilds: { fetch: (id: string) => Promise<Guild> } },
   interaction: Interaction | undefined,
   member: M,
+  /** Guilde déjà résolue (`null` = introuvable : pas de nouveau fetch). */
+  resolvedGuild?: Guild | null,
 ): Promise<M | GuildMember> {
   const roles = (member as { roles?: unknown } | null)?.roles as
     | { add?: unknown }
@@ -512,7 +584,13 @@ export async function upgradeInteractionMember<M>(
     return member;
   }
   try {
-    const guild = interaction.guild ?? (await client.guilds.fetch(interaction.guildId));
+    const guild =
+      resolvedGuild !== undefined
+        ? resolvedGuild
+        : (interaction.guild ?? (await client.guilds.fetch(interaction.guildId)));
+    if (!guild) {
+      return member;
+    }
     return await guild.members.fetch(interaction.user.id);
   } catch {
     return member;
