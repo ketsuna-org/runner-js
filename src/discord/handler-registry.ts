@@ -12,6 +12,7 @@ import {
   commandTriggerType,
   supportsSlash,
   supportsPrefix,
+  resolveCommandPrefix,
   type CommandHandler,
   type EventHandler,
   type InboundWebhookHandler,
@@ -143,13 +144,14 @@ export class HandlerRegistry {
     this.client.on(Events.InteractionCreate, onInteraction);
     this.disposers.push(() => this.client.off(Events.InteractionCreate, onInteraction));
 
-    if (this.config.prefix) {
+    {
       const onMessage = async (message: Message) => {
-        if (message.author.bot || !message.content.startsWith(this.config.prefix!)) {
+        const prefix = resolveCommandPrefix(this.config);
+        if (!prefix || message.author.bot || !message.content.startsWith(prefix)) {
           return;
         }
 
-        const withoutPrefix = message.content.slice(this.config.prefix!.length).trim();
+        const withoutPrefix = message.content.slice(prefix.length).trim();
         const commandName = withoutPrefix.split(/\s+/)[0]?.toLowerCase();
         if (!commandName) {
           return;
@@ -358,7 +360,7 @@ export class HandlerRegistry {
   }
 
   private isPrefixCommandMessage(message: Message): boolean {
-    const prefix = this.config.prefix?.trim();
+    const prefix = resolveCommandPrefix(this.config);
     if (!prefix || message.author.bot || !message.content.startsWith(prefix)) {
       return false;
     }

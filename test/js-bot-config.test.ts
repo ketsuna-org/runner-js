@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 
 import {
   parseJsBotConfig,
+  resolveCommandPrefix,
   validateJsBotConfig,
 } from '../src/config/js-bot-config.js';
 
@@ -100,5 +101,19 @@ describe('JsBotConfig', () => {
     });
 
     expect(config.commands[0]?.aliases).toEqual(['h', 'aide', 'halp']);
+  });
+});
+
+describe('resolveCommandPrefix', () => {
+  it('keeps the configured prefix', () => {
+    expect(resolveCommandPrefix({ prefix: ' ? ', commands: [] })).toBe('?');
+  });
+  it('falls back to ! when a prefix or hybrid command exists without a configured prefix', () => {
+    expect(resolveCommandPrefix({ commands: [{ triggerType: 'prefix' } as never] })).toBe('!');
+    expect(resolveCommandPrefix({ commands: [{ data: { triggerType: 'hybrid' } } as never] })).toBe('!');
+    expect(resolveCommandPrefix({ commands: [{ data: { legacyModeEnabled: true } } as never] })).toBe('!');
+  });
+  it('stays empty without explicit prefix commands', () => {
+    expect(resolveCommandPrefix({ commands: [{ triggerType: 'slash' } as never, { enabled: false, triggerType: 'prefix' } as never, {} as never] })).toBe('');
   });
 });
