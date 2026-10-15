@@ -389,6 +389,40 @@ jobs:
         run: |
           docker buildx imagetools inspect ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ needs.auto-release.outputs.version }}
 
+  publish-dev-image:
+    name: Publish staging image (Manager webhook deploys)
+    needs: [quality, unit-tests, api-integration-tests, container-build-scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ env.GHCR_REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Pas de tag latest/SemVer sur dev : seul dev-<sha> existe. Le workflow terminé avec
+      # succès laisse le Manager de staging déployer exactement cette image via son webhook.
+      - name: Publish immutable staging image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ env.GHCR_REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ github.sha }}
+          cache-from: type=gha,scope=dev-image
+          cache-to: type=gha,mode=max,scope=dev-image
+
   ci-success:
     name: ci-success
     needs:
@@ -402,6 +436,7 @@ jobs:
       - auto-release
       - build-image
       - publish-image
+      - publish-dev-image
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -420,5 +455,8 @@ jobs:
             if [[ "${{ needs.auto-release.result }}" != "success" ]]; then exit 1; fi
             if [[ "${{ needs.build-image.result }}" != "success" ]]; then exit 1; fi
             if [[ "${{ needs.publish-image.result }}" != "success" ]]; then exit 1; fi
+          fi
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/dev" ]]; then
+            if [[ "${{ needs.publish-dev-image.result }}" != "success" ]]; then exit 1; fi
           fi
           echo "All required CI checks passed successfully."
