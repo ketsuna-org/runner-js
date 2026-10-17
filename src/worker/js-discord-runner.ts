@@ -20,7 +20,7 @@ import {
 } from '../discord/discord-auth-errors.js';
 import { discordRest, removeStaleSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
-import { applyPresence } from '../discord/presence.js';
+import { applyPresence, stopPresenceRotation } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -311,6 +311,7 @@ export class JsDiscordRunner {
     this.databaseManager = null;
 
     if (this.client) {
+      stopPresenceRotation(this.client);
       await this.client.destroy();
       this.client = null;
     }
