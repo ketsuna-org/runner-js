@@ -3,7 +3,7 @@ import {
   buildDiscordClientOptions,
   clientHasGuildVoiceStatesIntent,
 } from '../src/discord/discord-client-options.js';
-import { GatewayIntentBits, GuildMemberManager, VoiceStateManager } from 'discord.js';
+import { GatewayIntentBits, GuildMemberManager, PresenceManager, VoiceStateManager } from 'discord.js';
 
 describe('buildDiscordClientOptions', () => {
   it('disables message and reaction caches by default', () => {
@@ -68,6 +68,14 @@ describe('buildDiscordClientOptions', () => {
     };
     expect(cache.maxSize).toBe(50);
     expect(typeof cache.keepOverLimit).toBe('function');
+  });
+
+  it('caches presences only when Guild Presence intent is enabled', () => {
+    const manager = { name: 'PresenceManager' };
+    const on = buildDiscordClientOptions({ Guilds: true, 'Guild Presence': true });
+    const off = buildDiscordClientOptions({ Guilds: true });
+    expect((on.makeCache!(PresenceManager, null as never, manager as never) as { maxSize?: number }).maxSize).toBe(200);
+    expect((off.makeCache!(PresenceManager, null as never, manager as never) as { maxSize?: number }).maxSize).toBe(0);
   });
 
   it('detects Guild Voice States intent on client options', () => {

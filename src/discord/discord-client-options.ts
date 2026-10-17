@@ -27,6 +27,7 @@ export function buildDiscordClientOptions(
 ): ClientOptions {
   const hasGuildMembers = Boolean(intentsMap['Guild Members']);
   const hasVoiceStates = Boolean(intentsMap['Guild Voice States']);
+  const hasPresences = Boolean(intentsMap['Guild Presence'] || intentsMap['Guild Presences']);
 
   return {
     intents: mapIntents(intentsMap),
@@ -51,7 +52,9 @@ export function buildDiscordClientOptions(
       GuildStickerManager: 0,
       GuildTextThreadManager: 25,
       MessageManager: 0,
-      PresenceManager: 0,
+      // member.presence reads this cache: with the Guild Presence intent a
+      // zero-size cache makes every member look offline with no activities.
+      PresenceManager: hasPresences ? 200 : 0,
       ReactionManager: 0,
       StageInstanceManager: 0,
       ThreadManager: 25,
