@@ -60,6 +60,8 @@ export const presenceSchema = z
             .default('playing'),
           name: z.string(),
           url: z.string().optional(),
+          minIntervalSeconds: z.number().positive().optional(),
+          maxIntervalSeconds: z.number().positive().optional(),
         }),
       )
       .default([]),
