@@ -13,6 +13,9 @@ import {
 import { buildDiscordClientOptions } from '../discord/discord-client-options.js';
 import {
   DiscordTokenUnauthorizedError,
+  DiscordUnavailableError,
+  asDiscordUnavailable,
+  discordIpBlockRemainingMs,
   formatGatewayCloseMessage,
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordGatewayFatalClose,
@@ -25,6 +28,7 @@ import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
+import type { LogOrigin } from '../runtime/log-store.js';
 
 export class JsDiscordRunner {
   private client: Client | null = null;
@@ -44,6 +48,7 @@ export class JsDiscordRunner {
     private readonly onLog: (
       level: 'info' | 'warn' | 'error' | 'debug',
       message: string,
+      origin?: LogOrigin,
     ) => void,
     private readonly onFatalDisconnect?: (reason: string) => void,
   ) {}
@@ -149,6 +154,15 @@ export class JsDiscordRunner {
     this.fatalDisconnectHandled = false;
     this.effectiveIntents = await this.resolveEffectiveIntents();
 
+    // Blocage d'IP connu (détecté à la lecture des intents ou par un login précédent) :
+    // inutile de créer un client et de retenter une connexion qui échouera pareil.
+    const blockedMs = discordIpBlockRemainingMs();
+    if (blockedMs > 0) {
+      const blocked = new DiscordUnavailableError('blocked', blockedMs / 1000);
+      this.lastError = blocked.message;
+      throw blocked;
+    }
+
     this.client = new Client(buildDiscordClientOptions(this.effectiveIntents));
 
     this.onLog('info', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
@@ -165,7 +179,8 @@ export class JsDiscordRunner {
       this.botId,
       this.executor,
       this.variableStore,
-      (level, message) => this.onLog(level, message),
+      // Journaux des scripts et des handlers : leur volume suit le trafic, pas le runner.
+      (level, message) => this.onLog(level, message, 'script'),
       this.databaseManager.handles,
     );
 
@@ -194,6 +209,13 @@ export class JsDiscordRunner {
     try {
       await this.client.login(this.config.token);
     } catch (error) {
+      // 429 au login : erreur typée (le RateLimitError de discord.js a un message vide).
+      const unavailable = asDiscordUnavailable(error);
+      if (unavailable) {
+        this.lastError = unavailable.message;
+        await this.stop();
+        throw unavailable;
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.lastError = message;
       if (isDiscordTokenUnauthorized(error) || isDiscordGatewayFatalClose(null, message)) {
@@ -228,10 +250,21 @@ export class JsDiscordRunner {
 
     this.config = config;
 
-    if (intentsChanged || tokenChanged) {
+    // Pendant un blocage d'IP, une reconnexion ne peut pas aboutir et start() détruirait d'abord
+    // le client sain : seul un changement de jeton force le passage par start(). Pour les intents,
+    // on garde le client et les intents actuels ; la reconnexion se refera au prochain reload
+    // (this.effectiveIntents reste différent des intents attendus).
+    const blockedMs = discordIpBlockRemainingMs();
+    if (tokenChanged || (intentsChanged && blockedMs === 0)) {
       this.onLog('info', 'Intents or token changed — reconnecting Discord client...');
       await this.start();
       return;
+    }
+    if (intentsChanged) {
+      this.onLog(
+        'warn',
+        `Intents changed but the reconnection is deferred: Discord is blocking requests from this network (retry after ${Math.ceil(blockedMs / 1000)}s)`,
+      );
     }
 
     if (!this.client || !this.registry) {
