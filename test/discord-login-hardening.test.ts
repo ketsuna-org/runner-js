@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
-import { Client } from 'discord.js';
+import { Client, DefaultRestOptions } from 'discord.js';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import { loadRunnerEnv } from '../src/config/env.js';
-import type { JsBotConfig } from '../src/config/js-bot-config.js';
+import { parseJsBotConfig, type JsBotConfig } from '../src/config/js-bot-config.js';
 import {
   DiscordUnavailableError,
   armDiscordIpBlock,
@@ -298,6 +298,45 @@ describe('JsDiscordRunner.start against an IP block', () => {
   });
 });
 
+describe('JsDiscordRunner.start against a 429 at login', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+    clearDiscordIpBlock();
+    clearLastKnownPortalIntents();
+  });
+
+  it('maps a per-token global 429 on /gateway/bot to a typed rate_limited error, hold untouched', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ flags: 0 }), { status: 200 }),
+    ) as unknown as typeof fetch;
+    const transport = vi.fn(async () =>
+      fakeResponse(
+        429,
+        { ...JSON_HEADERS, 'x-ratelimit-global': 'true', 'retry-after': '2' },
+        '{"message":"You are being rate limited.","retry_after":2,"global":true}',
+      ),
+    );
+    vi.spyOn(DefaultRestOptions, 'makeRequest').mockImplementation(transport as never);
+    const runner = new JsDiscordRunner(
+      'bot-1',
+      parseJsBotConfig({ token: 'token', events: [], commands: [] }),
+      {} as VariableDatabase,
+      () => undefined,
+    );
+
+    const error = await runner.start().catch((e: unknown) => e);
+
+    expect(transport).toHaveBeenCalledTimes(1);
+    expect(error).toBeInstanceOf(DiscordUnavailableError);
+    expect((error as DiscordUnavailableError).code).toBe('discord_rate_limited');
+    expect(runner.getStatus().lastError).toBeTruthy();
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+});
+
 describe('start route', () => {
   let dir: string;
   let runtime: RuntimeController | null = null;
@@ -365,6 +404,85 @@ describe('start route', () => {
       code: 'discord_rate_limited',
       retry_after_seconds: 3,
     });
+  });
+
+  it('answers 503 on /reload when the reconnection hits a Discord block', async () => {
+    const env = {
+      ...loadRunnerEnv(),
+      dataDir: dir,
+      logFile: path.join(dir, 'logs', 'runner.log'),
+      webHost: '127.0.0.1',
+      webPort: 0,
+      apiToken: '',
+    };
+    const logStore = new LogStore(env.logFile);
+    runtime = new RuntimeController(dir, logStore, {} as VariableDatabase, 1, () => ({
+      start: async () => undefined,
+      stop: async () => undefined,
+      reload: async () => {
+        throw new DiscordUnavailableError('blocked', 45);
+      },
+      triggerWebhook: async () => true,
+      getGuildCount: () => 0,
+      getHeapUsedBytes: () => null,
+    }));
+    const app = createHttpServer({ env, runtime, logStore });
+    const post = (url: string, body: unknown) =>
+      app.request(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    const config = { token: 'x', commands: [] };
+    expect((await post('/bots/sync', { botId: 'b1', botName: 'B', config })).status).toBe(200);
+    expect((await post('/bots/b1/start', {})).status).toBe(200);
+
+    const response = await post('/bots/b1/reload', { config });
+
+    expect(response.status).toBe(503);
+    expect(response.headers.get('retry-after')).toBe('45');
+    expect(await response.json()).toMatchObject({
+      code: 'discord_temporarily_blocked',
+      retry_after_seconds: 45,
+    });
+  });
+
+  it('end to end: Pedro text on applications/@me gives a 503 discord_temporarily_blocked after one request', async () => {
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.fn(async () =>
+      fakeResponse(429, { 'content-type': 'text/plain' }, PEDRO_TEXT),
+    );
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const env = {
+        ...loadRunnerEnv(),
+        dataDir: dir,
+        logFile: path.join(dir, 'logs', 'runner.log'),
+        webHost: '127.0.0.1',
+        webPort: 0,
+        apiToken: '',
+      };
+      const logStore = new LogStore(env.logFile);
+      runtime = new RuntimeController(dir, logStore, {} as VariableDatabase, 1);
+      const app = createHttpServer({ env, runtime, logStore });
+      const sync = await app.request('/bots/sync', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ botId: 'b1', botName: 'B', config: { token: 'x', commands: [] } }),
+      });
+      expect(sync.status).toBe(200);
+
+      const response = await app.request('/bots/b1/start', { method: 'POST' });
+
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: 'discord_temporarily_blocked' });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(runtime.isBotRunning('b1')).toBe(false);
+    } finally {
+      globalThis.fetch = originalFetch;
+      clearDiscordIpBlock();
+      clearLastKnownPortalIntents();
+    }
   });
 
   it('keeps answering 401 discord_token_invalid for a genuinely refused token', async () => {
