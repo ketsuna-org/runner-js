@@ -752,6 +752,7 @@ function serializeBotRuntimeState(state: ReturnType<RuntimeController['listRunti
     heapUsedBytes: state.heapUsedBytes,
     guildCount: state.guildCount,
     pid: state.pid,
+    discordRest: state.discordRest,
   };
 }
 

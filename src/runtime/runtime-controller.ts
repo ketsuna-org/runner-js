@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
 import { BotSupervisor, type BotSupervisorOptions, type ManagedBotState } from './bot-supervisor.js';
+import type { DiscordRestSnapshot } from '../discord/rest-observability.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
 import { mergeScopedVariableDefinitions } from './scoped-context.js';
@@ -30,6 +31,7 @@ export interface RunnerBotRuntimeState {
   heapUsedBytes: number | null;
   guildCount: number | null;
   pid: number | null;
+  discordRest?: DiscordRestSnapshot;
 }
 
 /** 501 avant toute écriture : le Manager retombe sur une synchro complète (voir hotSyncIncomplete). */
@@ -455,6 +457,7 @@ export class RuntimeController {
       heapUsedBytes: state.heapUsedBytes,
       guildCount: state.guildCount,
       pid: state.pid,
+      discordRest: state.discordRest,
     };
   }
 
