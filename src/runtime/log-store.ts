@@ -8,6 +8,26 @@ export interface LogLine {
   message: string;
 }
 
+// Lignes toujours recopiées sur stdout, quel que soit leur niveau : `kubectl logs` doit montrer
+// pourquoi un bot ne démarre pas ou s'est déconnecté (le fichier runner.log n'est pas visible).
+const STDOUT_MIRRORED_PREFIXES = ['Bot start failed', 'Fatal disconnect', 'Intent warning'];
+
+// Jetons Discord (3 segments base64url) et en-têtes `Bot <token>` : jamais écrits sur stdout.
+const DISCORD_TOKEN_PATTERN = /[\w-]{23,28}\.[\w-]{6,7}\.[\w-]{27,}/g;
+const BOT_AUTH_PATTERN = /\bBot\s+[\w.-]{20,}/g;
+
+function redactSecrets(text: string): string {
+  return text.replace(DISCORD_TOKEN_PATTERN, '[redacted]').replace(BOT_AUTH_PATTERN, 'Bot [redacted]');
+}
+
+function shouldMirrorToStdout(level: LogLine['level'], message: string): boolean {
+  return (
+    level === 'warn' ||
+    level === 'error' ||
+    STDOUT_MIRRORED_PREFIXES.some((prefix) => message.startsWith(prefix))
+  );
+}
+
 export class LogStore {
   private readonly lines: LogLine[] = [];
   private readonly maxLines: number;
@@ -81,6 +101,11 @@ export class LogStore {
     const formatted = `[${line.ts}] [${line.level.toUpperCase()}]${
       botId ? ` [bot:${botId}]` : ''
     } ${message}\n`;
+
+    if (shouldMirrorToStdout(level, message)) {
+      // Une ligne, même texte que dans le fichier ; stdout seulement (pas de spam par message).
+      console.log(redactSecrets(formatted.trimEnd()));
+    }
 
     this.writeQueue = this.writeQueue.then(async () => {
       try {
