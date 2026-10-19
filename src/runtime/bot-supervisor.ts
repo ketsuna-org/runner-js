@@ -4,6 +4,11 @@ import {
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
+import {
+  DiscordRestStats,
+  emptyDiscordRestSnapshot,
+  type DiscordRestSnapshot,
+} from '../discord/rest-observability.js';
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
 import type { LogOrigin, LogStore } from './log-store.js';
@@ -21,6 +26,8 @@ export interface ManagedBotState {
   heapUsedBytes: number | null;
   guildCount: number | null;
   autoRestart: boolean;
+  /** Compteurs des réponses REST de Discord pour ce bot (voir rest-observability.ts). */
+  discordRest?: DiscordRestSnapshot;
 }
 
 /** Compatibility alias from the per-bot worker-process era. */
@@ -52,6 +59,8 @@ export interface CreateRunnerParams {
     origin?: LogOrigin,
   ) => void;
   onFatalDisconnect: (reason: string) => void;
+  /** Compteurs REST du bot : les mêmes pour tous les runners successifs d'un même bot. */
+  restStats: DiscordRestStats;
 }
 
 export interface BotSupervisorOptions {
@@ -93,6 +102,9 @@ export class BotSupervisor {
   private readonly startingBots = new Set<string>();
   private readonly stoppingBots = new Set<string>();
   private readonly tokenInvalidBots = new Set<string>();
+  // Un runner (donc un client discord.js) est recréé à chaque démarrage : un bot qui boucle sur ses
+  // redémarrages est le cas où les compteurs REST doivent survivre. Une entrée par bot vu sur ce nœud.
+  private readonly restStats = new Map<string, DiscordRestStats>();
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
   // Fin (réussie ou non) du start() en cours d'un bot, et file des reloads d'un bot : un reload ne
   // doit jamais chevaucher un start() ni un autre reload (ils partagent client et registry).
@@ -115,6 +127,7 @@ export class BotSupervisor {
           params.variableStore,
           params.onLog,
           params.onFatalDisconnect,
+          params.restStats,
         ));
     this.maxBots = options.maxBots;
     this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
@@ -138,11 +151,11 @@ export class BotSupervisor {
   }
 
   listStates(): ManagedBotState[] {
-    return [...this.states.values()];
+    return [...this.states.values()].map((state) => this.withRestSnapshot(state));
   }
 
   getState(botId: string): ManagedBotState {
-    return (
+    return this.withRestSnapshot(
       this.states.get(botId) ?? {
         botId,
         botName: botId,
@@ -155,8 +168,25 @@ export class BotSupervisor {
         heapUsedBytes: null,
         guildCount: null,
         autoRestart: true,
-      }
+      },
     );
+  }
+
+  /** Lecture seule : un identifiant inconnu n'ajoute rien à la table des compteurs. */
+  private withRestSnapshot(state: ManagedBotState): ManagedBotState {
+    return {
+      ...state,
+      discordRest: this.restStats.get(state.botId)?.snapshot() ?? emptyDiscordRestSnapshot(),
+    };
+  }
+
+  private restStatsFor(botId: string): DiscordRestStats {
+    let stats = this.restStats.get(botId);
+    if (!stats) {
+      stats = new DiscordRestStats();
+      this.restStats.set(botId, stats);
+    }
+    return stats;
   }
 
   isRunning(botId: string): boolean {
@@ -211,6 +241,7 @@ export class BotSupervisor {
       onLog: (level, message, origin) =>
         this.options.logStore.append(level, message, botId, origin),
       onFatalDisconnect: (reason) => this.handleFatalDisconnect(botId, reason),
+      restStats: this.restStatsFor(botId),
     });
     this.bots.set(botId, { runner });
 

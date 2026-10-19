@@ -8,6 +8,7 @@ import {
   discordIpBlockRemainingMs,
 } from './discord-auth-errors.js';
 import { PRIVILEGED_INTENT_KEYS, resolveRequiredIntentKeys } from './intent-resolver.js';
+import type { DiscordResponseInfo } from './rest-observability.js';
 
 // Business logic mirrored in bot-creator-shared `application_intent_sync.dart`.
 // Valeurs de la doc Discord (ApplicationFlags) : le bit « normal » désigne
@@ -123,6 +124,8 @@ export type PortalSyncOptions = {
   /** Horloge injectable (tests). */
   now?: () => number;
   totalBudgetMs?: number;
+  /** Reçoit chaque 401, 403 et 429 de la lecture (compteurs REST du bot). */
+  onInvalidResponse?: (info: DiscordResponseInfo) => void;
 };
 
 function parseRetryAfterSeconds(header: string | null): number | null {
@@ -179,10 +182,12 @@ async function fetchApplicationFlagsOnce(
   token: string,
   timeoutMs: number,
   now: () => number,
+  onInvalidResponse?: PortalSyncOptions['onInvalidResponse'],
 ): Promise<number> {
+  const url = 'https://discord.com/api/v10/applications/@me';
   let response: Response;
   try {
-    response = await fetch('https://discord.com/api/v10/applications/@me', {
+    response = await fetch(url, {
       headers: { Authorization: `Bot ${token}` },
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -195,6 +200,18 @@ async function fetchApplicationFlagsOnce(
   }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403 || response.status === 429) {
+      try {
+        onInvalidResponse?.({
+          status: response.status,
+          method: 'GET',
+          url,
+          scope: response.headers.get('x-ratelimit-scope'),
+        });
+      } catch {
+        // Un compteur en échec ne doit jamais faire échouer la lecture des intents.
+      }
+    }
     if (response.status === 401 || response.status === 403) {
       throw new DiscordTokenUnauthorizedError(
         `Failed to fetch application flags (${response.status})`,
@@ -271,6 +288,7 @@ export async function fetchPortalEnabledPrivilegedIntents(
         token,
         Math.max(1, Math.min(PORTAL_SYNC_ATTEMPT_TIMEOUT_MS, remaining)),
         now,
+        options.onInvalidResponse,
       );
       return {
         enabled: portalEnabledPrivilegedIntentsFromFlags(flags),

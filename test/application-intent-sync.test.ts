@@ -444,6 +444,47 @@ describe('portal sync resilience', () => {
     expect(discordIpBlockRemainingMs()).toBe(0);
   });
 
+  it('reports every invalid response of the startup read to the observer, retries included', async () => {
+    mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1,"global":false}', {
+          status: 429,
+          headers: { ...JSON_429, 'x-ratelimit-scope': 'user', 'retry-after': '1' },
+        }),
+      () => new Response(JSON.stringify({ flags: PRESENCE_LIMITED }), { status: 200 }),
+    ]);
+    const seen: Array<{ status: number; method: string; url: string; scope?: string | null }> = [];
+
+    await fetchPortalEnabledPrivilegedIntents('token', {
+      ...noSleep,
+      onInvalidResponse: (info) => seen.push(info),
+    });
+
+    // La réponse 200 n'est pas un invalide ; le 429 est compté avec la route, sans jeton.
+    expect(seen).toEqual([
+      {
+        status: 429,
+        method: 'GET',
+        url: 'https://discord.com/api/v10/applications/@me',
+        scope: 'user',
+      },
+    ]);
+  });
+
+  it('reports a 403 of the startup read too', async () => {
+    mockSequence([() => new Response('{}', { status: 403 })]);
+    const seen: number[] = [];
+
+    await expect(
+      fetchPortalEnabledPrivilegedIntents('token', {
+        ...noSleep,
+        onInvalidResponse: (info) => seen.push(info.status),
+      }),
+    ).rejects.toBeInstanceOf(DiscordTokenUnauthorizedError);
+
+    expect(seen).toEqual([403]);
+  });
+
   it('never leaks the token in failure descriptions', async () => {
     mockSequence([
       () => {

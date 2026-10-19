@@ -266,6 +266,38 @@ describe('BotSupervisor', () => {
     expect(createdParams).toHaveLength(2);
   });
 
+  it('keeps the REST counters of a bot across restarts and exposes them in its state', async () => {
+    vi.useFakeTimers();
+    const { supervisor, createdParams } = makeHarness();
+
+    await supervisor.startBot('bot-1', 'Bot One');
+    createdParams[0].restStats.recordInvalidResponse({
+      status: 403,
+      method: 'POST',
+      url: 'https://discord.com/api/v10/channels/123456789012345678/messages',
+    });
+    expect(supervisor.getState('bot-1').discordRest?.invalid.total).toBe(1);
+
+    // Un bot qui boucle sur ses redémarrages recrée son runner à chaque tour : les compteurs,
+    // eux, appartiennent au bot et ne repartent pas de zéro.
+    createdParams[0].onFatalDisconnect('Discord session invalidated');
+    await vi.advanceTimersByTime(4000);
+
+    expect(createdParams).toHaveLength(2);
+    expect(createdParams[1].restStats).toBe(createdParams[0].restStats);
+    const [state] = supervisor.listStates();
+    expect(state.discordRest?.invalid.total).toBe(1);
+    expect(state.discordRest?.invalid.topRoutes[0]).toMatchObject({
+      route: 'POST /channels/:id/messages',
+      status: 403,
+    });
+  });
+
+  it('gives a bot that never started an empty REST snapshot rather than none', () => {
+    const { supervisor } = makeHarness();
+    expect(supervisor.getState('ghost').discordRest?.invalid.total).toBe(0);
+  });
+
   it('does not restart after a disallowed-intents disconnect', async () => {
     vi.useFakeTimers();
     const { supervisor, createdParams } = makeHarness();

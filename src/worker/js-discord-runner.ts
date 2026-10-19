@@ -12,6 +12,11 @@ import {
 } from '../discord/application-intent-sync.js';
 import { buildDiscordClientOptions } from '../discord/discord-client-options.js';
 import {
+  DiscordRestStats,
+  attachRestObservers,
+  type RestEventSource,
+} from '../discord/rest-observability.js';
+import {
   DiscordTokenUnauthorizedError,
   DiscordUnavailableError,
   asDiscordUnavailable,
@@ -51,6 +56,11 @@ export class JsDiscordRunner {
       origin?: LogOrigin,
     ) => void,
     private readonly onFatalDisconnect?: (reason: string) => void,
+    /**
+     * Compteurs REST du bot, fournis par le superviseur : le runner est recréé à chaque démarrage,
+     * les compteurs doivent survivre aux redémarrages.
+     */
+    private readonly restStats: DiscordRestStats = new DiscordRestStats(),
   ) {}
 
   getGuildCount(): number {
@@ -65,7 +75,9 @@ export class JsDiscordRunner {
   private async resolveEffectiveIntents(config: JsBotConfig = this.config): Promise<Record<string, boolean>> {
     const warnings: string[] = [];
     try {
-      const portalSync = await fetchPortalEnabledPrivilegedIntents(config.token);
+      const portalSync = await fetchPortalEnabledPrivilegedIntents(config.token, {
+        onInvalidResponse: (info) => this.restStats.recordInvalidResponse(info),
+      });
       rememberPortalIntents(this.botId, portalSync.enabled);
       const effective = buildEffectiveIntentsMap(config, portalSync.enabled, warnings);
       for (const warning of warnings) {
@@ -163,7 +175,17 @@ export class JsDiscordRunner {
       throw blocked;
     }
 
-    this.client = new Client(buildDiscordClientOptions(this.effectiveIntents));
+    this.client = new Client(
+      buildDiscordClientOptions(this.effectiveIntents, undefined, (info) =>
+        this.restStats.recordInvalidResponse(info),
+      ),
+    );
+    attachRestObservers(
+      this.client.rest as unknown as RestEventSource,
+      this.botId,
+      this.onLog,
+      this.restStats,
+    );
 
     this.onLog('info', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
     this.onLog(
