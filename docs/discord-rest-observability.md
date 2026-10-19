@@ -28,6 +28,10 @@ Discord REST invalid_request_warning lines suppressed bot=<id>: more than 6 per 
 - `rate_limited` : **n'est pas un compteur de 429**. discord.js ne l'émet que lorsqu'il met une requête en
   attente d'une limite déjà connue. Un 429 inattendu, et surtout un 429 de blocage Cloudflare (sans en-têtes
   `X-RateLimit-*`), ne l'émet pas. Il est normal pour un bot actif ; il est journalisé à titre informatif.
+  **Attention à `global=true`** : discord.js espace lui-même ses requêtes à 50 par seconde
+  (`globalRequestsPerSecond`) et émet alors `rateLimited` avec `global=true` ; la même valeur peut aussi venir
+  d'un vrai 429 portant `X-RateLimit-Global`. Une ligne `global=true` ne prouve donc pas que Discord limite
+  le jeton : un bot occupé qui se bride lui-même la produit.
 - Plafond : 6 lignes par minute, par bot et par type d'événement ; la 7e est remplacée par la ligne
   « suppressed » (une seule), les suivantes sont tues. Les compteurs restent exacts.
 - Aucune ligne ne contient d'URL, de jeton ni d'identifiant : la route est normalisée (`:id`, `:token`).
