@@ -60,7 +60,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       {
         error: err.message ?? 'Internal server error',
       },
-      statusCode as 400 | 401 | 404 | 409 | 500,
+      statusCode as 400 | 401 | 404 | 409 | 500 | 501,
     );
   });
 
@@ -305,6 +305,72 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       }
       throw badRequest(`Failed to delete command: ${message}`);
     }
+  });
+
+  app.post('/bots/:id/workflows/sync', async (c) => {
+    const botId = c.req.param('id');
+    let body: { workflowName?: unknown; workflow?: unknown } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      throw badRequest('Missing or invalid JSON body.');
+    }
+
+    const workflow = body.workflow;
+    if (!workflow || typeof workflow !== 'object' || Array.isArray(workflow)) {
+      throw badRequest('Missing or invalid workflow payload.');
+    }
+
+    // Même tolérance que le Manager : à défaut de clé explicite, le nom du workflow fait foi.
+    const workflowName = (
+      typeof body.workflowName === 'string' && body.workflowName.trim()
+        ? body.workflowName
+        : String((workflow as { name?: unknown }).name ?? '')
+    ).trim();
+    if (!workflowName) {
+      throw badRequest('Missing workflowName.');
+    }
+
+    try {
+      await deps.runtime.upsertWorkflow(botId, workflowName, workflow as Record<string, unknown>);
+    } catch (error) {
+      throw workflowError(error);
+    }
+    deps.logStore.append('info', `Synced workflow "${workflowName}" for bot ${botId}`, botId);
+    return c.json({
+      ok: true,
+      botId,
+      workflowName,
+      running: deps.runtime.isBotRunning(botId),
+    });
+  });
+
+  app.post('/bots/:id/workflows/delete', async (c) => {
+    const botId = c.req.param('id');
+    let body: { workflowName?: unknown } = {};
+    try {
+      body = (await c.req.json()) ?? {};
+    } catch {
+      throw badRequest('Missing or invalid JSON body.');
+    }
+
+    const workflowName = typeof body.workflowName === 'string' ? body.workflowName.trim() : '';
+    if (!workflowName) {
+      throw badRequest('Missing workflowName.');
+    }
+
+    try {
+      await deps.runtime.deleteWorkflow(botId, workflowName);
+    } catch (error) {
+      throw workflowError(error);
+    }
+    deps.logStore.append('info', `Deleted workflow "${workflowName}" for bot ${botId}`, botId);
+    return c.json({
+      ok: true,
+      botId,
+      workflowName,
+      running: deps.runtime.isBotRunning(botId),
+    });
   });
 
   app.get('/pool/config', (c) =>
@@ -749,6 +815,18 @@ function notFound(message: string): HttpError {
 
 function unauthorized(message: string): HttpError {
   return new HttpError(401, message);
+}
+
+/**
+ * Un bot absent du nœud garde son 404 (porté par l'erreur ; le Manager retombe alors sur une
+ * synchro complète). Un échec de rechargement ou de disque n'est pas une charge utile invalide :
+ * il garde son statut 500.
+ */
+function workflowError(error: unknown): Error {
+  if (error instanceof ZodError) {
+    return badRequest(`Invalid workflow: ${describeZodError(error)}`);
+  }
+  return error instanceof Error ? error : new Error(String(error));
 }
 
 function isMissingOrEmpty(value: unknown): boolean {
