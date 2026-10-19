@@ -414,6 +414,21 @@ describe('portal sync resilience', () => {
     expect(discordIpBlockRemainingMs()).toBe(0);
   });
 
+  it('a non-JSON 429 with a Discord-shaped body is a rate limit: bounded retries, no platform hold', async () => {
+    const fn = mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1.5,"global":false}', {
+          status: 429,
+          headers: { 'content-type': 'text/plain' },
+        }),
+      () => new Response(JSON.stringify({ flags: PRESENCE_LIMITED }), { status: 200 }),
+    ]);
+    const result = await fetchPortalEnabledPrivilegedIntents('token', noSleep);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(result.enabled).toEqual(new Set(['Guild Presence']));
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
   it('an ordinary JSON 429 retries then succeeds', async () => {
     const fn = mockSequence([
       () =>

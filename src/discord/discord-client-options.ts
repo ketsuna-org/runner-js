@@ -18,8 +18,12 @@ import { mapIntents } from './intent-mapper.js';
 
 /** Valeurs explicites (celles de discord.js 14 pour le délai) : plus de dépendance silencieuse au défaut. */
 export const DISCORD_REST_TIMEOUT_MS = 15_000;
-/** Réessais REST pour les 5xx et délais dépassés seulement : un 429 n'en consomme jamais. */
-export const DISCORD_REST_RETRIES = 1;
+/**
+ * Réessais REST pour les 5xx et délais dépassés seulement : un 429 n'en consomme jamais et ces
+ * échecs ne comptent pas dans le budget de requêtes invalides de Discord. Valeur par défaut de
+ * discord.js 14 (3), gardée explicite pour ne pas fragiliser les scripts face à une panne passagère.
+ */
+export const DISCORD_REST_RETRIES = 3;
 
 /**
  * Routes de la connexion : un 429 y fait échouer l'appel tout de suite (RateLimitError) au lieu

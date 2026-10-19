@@ -78,7 +78,9 @@ function isJsonContentType(contentType: string | null): boolean {
  * Classe un 429 de Discord (fonction pure). Prudente : dans le doute, c'est une limite
  * ordinaire ('rate-limit'), jamais un blocage d'IP.
  *  1. 'ip-block' : texte « you are being blocked » / « error code: 1015 », ou Content-Type
- *     présent et non JSON SANS aucun en-tête X-RateLimit-* (page Cloudflare).
+ *     présent et non JSON SANS aucun en-tête X-RateLimit-* (page Cloudflare), sauf si le corps
+ *     est tout de même celui de Discord (objet JSON avec `retry_after` numérique ou `global`
+ *     booléen) : c'est alors une vraie limite de débit (même règle que le Manager).
  *  2. 'token-global' : limite globale d'un seul jeton (X-RateLimit-Global: true,
  *     X-RateLimit-Scope: global ou `"global": true` dans le JSON).
  *  3. 'rate-limit' : tout le reste.
@@ -91,9 +93,14 @@ export function classifyDiscord429(input: {
   const bodyText = input.bodyText ?? '';
   if (isDiscordIpBlockText(bodyText)) return 'ip-block';
 
+  const parsed = parseJsonObject(bodyText);
   const contentType = headers.get('content-type');
   if (contentType != null && !isJsonContentType(contentType) && !hasRateLimitHeader(headers)) {
-    return 'ip-block';
+    const discordShaped =
+      parsed != null &&
+      ((typeof parsed.retry_after === 'number' && Number.isFinite(parsed.retry_after)) ||
+        typeof parsed.global === 'boolean');
+    if (!discordShaped) return 'ip-block';
   }
 
   if (
@@ -102,7 +109,6 @@ export function classifyDiscord429(input: {
   ) {
     return 'token-global';
   }
-  const parsed = parseJsonObject(bodyText);
   if (parsed?.global === true) return 'token-global';
 
   return 'rate-limit';

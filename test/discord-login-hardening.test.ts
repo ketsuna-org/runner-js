@@ -60,6 +60,16 @@ const CLASSIFICATION_CASES: Case[] = [
   { name: 'non-JSON 429 with a Retry-After only', headers: { 'content-type': 'text/html', 'retry-after': '30' }, body: 'slow down', expected: 'ip-block' },
   { name: 'non-JSON 429 but carrying x-ratelimit headers', headers: { 'content-type': 'text/plain', 'x-ratelimit-remaining': '0' }, body: 'slow down', expected: 'rate-limit' },
   { name: 'no content-type at all, no text pattern', headers: {}, body: 'slow down', expected: 'rate-limit' },
+  { name: 'text/plain, no rate-limit header, empty body', headers: { 'content-type': 'text/plain' }, body: '', expected: 'ip-block' },
+  { name: 'text/html with error code: 1015', headers: { 'content-type': 'text/html' }, body: 'error code: 1015', expected: 'ip-block' },
+  { name: 'non-JSON content-type but Discord-shaped body (retry_after + global false)', headers: { 'content-type': 'text/plain' }, body: '{"retry_after":1.5,"global":false}', expected: 'rate-limit' },
+  { name: 'non-JSON content-type, Discord-shaped body with only retry_after', headers: { 'content-type': 'text/plain' }, body: '{"retry_after":2}', expected: 'rate-limit' },
+  { name: 'non-JSON content-type, Discord-shaped body with only global false', headers: { 'content-type': 'text/html' }, body: '{"global":false}', expected: 'rate-limit' },
+  { name: 'non-JSON content-type, global true in body: token-global, not ip-block', headers: { 'content-type': 'text/plain' }, body: '{"retry_after":1,"global":true}', expected: 'token-global' },
+  { name: 'non-JSON content-type, JSON object without retry_after/global', headers: { 'content-type': 'text/plain' }, body: '{"message":"nope"}', expected: 'ip-block' },
+  { name: 'non-JSON content-type, non-numeric retry_after', headers: { 'content-type': 'text/plain' }, body: '{"retry_after":"soon"}', expected: 'ip-block' },
+  { name: 'blocked text wins over a Discord-shaped body', headers: { 'content-type': 'text/plain' }, body: '{"message":"You are being blocked","retry_after":1,"global":false}', expected: 'ip-block' },
+  { name: 'no content-type, empty body: never ip-block', headers: {}, body: '', expected: 'rate-limit' },
   { name: 'per-token global, header', headers: { ...JSON_HEADERS, 'x-ratelimit-global': 'true', 'retry-after': '2' }, body: JSON.stringify({ message: 'You are being rate limited.', retry_after: 2, global: true }), expected: 'token-global' },
   { name: 'per-token global, scope header', headers: { ...JSON_HEADERS, 'x-ratelimit-scope': 'global' }, body: '{"message":"You are being rate limited.","retry_after":1}', expected: 'token-global' },
   { name: 'per-token global, JSON body only', headers: JSON_HEADERS, body: '{"message":"You are being rate limited.","retry_after":1,"global":true}', expected: 'token-global' },
@@ -138,6 +148,8 @@ describe('buildDiscordClientOptions rest options', () => {
     const rest = buildDiscordClientOptions({ Guilds: true }).rest!;
     expect(rest.timeout).toBe(DISCORD_REST_TIMEOUT_MS);
     expect(rest.retries).toBe(DISCORD_REST_RETRIES);
+    expect(DISCORD_REST_RETRIES).toBe(DefaultRestOptions.retries);
+    expect(DISCORD_REST_RETRIES).toBe(3);
     expect(typeof rest.makeRequest).toBe('function');
     const reject = rest.rejectOnRateLimit as (data: { route: string }) => boolean;
     expect(reject({ route: '/gateway/bot' })).toBe(true);
@@ -181,6 +193,19 @@ describe('createGuardedMakeRequest', () => {
     expect(response.status).toBe(429);
     expect(await response.json()).toEqual(JSON.parse(body));
     expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
+  it('does not arm the hold on a non-JSON 429 whose body is Discord-shaped', async () => {
+    const body = '{"message":"You are being rate limited.","retry_after":1.5,"global":false}';
+    const base = vi.fn(async () => fakeResponse(429, { 'content-type': 'text/plain' }, body));
+    const guarded = createGuardedMakeRequest(base as never);
+
+    const response = await guarded('https://discord.com/api/v10/users/@me', {});
+    expect(response.status).toBe(429);
+    expect(await response.text()).toBe(body);
+    expect(discordIpBlockRemainingMs()).toBe(0);
+    await guarded('https://discord.com/api/v10/users/@me', {});
+    expect(base).toHaveBeenCalledTimes(2);
   });
 
   it('does not touch successful responses', async () => {
