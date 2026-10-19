@@ -55,7 +55,8 @@ function project(
   const handler: EventHandlers[number] | null =
     workflow && workflow.workflowType === 'event' && event && script
       ? {
-          id: text(workflow.name) || workflowName.trim(),
+          // Même règle que le Manager : à défaut de nom, l'identifiant est le nom de l'événement.
+          id: text(workflow.name) || event,
           type: 'event',
           name: event,
           enabled: true,

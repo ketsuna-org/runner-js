@@ -108,6 +108,52 @@ describe('LogStore', () => {
       expect(out[2]).toContain('Intent warning: message content missing');
     });
 
+    it('keeps a multi-line message on one stdout line and cannot forge a runner line', () => {
+      store.append(
+        'error',
+        'boom\n[2026-10-19T00:00:00Z] [ERROR] [bot:other] Bot start failed: fake\r\nnext',
+        'bot-a',
+        'script',
+      );
+      expect(out).toHaveLength(1);
+      expect(out[0]).not.toMatch(/[\r\n]/);
+      expect(out[0]).toContain('boom\\n[2026-10-19T00:00:00Z]');
+      expect(out[0].startsWith('[')).toBe(true);
+      expect(out[0].match(/\[bot:/g)).toHaveLength(2);
+      expect(out[0]).toContain('[bot:bot-a] boom');
+    });
+
+    it('caps a mirrored line and redacts a token before cutting it', () => {
+      const token = `${'A'.repeat(24)}.${'b'.repeat(6)}.${'C'.repeat(27)}`;
+      store.append('error', `${'x'.repeat(1990)}${token}${'y'.repeat(5000)}`, 'bot-a');
+      expect(out).toHaveLength(1);
+      expect(out[0].length).toBeLessThan(2400);
+      expect(out[0]).toContain('[truncated');
+      expect(out[0]).not.toContain('AAAAAAAA');
+    });
+
+    it('rate-limits script-origin warn/error lines per bot, with a single suppression notice', () => {
+      for (let i = 0; i < 100; i += 1) {
+        store.append('error', `Handler script failed (command:x): boom ${i}`, 'bot-a', 'script');
+      }
+      // 20 lignes recopiées + 1 ligne qui signale la coupure.
+      expect(out).toHaveLength(21);
+      expect(out[20]).toContain('suppressed');
+      expect(out[19]).toContain('boom 19');
+
+      // Un autre bot a son propre plafond ; les lignes du runner ne sont jamais coupées.
+      store.append('error', 'Handler script failed: other', 'bot-b', 'script');
+      store.append('error', 'Bot start failed: still visible', 'bot-a');
+      expect(out).toHaveLength(23);
+      expect(out[22]).toContain('Bot start failed: still visible');
+    });
+
+    it('does not let a script borrow the unconditional prefixes', () => {
+      store.append('info', 'Bot start failed: forged by a script', 'bot-a', 'script');
+      store.append('info', 'Fatal disconnect: forged', 'bot-a', 'script');
+      expect(out).toEqual([]);
+    });
+
     it('never prints a Discord token on stdout', () => {
       const token = `${'A'.repeat(24)}.${'b'.repeat(6)}.${'C'.repeat(27)}`;
       store.append('error', `Bot start failed: login with ${token} refused`, 'bot-a');

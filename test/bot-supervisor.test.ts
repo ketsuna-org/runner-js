@@ -193,9 +193,30 @@ describe('BotSupervisor', () => {
     expect(createdParams).toHaveLength(1);
     expect(logStore.append).toHaveBeenCalledWith(
       'warn',
-      expect.stringContaining('Auto-restart skipped'),
+      expect.stringContaining('Auto-restart deferred'),
       'bot-1',
     );
+  });
+
+  it('schedules exactly one restart after the Discord IP block expires', async () => {
+    vi.useFakeTimers();
+    const { supervisor, createdParams } = makeHarness();
+
+    await supervisor.startBot('bot-1', 'Bot One');
+    armDiscordIpBlock(120);
+    createdParams[0].onFatalDisconnect('Discord session invalidated');
+
+    await vi.advanceTimersByTime(119_000);
+    expect(createdParams).toHaveLength(1);
+    expect(supervisor.getState('bot-1').state).toBe('error');
+
+    // 120 s de blocage + 5 s de gigue au plus.
+    await vi.advanceTimersByTime(7_000);
+    expect(createdParams).toHaveLength(2);
+    expect(supervisor.getState('bot-1').state).toBe('running');
+
+    await vi.advanceTimersByTime(600_000);
+    expect(createdParams).toHaveLength(2);
   });
 
   it('keeps a bot whose start hit a Discord block restartable and never token-invalid', async () => {
@@ -319,6 +340,93 @@ describe('BotSupervisor', () => {
     expect(await supervisor.reloadBot('bot-1')).toBe(true);
     expect(runners[0].reload).toHaveBeenCalledTimes(1);
     expect(supervisor.getState('bot-1').state).toBe('running');
+  });
+
+  describe('reload serialization', () => {
+    function gate() {
+      let open!: () => void;
+      let fail!: (error: Error) => void;
+      const promise = new Promise<void>((resolve, reject) => {
+        open = resolve;
+        fail = reject;
+      });
+      return { promise, open, fail };
+    }
+
+    it('waits for a start in progress instead of overlapping it', async () => {
+      const startGate = gate();
+      const { supervisor, runners } = makeHarness({
+        nextRunner: () => fakeRunner({ start: vi.fn(() => startGate.promise) }),
+      });
+
+      const starting = supervisor.startBot('bot-1', 'Bot One');
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(supervisor.getState('bot-1').state).toBe('starting');
+
+      let reloadDone = false;
+      const reloading = supervisor.reloadBot('bot-1').then((value) => {
+        reloadDone = true;
+        return value;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(runners[0].reload).not.toHaveBeenCalled();
+      expect(reloadDone).toBe(false);
+
+      startGate.open();
+      await starting;
+      expect(await reloading).toBe(true);
+      expect(runners[0].reload).toHaveBeenCalledTimes(1);
+      expect(supervisor.getState('bot-1').state).toBe('running');
+    });
+
+    it('does not reload, nor mark the bot running, when the start it waited for failed', async () => {
+      const startGate = gate();
+      const { supervisor, runners } = makeHarness({
+        nextRunner: () => fakeRunner({ start: vi.fn(() => startGate.promise) }),
+      });
+
+      const starting = supervisor.startBot('bot-1', 'Bot One').catch((e: unknown) => e);
+      await Promise.resolve();
+      await Promise.resolve();
+      const reloading = supervisor.reloadBot('bot-1');
+
+      startGate.fail(new Error('login failed'));
+      expect(((await starting) as Error).message).toBe('login failed');
+      expect(await reloading).toBe(false);
+      expect(runners[0].reload).not.toHaveBeenCalled();
+      expect(supervisor.getState('bot-1').state).toBe('stopped');
+    });
+
+    it('runs two reloads of the same bot one after the other', async () => {
+      const first = gate();
+      let active = 0;
+      let maxActive = 0;
+      let calls = 0;
+      const { supervisor } = makeHarness({
+        nextRunner: () =>
+          fakeRunner({
+            reload: vi.fn(async () => {
+              calls += 1;
+              active += 1;
+              maxActive = Math.max(maxActive, active);
+              if (calls === 1) await first.promise;
+              active -= 1;
+            }),
+          }),
+      });
+      await supervisor.startBot('bot-1', 'Bot One');
+
+      const a = supervisor.reloadBot('bot-1');
+      const b = supervisor.reloadBot('bot-1');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(calls).toBe(1);
+
+      first.open();
+      expect(await Promise.all([a, b])).toEqual([true, true]);
+      expect(calls).toBe(2);
+      expect(maxActive).toBe(1);
+    });
   });
 
   it('drains all running bots', async () => {

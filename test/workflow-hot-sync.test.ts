@@ -361,6 +361,13 @@ describe('workflow projection', () => {
     expect(next.events.map((event) => event.id)).toEqual(['Welcome 2']);
   });
 
+  it('names the handler after its event when the workflow has no name, as the Manager does', () => {
+    const next = applyWorkflowToConfig(base(), 'welcome', { ...eventWorkflow(), name: '' });
+    expect(next.events.map((event) => [event.id, event.name])).toEqual([
+      ['guildMemberAdd', 'guildMemberAdd'],
+    ]);
+  });
+
   it('does not mutate its input', () => {
     const config = applyWorkflowToConfig(base(), 'welcome', eventWorkflow('a();'));
     const snapshot = JSON.stringify(config);
