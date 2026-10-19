@@ -13,6 +13,9 @@ import {
 import { buildDiscordClientOptions } from '../discord/discord-client-options.js';
 import {
   DiscordTokenUnauthorizedError,
+  DiscordUnavailableError,
+  asDiscordUnavailable,
+  discordIpBlockRemainingMs,
   formatGatewayCloseMessage,
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordGatewayFatalClose,
@@ -149,6 +152,15 @@ export class JsDiscordRunner {
     this.fatalDisconnectHandled = false;
     this.effectiveIntents = await this.resolveEffectiveIntents();
 
+    // Blocage d'IP connu (détecté à la lecture des intents ou par un login précédent) :
+    // inutile de créer un client et de retenter une connexion qui échouera pareil.
+    const blockedMs = discordIpBlockRemainingMs();
+    if (blockedMs > 0) {
+      const blocked = new DiscordUnavailableError('blocked', blockedMs / 1000);
+      this.lastError = blocked.message;
+      throw blocked;
+    }
+
     this.client = new Client(buildDiscordClientOptions(this.effectiveIntents));
 
     this.onLog('info', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
@@ -194,6 +206,13 @@ export class JsDiscordRunner {
     try {
       await this.client.login(this.config.token);
     } catch (error) {
+      // 429 au login : erreur typée (le RateLimitError de discord.js a un message vide).
+      const unavailable = asDiscordUnavailable(error);
+      if (unavailable) {
+        this.lastError = unavailable.message;
+        await this.stop();
+        throw unavailable;
+      }
       const message = error instanceof Error ? error.message : String(error);
       this.lastError = message;
       if (isDiscordTokenUnauthorized(error) || isDiscordGatewayFatalClose(null, message)) {

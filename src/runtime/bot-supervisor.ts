@@ -1,5 +1,6 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
+  discordIpBlockRemainingMs,
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
@@ -444,6 +445,18 @@ export class BotSupervisor {
     });
 
     if (current.autoRestart && !tokenInvalid && !this.tokenInvalidBots.has(botId)) {
+      // Blocage d'IP actif : se reconnecter ne ferait que l'entretenir. Pas de redémarrage
+      // automatique (ni différé à l'expiration, qui libérerait tous les bots d'un coup) ;
+      // le Manager relance le bot quand il le juge utile.
+      const blockedMs = discordIpBlockRemainingMs();
+      if (blockedMs > 0) {
+        this.options.logStore.append(
+          'warn',
+          `Auto-restart skipped: Discord is blocking requests from this network (retry after ${Math.ceil(blockedMs / 1000)}s)`,
+          botId,
+        );
+        return;
+      }
       this.options.logStore.append('warn', 'Auto-restarting bot after fatal disconnect', botId);
       this.cancelPendingRestart(botId);
       const timer = setTimeout(() => {

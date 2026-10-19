@@ -11,7 +11,10 @@ import {
   normalizeScopedStorageKey,
   toScopedReferenceKey,
 } from '../runtime/variable-keys.js';
-import { isDiscordTokenUnauthorized } from '../discord/discord-auth-errors.js';
+import {
+  DiscordUnavailableError,
+  isDiscordTokenUnauthorized,
+} from '../discord/discord-auth-errors.js';
 import { safeEqual } from './safe-equal.js';
 
 export interface HttpServerDeps {
@@ -54,6 +57,18 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
   // Error handler
   app.onError((error, c) => {
+    // Blocage d'IP / limite Discord : 503 typé que le Manager sait lire (jamais « jeton invalide »).
+    if (error instanceof DiscordUnavailableError) {
+      return c.json(
+        {
+          error: error.message,
+          code: error.code,
+          retry_after_seconds: error.retryAfterSeconds,
+        },
+        503,
+        { 'retry-after': String(error.retryAfterSeconds) },
+      );
+    }
     const err = error as Error & { statusCode?: number };
     const statusCode = typeof err.statusCode === 'number' ? err.statusCode : 500;
     return c.json(
@@ -905,6 +920,9 @@ export function describeZodError(error: ZodError): string {
  * own problem and must not be reported as "Invalid config".
  */
 function configError(error: unknown): Error {
+  if (error instanceof DiscordUnavailableError) {
+    return error;
+  }
   if (error instanceof ZodError) {
     return badRequest(`Invalid config: ${describeZodError(error)}`);
   }

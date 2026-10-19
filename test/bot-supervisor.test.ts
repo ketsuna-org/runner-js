@@ -1,7 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'bun:test';
 
 import type { JsBotConfig } from '../src/config/js-bot-config.js';
-import { DiscordTokenUnauthorizedError } from '../src/discord/discord-auth-errors.js';
+import {
+  DiscordTokenUnauthorizedError,
+  DiscordUnavailableError,
+  armDiscordIpBlock,
+  clearDiscordIpBlock,
+} from '../src/discord/discord-auth-errors.js';
 import type { BotStore } from '../src/runtime/bot-store.js';
 import {
   BotSupervisor,
@@ -80,6 +85,7 @@ afterEach(async () => {
     await disposers.pop()?.();
   }
   vi.useRealTimers();
+  clearDiscordIpBlock();
 });
 
 describe('BotSupervisor', () => {
@@ -171,6 +177,72 @@ describe('BotSupervisor', () => {
     expect(runners[1].start).toHaveBeenCalledTimes(1);
     state = supervisor.getState('bot-1');
     expect(state.state).toBe('running');
+  });
+
+  it('does not schedule the auto-restart while a Discord IP block is active', async () => {
+    vi.useFakeTimers();
+    const { supervisor, createdParams, logStore } = makeHarness();
+
+    await supervisor.startBot('bot-1', 'Bot One');
+    armDiscordIpBlock(120);
+    createdParams[0].onFatalDisconnect('Discord session invalidated');
+
+    expect(supervisor.getState('bot-1').state).toBe('error');
+    expect(supervisor.isTokenInvalid('bot-1')).toBe(false);
+    await vi.advanceTimersByTime(10_000);
+    expect(createdParams).toHaveLength(1);
+    expect(logStore.append).toHaveBeenCalledWith(
+      'warn',
+      expect.stringContaining('Auto-restart skipped'),
+      'bot-1',
+    );
+  });
+
+  it('keeps a bot whose start hit a Discord block restartable and never token-invalid', async () => {
+    for (const kind of ['blocked', 'rate_limited'] as const) {
+      const { supervisor } = makeHarness({
+        nextRunner: () =>
+          fakeRunner({
+            start: vi.fn(async () => {
+              throw new DiscordUnavailableError(kind, 4013);
+            }),
+          }),
+      });
+
+      await expect(supervisor.startBot('bot-1', '')).rejects.toBeInstanceOf(
+        DiscordUnavailableError,
+      );
+
+      const state = supervisor.getState('bot-1');
+      expect(state.state).toBe('stopped');
+      expect(state.autoRestart).toBe(true);
+      expect(supervisor.isTokenInvalid('bot-1')).toBe(false);
+    }
+  });
+
+  it('a failed auto-restart under a block does not loop', async () => {
+    vi.useFakeTimers();
+    let created = 0;
+    const { supervisor, createdParams } = makeHarness({
+      nextRunner: () => {
+        created += 1;
+        return fakeRunner(
+          created === 1
+            ? {}
+            : {
+                start: vi.fn(async () => {
+                  throw new DiscordUnavailableError('rate_limited', 30);
+                }),
+              },
+        );
+      },
+    });
+
+    await supervisor.startBot('bot-1', 'Bot One');
+    createdParams[0].onFatalDisconnect('Discord session invalidated');
+    await vi.advanceTimersByTime(60_000);
+
+    expect(createdParams).toHaveLength(2);
   });
 
   it('does not restart after a disallowed-intents disconnect', async () => {
