@@ -323,11 +323,15 @@ describe('invalidRequestWarning with the real discord.js REST', () => {
         }),
     );
     const stats = new DiscordRestStats();
-    const client = new Client(
-      buildDiscordClientOptions({ Guilds: true }, base as never, (info) =>
-        stats.recordInvalidResponse(info),
-      ),
+    const options = buildDiscordClientOptions({ Guilds: true }, base as never, (info) =>
+      stats.recordInvalidResponse(info),
     );
+    // discord.js espace ses requêtes (globalRequestsPerSecond = 50) : 250 requêtes prendraient 5 s, à la
+    // limite du délai par défaut d'un test. On lève ce pas, l'intervalle d'alerte reste celui du vrai builder.
+    const client = new Client({
+      ...options,
+      rest: { ...options.rest, globalRequestsPerSecond: 10_000 },
+    });
     client.rest.setToken('token');
     const warnings: number[] = [];
     client.rest.on('invalidRequestWarning', (data) => warnings.push(data.count));
