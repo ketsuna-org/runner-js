@@ -1,11 +1,17 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
+  discordIpBlockRemainingMs,
   isDiscordGatewayDisallowedIntentsClose,
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
+import {
+  DiscordRestStats,
+  emptyDiscordRestSnapshot,
+  type DiscordRestSnapshot,
+} from '../discord/rest-observability.js';
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
-import type { LogStore } from './log-store.js';
+import type { LogOrigin, LogStore } from './log-store.js';
 import type { VariableDatabase } from './variable-database.js';
 
 export interface ManagedBotState {
@@ -20,6 +26,8 @@ export interface ManagedBotState {
   heapUsedBytes: number | null;
   guildCount: number | null;
   autoRestart: boolean;
+  /** Compteurs des réponses REST de Discord pour ce bot (voir rest-observability.ts). */
+  discordRest?: DiscordRestSnapshot;
 }
 
 /** Compatibility alias from the per-bot worker-process era. */
@@ -45,8 +53,14 @@ export interface CreateRunnerParams {
   botId: string;
   config: JsBotConfig;
   variableStore: VariableDatabase;
-  onLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void;
+  onLog: (
+    level: 'info' | 'warn' | 'error' | 'debug',
+    message: string,
+    origin?: LogOrigin,
+  ) => void;
   onFatalDisconnect: (reason: string) => void;
+  /** Compteurs REST du bot : les mêmes pour tous les runners successifs d'un même bot. */
+  restStats: DiscordRestStats;
 }
 
 export interface BotSupervisorOptions {
@@ -68,6 +82,8 @@ export interface BotSupervisorOptions {
 
 const DEFAULT_RESTART_DELAY_MS = 2000;
 const DEFAULT_METRICS_INTERVAL_MS = 5000;
+// Gigue ajoutée au redémarrage différé par un blocage d'IP (évite une reconnexion pile à l'expiration).
+const RESTART_AFTER_BLOCK_JITTER_MS = 5000;
 const MEMORY_LOG_EVERY_TICKS = 60; // ~5 minutes at the default tick interval
 
 interface ManagedBot {
@@ -86,7 +102,14 @@ export class BotSupervisor {
   private readonly startingBots = new Set<string>();
   private readonly stoppingBots = new Set<string>();
   private readonly tokenInvalidBots = new Set<string>();
+  // Un runner (donc un client discord.js) est recréé à chaque démarrage : un bot qui boucle sur ses
+  // redémarrages est le cas où les compteurs REST doivent survivre. Une entrée par bot vu sur ce nœud.
+  private readonly restStats = new Map<string, DiscordRestStats>();
   private readonly restartTimers = new Map<string, NodeJS.Timeout>();
+  // Fin (réussie ou non) du start() en cours d'un bot, et file des reloads d'un bot : un reload ne
+  // doit jamais chevaucher un start() ni un autre reload (ils partagent client et registry).
+  private readonly startSettled = new Map<string, Promise<void>>();
+  private readonly reloadTails = new Map<string, Promise<void>>();
   private readonly createRunner: (params: CreateRunnerParams) => BotRunnerHandle;
   private readonly restartDelayMs: number;
   private readonly maintenanceTimer: NodeJS.Timeout;
@@ -104,6 +127,7 @@ export class BotSupervisor {
           params.variableStore,
           params.onLog,
           params.onFatalDisconnect,
+          params.restStats,
         ));
     this.maxBots = options.maxBots;
     this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
@@ -127,11 +151,11 @@ export class BotSupervisor {
   }
 
   listStates(): ManagedBotState[] {
-    return [...this.states.values()];
+    return [...this.states.values()].map((state) => this.withRestSnapshot(state));
   }
 
   getState(botId: string): ManagedBotState {
-    return (
+    return this.withRestSnapshot(
       this.states.get(botId) ?? {
         botId,
         botName: botId,
@@ -144,8 +168,25 @@ export class BotSupervisor {
         heapUsedBytes: null,
         guildCount: null,
         autoRestart: true,
-      }
+      },
     );
+  }
+
+  /** Lecture seule : un identifiant inconnu n'ajoute rien à la table des compteurs. */
+  private withRestSnapshot(state: ManagedBotState): ManagedBotState {
+    return {
+      ...state,
+      discordRest: this.restStats.get(state.botId)?.snapshot() ?? emptyDiscordRestSnapshot(),
+    };
+  }
+
+  private restStatsFor(botId: string): DiscordRestStats {
+    let stats = this.restStats.get(botId);
+    if (!stats) {
+      stats = new DiscordRestStats();
+      this.restStats.set(botId, stats);
+    }
+    return stats;
   }
 
   isRunning(botId: string): boolean {
@@ -197,12 +238,24 @@ export class BotSupervisor {
       botId,
       config: entry.config,
       variableStore: this.options.variableStore,
-      onLog: (level, message) => this.options.logStore.append(level, message, botId),
+      onLog: (level, message, origin) =>
+        this.options.logStore.append(level, message, botId, origin),
       onFatalDisconnect: (reason) => this.handleFatalDisconnect(botId, reason),
+      restStats: this.restStatsFor(botId),
     });
     this.bots.set(botId, { runner });
 
     this.startingBots.add(botId);
+    let settleStart!: () => void;
+    this.startSettled.set(
+      botId,
+      new Promise<void>((resolve) => {
+        settleStart = () => {
+          this.startSettled.delete(botId);
+          resolve();
+        };
+      }),
+    );
     try {
       await runner.start();
     } catch (error) {
@@ -226,6 +279,7 @@ export class BotSupervisor {
           autoRestart: tokenInvalid ? false : current.autoRestart,
         });
       }
+      settleStart();
       throw error;
     } finally {
       this.startingBots.delete(botId);
@@ -243,6 +297,7 @@ export class BotSupervisor {
         heapUsedBytes: runner.getHeapUsedBytes(),
       });
     }
+    settleStart();
   }
 
   async stopBot(botId: string): Promise<void> {
@@ -276,7 +331,30 @@ export class BotSupervisor {
     }
   }
 
+  /**
+   * Les reloads d'un même bot passent l'un après l'autre et attendent la fin d'un start() en
+   * cours : reload() peut se reconnecter via start() et détruirait le client que le premier
+   * start() est en train de connecter. La configuration est relue une fois l'attente terminée.
+   */
   async reloadBot(botId: string): Promise<boolean> {
+    const previous = this.reloadTails.get(botId) ?? Promise.resolve();
+    const run = previous.then(() => this.reloadBotNow(botId));
+    const tail = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.reloadTails.set(botId, tail);
+    try {
+      return await run;
+    } finally {
+      if (this.reloadTails.get(botId) === tail) {
+        this.reloadTails.delete(botId);
+      }
+    }
+  }
+
+  private async reloadBotNow(botId: string): Promise<boolean> {
+    await this.startSettled.get(botId);
     if (!this.isRunning(botId)) {
       return false;
     }
@@ -444,7 +522,24 @@ export class BotSupervisor {
     });
 
     if (current.autoRestart && !tokenInvalid && !this.tokenInvalidBots.has(botId)) {
-      this.options.logStore.append('warn', 'Auto-restarting bot after fatal disconnect', botId);
+      // Blocage d'IP actif : se reconnecter ne ferait que l'entretenir, donc aucun redémarrage
+      // pendant le blocage. Un seul est programmé après son expiration (plus une petite
+      // gigue) : sans lui le bot restait en erreur, rien d'autre ne le relançant.
+      const blockedMs = discordIpBlockRemainingMs();
+      let delayMs = this.restartDelayMs;
+      if (blockedMs > 0) {
+        delayMs = Math.max(
+          this.restartDelayMs,
+          blockedMs + Math.floor(Math.random() * RESTART_AFTER_BLOCK_JITTER_MS),
+        );
+        this.options.logStore.append(
+          'warn',
+          `Auto-restart deferred: Discord is blocking requests from this network (retry in ${Math.ceil(delayMs / 1000)}s)`,
+          botId,
+        );
+      } else {
+        this.options.logStore.append('warn', 'Auto-restarting bot after fatal disconnect', botId);
+      }
       this.cancelPendingRestart(botId);
       const timer = setTimeout(() => {
         this.restartTimers.delete(botId);
@@ -452,7 +547,7 @@ export class BotSupervisor {
           const message = error instanceof Error ? error.message : String(error);
           this.options.logStore.append('error', `Auto-restart failed: ${message}`, botId);
         });
-      }, this.restartDelayMs);
+      }, delayMs);
       timer.unref?.();
       this.restartTimers.set(botId, timer);
     }

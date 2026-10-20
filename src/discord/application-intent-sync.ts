@@ -1,6 +1,14 @@
 import { resolveCommandPrefix, type JsBotConfig } from '../config/js-bot-config.js';
-import { DiscordTokenUnauthorizedError } from './discord-auth-errors.js';
+import {
+  DiscordTokenUnauthorizedError,
+  armDiscordIpBlock,
+  classifyDiscord429,
+  clampRetryAfterSeconds,
+  discord429RetryAfterSeconds,
+  discordIpBlockRemainingMs,
+} from './discord-auth-errors.js';
 import { PRIVILEGED_INTENT_KEYS, resolveRequiredIntentKeys } from './intent-resolver.js';
+import type { DiscordResponseInfo } from './rest-observability.js';
 
 // Business logic mirrored in bot-creator-shared `application_intent_sync.dart`.
 // Valeurs de la doc Discord (ApplicationFlags) : le bit « normal » désigne
@@ -100,7 +108,10 @@ export class PortalFetchError extends Error {
     message: string,
     public readonly statusCode: number | null,
     public readonly retryAfterSeconds: number | null,
-    public readonly kind: 'http' | 'timeout' | 'network' | 'invalid-body',
+    // 'blocked' : blocage de l'IP de sortie (jamais réessayé, voir classifyDiscord429).
+    public readonly kind: 'http' | 'timeout' | 'network' | 'invalid-body' | 'blocked',
+    // Limite globale d'un seul jeton (429 « http » uniquement) : n'affecte pas la plateforme.
+    public readonly tokenGlobal = false,
   ) {
     super(message);
     this.name = 'PortalFetchError';
@@ -113,6 +124,8 @@ export type PortalSyncOptions = {
   /** Horloge injectable (tests). */
   now?: () => number;
   totalBudgetMs?: number;
+  /** Reçoit chaque 401, 403 et 429 de la lecture (compteurs REST du bot). */
+  onInvalidResponse?: (info: DiscordResponseInfo) => void;
 };
 
 function parseRetryAfterSeconds(header: string | null): number | null {
@@ -123,6 +136,7 @@ function parseRetryAfterSeconds(header: string | null): number | null {
 }
 
 function isRetryable(error: PortalFetchError): boolean {
+  if (error.kind === 'blocked') return false;
   if (error.kind === 'timeout' || error.kind === 'network') return true;
   if (error.kind === 'invalid-body') return false;
   const status = error.statusCode ?? 0;
@@ -139,12 +153,15 @@ export function describePortalSyncFailure(error: unknown): string {
         return error.message;
       case 'invalid-body':
         return 'invalid response body';
+      case 'blocked':
+        return `Discord is blocking requests from this network, retry after ${error.retryAfterSeconds ?? '?'}s`;
       default: {
         const retry =
           error.retryAfterSeconds != null
             ? `, retry after ${error.retryAfterSeconds}s`
             : '';
-        return `HTTP ${error.statusCode}${retry}`;
+        const scope = error.tokenGlobal ? ' (token global limit)' : '';
+        return `HTTP ${error.statusCode}${scope}${retry}`;
       }
     }
   }
@@ -152,13 +169,25 @@ export function describePortalSyncFailure(error: unknown): string {
   return `error ${name}`;
 }
 
+/** Corps d'un 429, borné et sans effet de bord : sert uniquement à le classer. */
+async function readBodyForClassification(response: Response): Promise<string> {
+  try {
+    return (await response.text()).slice(0, 4096);
+  } catch {
+    return '';
+  }
+}
+
 async function fetchApplicationFlagsOnce(
   token: string,
   timeoutMs: number,
+  now: () => number,
+  onInvalidResponse?: PortalSyncOptions['onInvalidResponse'],
 ): Promise<number> {
+  const url = 'https://discord.com/api/v10/applications/@me';
   let response: Response;
   try {
-    response = await fetch('https://discord.com/api/v10/applications/@me', {
+    response = await fetch(url, {
       headers: { Authorization: `Bot ${token}` },
       signal: AbortSignal.timeout(timeoutMs),
     });
@@ -171,9 +200,45 @@ async function fetchApplicationFlagsOnce(
   }
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403 || response.status === 429) {
+      try {
+        onInvalidResponse?.({
+          status: response.status,
+          method: 'GET',
+          url,
+          scope: response.headers.get('x-ratelimit-scope'),
+        });
+      } catch {
+        // Un compteur en échec ne doit jamais faire échouer la lecture des intents.
+      }
+    }
     if (response.status === 401 || response.status === 403) {
       throw new DiscordTokenUnauthorizedError(
         `Failed to fetch application flags (${response.status})`,
+      );
+    }
+    if (response.status === 429) {
+      const signals = {
+        headers: response.headers,
+        bodyText: await readBodyForClassification(response),
+      };
+      const retryAfter = discord429RetryAfterSeconds(signals);
+      const kind = classifyDiscord429(signals);
+      if (kind === 'ip-block') {
+        const seconds = armDiscordIpBlock(retryAfter, now());
+        throw new PortalFetchError(
+          'Failed to fetch application flags (429, IP block)',
+          429,
+          seconds,
+          'blocked',
+        );
+      }
+      throw new PortalFetchError(
+        'Failed to fetch application flags (429)',
+        429,
+        retryAfter,
+        'http',
+        kind === 'token-global',
       );
     }
     throw new PortalFetchError(
@@ -205,12 +270,25 @@ export async function fetchPortalEnabledPrivilegedIntents(
   const budget = options.totalBudgetMs ?? PORTAL_SYNC_TOTAL_BUDGET_MS;
   const deadline = now() + budget;
 
+  // Blocage d'IP connu : aucune requête de plus, repli immédiat sur les derniers intents.
+  const blockedMs = discordIpBlockRemainingMs(now());
+  if (blockedMs > 0) {
+    throw new PortalFetchError(
+      'Discord IP block in effect',
+      429,
+      clampRetryAfterSeconds(blockedMs / 1000),
+      'blocked',
+    );
+  }
+
   for (let attempt = 1; ; attempt++) {
     const remaining = deadline - now();
     try {
       const flags = await fetchApplicationFlagsOnce(
         token,
         Math.max(1, Math.min(PORTAL_SYNC_ATTEMPT_TIMEOUT_MS, remaining)),
+        now,
+        options.onInvalidResponse,
       );
       return {
         enabled: portalEnabledPrivilegedIntentsFromFlags(flags),

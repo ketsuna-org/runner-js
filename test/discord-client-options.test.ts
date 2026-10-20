@@ -1,8 +1,14 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, describe, expect, it, vi } from 'bun:test';
+import { clearDiscordIpBlock } from '../src/discord/discord-auth-errors.js';
 import {
   buildDiscordClientOptions,
   clientHasGuildVoiceStatesIntent,
+  createGuardedMakeRequest,
 } from '../src/discord/discord-client-options.js';
+import {
+  DISCORD_INVALID_REQUEST_WARNING_INTERVAL,
+  type DiscordResponseInfo,
+} from '../src/discord/rest-observability.js';
 import { GatewayIntentBits, GuildMemberManager, PresenceManager, VoiceStateManager } from 'discord.js';
 
 describe('buildDiscordClientOptions', () => {
@@ -93,5 +99,79 @@ describe('buildDiscordClientOptions', () => {
 
     expect(clientHasGuildVoiceStatesIntent(clientWith)).toBe(true);
     expect(clientHasGuildVoiceStatesIntent(clientWithout)).toBe(false);
+  });
+});
+
+describe('REST observability options', () => {
+  it('asks discord.js for invalidRequestWarning events before the 10 000 invalid responses limit', () => {
+    const options = buildDiscordClientOptions({ Guilds: true });
+    expect(DISCORD_INVALID_REQUEST_WARNING_INTERVAL).toBe(250);
+    expect(options.rest?.invalidRequestWarningInterval).toBe(DISCORD_INVALID_REQUEST_WARNING_INTERVAL);
+    // Les valeurs explicites déjà en place ne bougent pas.
+    expect(options.rest?.timeout).toBe(15_000);
+    expect(options.rest?.retries).toBe(3);
+  });
+});
+
+describe('createGuardedMakeRequest invalid response observer', () => {
+  afterEach(() => clearDiscordIpBlock());
+
+  const respond = (status: number, headers: Record<string, string> = {}, body = '{}') =>
+    new Response(body, { status, headers });
+
+  it.each([401, 403, 429])('reports a %i with the method, url and rate limit scope', async (status) => {
+    const seen: DiscordResponseInfo[] = [];
+    const guarded = createGuardedMakeRequest(
+      (async () =>
+        respond(status, { 'content-type': 'application/json', 'x-ratelimit-scope': 'user' })) as never,
+      (info) => seen.push(info),
+    );
+
+    const response = await guarded('https://discord.com/api/v10/channels/1/messages', { method: 'POST' });
+
+    expect(response.status).toBe(status);
+    expect(seen).toEqual([
+      {
+        status,
+        method: 'POST',
+        url: 'https://discord.com/api/v10/channels/1/messages',
+        scope: 'user',
+      },
+    ]);
+  });
+
+  it('stays silent on every other status', async () => {
+    const seen: DiscordResponseInfo[] = [];
+    for (const status of [200, 204, 404, 500]) {
+      const guarded = createGuardedMakeRequest((async () => respond(status)) as never, (info) =>
+        seen.push(info),
+      );
+      await guarded('https://discord.com/api/v10/users/@me', {});
+    }
+    expect(seen).toEqual([]);
+  });
+
+  it('still counts the 429 that turns out to be an IP block, before throwing', async () => {
+    const seen: DiscordResponseInfo[] = [];
+    const guarded = createGuardedMakeRequest(
+      (async () =>
+        respond(429, { 'content-type': 'text/html' }, 'You are being blocked from accessing our API')) as never,
+      (info) => seen.push(info),
+    );
+
+    await expect(guarded('https://discord.com/api/v10/users/@me', {})).rejects.toThrow();
+    expect(seen).toHaveLength(1);
+    expect(seen[0].status).toBe(429);
+  });
+
+  it('never lets a failing observer break the request', async () => {
+    const guarded = createGuardedMakeRequest(
+      (async () => respond(403)) as never,
+      vi.fn(() => {
+        throw new Error('observer exploded');
+      }),
+    );
+    const response = await guarded('https://discord.com/api/v10/users/@me', {});
+    expect(response.status).toBe(403);
   });
 });

@@ -7,10 +7,16 @@ import {
 import path from 'node:path';
 import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
-import { BotSupervisor, type ManagedBotState } from './bot-supervisor.js';
+import { BotSupervisor, type BotSupervisorOptions, type ManagedBotState } from './bot-supervisor.js';
+import type { DiscordRestSnapshot } from '../discord/rest-observability.js';
 import type { LogStore } from './log-store.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
 import { mergeScopedVariableDefinitions } from './scoped-context.js';
+import {
+  applyWorkflowToConfig,
+  hotSyncIncomplete,
+  removeWorkflowFromConfig,
+} from './workflow-projection.js';
 import type { VariableDatabase } from './variable-database.js';
 import { resolveVariableStore } from './resolve-variable-store.js';
 import type { VariableStoreEnv } from './resolve-variable-store.js';
@@ -25,6 +31,22 @@ export interface RunnerBotRuntimeState {
   heapUsedBytes: number | null;
   guildCount: number | null;
   pid: number | null;
+  discordRest?: DiscordRestSnapshot;
+}
+
+/** 501 avant toute écriture : le Manager retombe sur une synchro complète (voir hotSyncIncomplete). */
+function assertHotSyncComplete(
+  config: JsBotConfig,
+  workflowName: string,
+  workflow: Record<string, unknown> | null,
+): void {
+  if (hotSyncIncomplete(config, workflowName, workflow)) {
+    const error = new Error(
+      'Workflow hot-sync cannot refresh inbound webhooks; use a full sync.',
+    ) as Error & { statusCode: number };
+    error.statusCode = 501;
+    throw error;
+  }
 }
 
 export class RuntimeController {
@@ -46,6 +68,7 @@ export class RuntimeController {
     logStore: LogStore,
     variableStore: VariableDatabase,
     maxBots = 1,
+    createRunner?: BotSupervisorOptions['createRunner'],
   ) {
     this.botStore = new BotStore(path.join(dataDir, 'synced-bots'));
     this.variableStore = variableStore;
@@ -54,6 +77,7 @@ export class RuntimeController {
       logStore,
       variableStore,
       maxBots,
+      createRunner,
     });
   }
 
@@ -177,6 +201,33 @@ export class RuntimeController {
     if (this.isBotRunning(botId)) {
       await this.processManager.deleteCommand(botId, normalizedId);
     }
+  }
+
+  /**
+   * Hot-sync d'UN workflow (route du Manager). Le workflow est projeté dans `events`/`scheduled`
+   * comme à la synchro complète, persisté, puis le bot est rechargé s'il tourne. Le rechargement
+   * réutilise le client Discord tant que ni le jeton ni les intents effectifs ne changent ; un
+   * nouvel événement qui exige un intent absent provoque la reconnexion que ce rechargement fait
+   * déjà pour toute autre modification.
+   */
+  async upsertWorkflow(
+    botId: string,
+    workflowName: string,
+    workflow: Record<string, unknown>,
+  ): Promise<void> {
+    await this.botStore.updateConfig(botId, (config) => {
+      assertHotSyncComplete(config, workflowName, workflow);
+      return applyWorkflowToConfig(config, workflowName, workflow);
+    });
+    await this.reloadBotIfRunning(botId);
+  }
+
+  async deleteWorkflow(botId: string, workflowName: string): Promise<void> {
+    await this.botStore.updateConfig(botId, (config) => {
+      assertHotSyncComplete(config, workflowName, null);
+      return removeWorkflowFromConfig(config, workflowName);
+    });
+    await this.reloadBotIfRunning(botId);
   }
 
   async triggerInboundWebhook(
@@ -406,6 +457,7 @@ export class RuntimeController {
       heapUsedBytes: state.heapUsedBytes,
       guildCount: state.guildCount,
       pid: state.pid,
+      discordRest: state.discordRest,
     };
   }
 

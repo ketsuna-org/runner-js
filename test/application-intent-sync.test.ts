@@ -5,11 +5,16 @@ import {
   buildSafeFallbackIntentsMap,
   clearLastKnownPortalIntents,
   describePortalSyncFailure,
+  PortalFetchError,
   fetchPortalEnabledPrivilegedIntents,
   getLastKnownPortalIntents,
   rememberPortalIntents,
 } from '../src/discord/application-intent-sync.js';
-import { DiscordTokenUnauthorizedError } from '../src/discord/discord-auth-errors.js';
+import {
+  DiscordTokenUnauthorizedError,
+  clearDiscordIpBlock,
+  discordIpBlockRemainingMs,
+} from '../src/discord/discord-auth-errors.js';
 import type { JsBotConfig } from '../src/config/js-bot-config.js';
 
 // Bits « limited » selon la doc Discord (bot non vérifié, intent activé au portail).
@@ -136,6 +141,7 @@ describe('portal sync resilience', () => {
   afterEach(() => {
     globalThis.fetch = originalFetch;
     clearLastKnownPortalIntents();
+    clearDiscordIpBlock();
   });
 
   function mockSequence(responses: Array<() => Response | Promise<Response>>) {
@@ -295,6 +301,188 @@ describe('portal sync resilience', () => {
     expect(effective['Message Content']).toBe(false);
     expect(warnings[0]).toContain('(timeout)');
     expect(warnings[0]).toContain('privileged intents disabled');
+  });
+
+  const JSON_429 = { 'content-type': 'application/json' };
+
+  async function failure(run: () => Promise<unknown>): Promise<unknown> {
+    try {
+      await run();
+    } catch (error) {
+      return error;
+    }
+    throw new Error('expected a failure');
+  }
+
+  it.each([
+    [
+      'blocked text',
+      () =>
+        new Response(
+          'You are being blocked from accessing our API temporarily due to exceeding global rate limits.',
+          { status: 429, headers: { 'content-type': 'text/plain', 'retry-after': '120' } },
+        ),
+    ],
+    [
+      'error code 1015',
+      () =>
+        new Response('error code: 1015', {
+          status: 429,
+          headers: { 'content-type': 'text/html', 'retry-after': '1' },
+        }),
+    ],
+    [
+      'non-JSON 429 without any x-ratelimit header',
+      () => new Response('<html>denied</html>', { status: 429, headers: { 'content-type': 'text/html' } }),
+    ],
+  ])('IP block (%s): one request, no retry, platform hold armed', async (_name, response) => {
+    const waits: number[] = [];
+    const fn = mockSequence([response]);
+
+    const caught = await failure(() =>
+      fetchPortalEnabledPrivilegedIntents('token', { sleep: async (ms) => void waits.push(ms) }),
+    );
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(waits).toEqual([]);
+    expect(caught).toBeInstanceOf(PortalFetchError);
+    expect((caught as PortalFetchError).kind).toBe('blocked');
+    expect(describePortalSyncFailure(caught)).toContain('blocking requests');
+    expect(discordIpBlockRemainingMs()).toBeGreaterThan(0);
+  });
+
+  it('IP block: the retry-after of the response drives the hold (default 60 s, capped at 600 s)', async () => {
+    mockSequence([
+      () => new Response('You are being blocked', { status: 429, headers: { 'retry-after': '120' } }),
+    ]);
+    const caught = (await failure(() => fetchPortalEnabledPrivilegedIntents('token', noSleep))) as PortalFetchError;
+    expect(caught.retryAfterSeconds).toBe(120);
+    expect(describePortalSyncFailure(caught)).toContain('retry after 120s');
+
+    clearDiscordIpBlock();
+    mockSequence([() => new Response('You are being blocked', { status: 429 })]);
+    const noHeader = (await failure(() => fetchPortalEnabledPrivilegedIntents('token', noSleep))) as PortalFetchError;
+    expect(noHeader.retryAfterSeconds).toBe(60);
+
+    clearDiscordIpBlock();
+    mockSequence([
+      () => new Response('You are being blocked', { status: 429, headers: { 'retry-after': '99999' } }),
+    ]);
+    const capped = (await failure(() => fetchPortalEnabledPrivilegedIntents('token', noSleep))) as PortalFetchError;
+    expect(capped.retryAfterSeconds).toBe(600);
+  });
+
+  it('sends no request at all while the IP block lasts', async () => {
+    const fn = mockSequence([
+      () => new Response('error code: 1015', { status: 429, headers: { 'content-type': 'text/html' } }),
+    ]);
+    await failure(() => fetchPortalEnabledPrivilegedIntents('token', noSleep));
+    const caught = await failure(() => fetchPortalEnabledPrivilegedIntents('other-token', noSleep));
+
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect((caught as PortalFetchError).kind).toBe('blocked');
+  });
+
+  it('per-token global 429 keeps a bounded backoff and never arms the platform hold', async () => {
+    const waits: number[] = [];
+    const fn = mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1,"global":true}', {
+          status: 429,
+          headers: { ...JSON_429, 'x-ratelimit-global': 'true', 'retry-after': '1' },
+        }),
+    ]);
+
+    const caught = await failure(() =>
+      fetchPortalEnabledPrivilegedIntents('token', { sleep: async (ms) => void waits.push(ms) }),
+    );
+
+    expect(fn.mock.calls.length).toBe(4);
+    expect(waits.length).toBe(3);
+    expect(Math.max(...waits)).toBeLessThanOrEqual(5_000);
+    expect((caught as PortalFetchError).kind).toBe('http');
+    expect(describePortalSyncFailure(caught)).toBe('HTTP 429 (token global limit), retry after 1s');
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
+  it('per-token global 429 announced only by the JSON body is not an IP block', async () => {
+    const fn = mockSequence([
+      () => new Response('{"retry_after":1,"global":true}', { status: 429, headers: JSON_429 }),
+    ]);
+    await failure(() => fetchPortalEnabledPrivilegedIntents('token', noSleep));
+    expect(fn.mock.calls.length).toBeGreaterThan(1);
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
+  it('a non-JSON 429 with a Discord-shaped body is a rate limit: bounded retries, no platform hold', async () => {
+    const fn = mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1.5,"global":false}', {
+          status: 429,
+          headers: { 'content-type': 'text/plain' },
+        }),
+      () => new Response(JSON.stringify({ flags: PRESENCE_LIMITED }), { status: 200 }),
+    ]);
+    const result = await fetchPortalEnabledPrivilegedIntents('token', noSleep);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(result.enabled).toEqual(new Set(['Guild Presence']));
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
+  it('an ordinary JSON 429 retries then succeeds', async () => {
+    const fn = mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1,"global":false}', {
+          status: 429,
+          headers: { ...JSON_429, 'x-ratelimit-scope': 'user', 'retry-after': '1' },
+        }),
+      () => new Response(JSON.stringify({ flags: PRESENCE_LIMITED }), { status: 200 }),
+    ]);
+    const result = await fetchPortalEnabledPrivilegedIntents('token', noSleep);
+    expect(fn).toHaveBeenCalledTimes(2);
+    expect(result.enabled).toEqual(new Set(['Guild Presence']));
+    expect(discordIpBlockRemainingMs()).toBe(0);
+  });
+
+  it('reports every invalid response of the startup read to the observer, retries included', async () => {
+    mockSequence([
+      () =>
+        new Response('{"message":"You are being rate limited.","retry_after":1,"global":false}', {
+          status: 429,
+          headers: { ...JSON_429, 'x-ratelimit-scope': 'user', 'retry-after': '1' },
+        }),
+      () => new Response(JSON.stringify({ flags: PRESENCE_LIMITED }), { status: 200 }),
+    ]);
+    const seen: Array<{ status: number; method: string; url: string; scope?: string | null }> = [];
+
+    await fetchPortalEnabledPrivilegedIntents('token', {
+      ...noSleep,
+      onInvalidResponse: (info) => seen.push(info),
+    });
+
+    // La réponse 200 n'est pas un invalide ; le 429 est compté avec la route, sans jeton.
+    expect(seen).toEqual([
+      {
+        status: 429,
+        method: 'GET',
+        url: 'https://discord.com/api/v10/applications/@me',
+        scope: 'user',
+      },
+    ]);
+  });
+
+  it('reports a 403 of the startup read too', async () => {
+    mockSequence([() => new Response('{}', { status: 403 })]);
+    const seen: number[] = [];
+
+    await expect(
+      fetchPortalEnabledPrivilegedIntents('token', {
+        ...noSleep,
+        onInvalidResponse: (info) => seen.push(info.status),
+      }),
+    ).rejects.toBeInstanceOf(DiscordTokenUnauthorizedError);
+
+    expect(seen).toEqual([403]);
   });
 
   it('never leaks the token in failure descriptions', async () => {
