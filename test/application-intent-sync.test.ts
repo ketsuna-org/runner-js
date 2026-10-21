@@ -15,7 +15,7 @@ import {
   clearDiscordIpBlock,
   discordIpBlockRemainingMs,
 } from '../src/discord/discord-auth-errors.js';
-import type { JsBotConfig } from '../src/config/js-bot-config.js';
+import { parseJsBotConfig, type JsBotConfig } from '../src/config/js-bot-config.js';
 
 // Bits « limited » selon la doc Discord (bot non vérifié, intent activé au portail).
 const PRESENCE_LIMITED = 1 << 13;
@@ -523,6 +523,30 @@ describe('intents des routes de message (préfixes, variable de préfixe, mentio
     const config = { ...noCommands, prefixVariable: 'prefix' } as JsBotConfig;
     expect(buildEffectiveIntentsMap(config, approved)['Message Content']).toBe(true);
     expect(buildEffectiveIntentsMap({ ...config, prefixVariable: '  ' } as JsBotConfig, approved)['Message Content']).toBe(false);
+  });
+
+  it('Message Content demandé par des commandes sans préfixe (double opt-in), même sans préfixe ni déclencheur explicite', () => {
+    const noPrefixCommand = { id: 'a', name: 'ping', noPrefix: true, script: 'x' };
+    const parse = (extra: Record<string, unknown>) => parseJsBotConfig({ token: 'token', ...extra });
+
+    // Commande hybride par défaut (aucun triggerType) et aucun préfixe : le sans-préfixe est le seul usage de l'intent.
+    const enabled = parse({ allowNoPrefixCommands: true, commands: [noPrefixCommand] });
+    expect(buildEffectiveIntentsMap(enabled, approved)['Message Content']).toBe(true);
+    // La forme écrite par l'app (data.noPrefix) compte comme la forme racine.
+    const viaData = parse({ allowNoPrefixCommands: true, commands: [{ id: 'a', name: 'ping', script: 'x', data: { noPrefix: true } }] });
+    expect(buildEffectiveIntentsMap(viaData, approved)['Message Content']).toBe(true);
+    // Intent non approuvé au portail : toujours refusé (seul cas où l'avertissement du registre dit vrai).
+    expect(buildEffectiveIntentsMap(enabled, new Set())['Message Content']).toBe(false);
+
+    for (const config of [
+      parse({ commands: [noPrefixCommand] }),
+      parse({ allowNoPrefixCommands: false, commands: [noPrefixCommand] }),
+      parse({ allowNoPrefixCommands: true, commands: [{ id: 'a', name: 'ping', script: 'x' }] }),
+      parse({ allowNoPrefixCommands: true, commands: [{ ...noPrefixCommand, enabled: false }] }),
+      parse({ allowNoPrefixCommands: true, commands: [{ ...noPrefixCommand, triggerType: 'slash' }] }),
+    ]) {
+      expect(buildEffectiveIntentsMap(config, approved)['Message Content']).toBe(false);
+    }
   });
 
   it('configurations historiques inchangées', () => {

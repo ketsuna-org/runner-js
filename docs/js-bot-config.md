@@ -287,12 +287,14 @@ exécutable par tous en tapant `@Bot ban …` ou `ban …`.
 
 Les intents non privilégiés (dont Guild Messages et Direct Messages) sont toujours actifs. **Message Content**
 (privilégié) n'est actif que s'il est demandé **et** approuvé au portail. Il est demandé quand : un préfixe
-statique est effectif (repli `!` compris), une `prefixVariable` est définie, ou un handler `messageCreate` /
-`messageUpdate` existe. `mentionAsPrefix` seul ne le demande pas : pour les messages qui mentionnent le bot,
-Discord fournit le contenu même sans cet intent. `allowNoPrefixCommands` seul ne le demande pas non plus
-(il faut un préfixe ou une variable de préfixe qui le fasse). En pratique, dès qu'une commande est explicitement
-`prefix` ou `hybrid`, le repli `!` rend un préfixe effectif et Message Content est demandé, mention ou non ; une
-configuration « mention seulement » sans Message Content suppose des commandes sans `triggerType` explicite.
+statique est effectif (repli `!` compris), une `prefixVariable` est définie, des commandes sans préfixe sont
+possibles (`allowNoPrefixCommands` à `true` **et** au moins une commande activée `prefix` ou `hybrid` avec
+`noPrefix`, même sans aucun préfixe configuré), ou un handler `messageCreate` / `messageUpdate` existe.
+`mentionAsPrefix` seul ne le demande pas : pour les messages qui mentionnent le bot, Discord fournit le contenu
+même sans cet intent. `allowNoPrefixCommands` sans commande `noPrefix` ne le demande pas non plus. En pratique,
+dès qu'une commande est explicitement `prefix` ou `hybrid`, le repli `!` rend un préfixe effectif et Message
+Content est demandé, mention ou non ; une configuration « mention seulement » sans Message Content suppose des
+commandes sans `triggerType` explicite.
 
 ### 4.9 Cumul avec un handler `messageCreate`
 
