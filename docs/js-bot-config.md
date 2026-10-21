@@ -493,7 +493,7 @@ runner, seuls `warn` et `error` sont recopiés (20 lignes par minute et par bot 
 
 | Niveau | Ligne |
 | --- | --- |
-| `debug` | `Scheduled task <id> ok in <N>ms` (un tir réussi n'apparaît donc pas sur la sortie standard) |
+| `debug` | `Scheduled task <id> ok in <N>ms` (un tir réussi n'apparaît donc pas sur la sortie standard) ; `Scheduled task <id> deferred: waiting for a free slot …` (plafond de 3 exécutions simultanées atteint) |
 | `error` | `Scheduled task <id> (<planification>) failed after <N>ms: <erreur>` suivi de la pile |
 | `warn` | `Scheduled task <id> skipped: still running \| client not ready \| concurrency limit` |
 | `warn` | `Scheduled task <id> ignored: <raison>` ; `… has no upcoming run` ; `… woke up <N>s late …` ; `… timed out but its script is still running …` ; `… runOnStart skipped …` |
