@@ -10,6 +10,7 @@ import { BotStore } from './bot-store.js';
 import { BotSupervisor, type BotSupervisorOptions, type ManagedBotState } from './bot-supervisor.js';
 import type { DiscordRestSnapshot } from '../discord/rest-observability.js';
 import type { LogStore } from './log-store.js';
+import type { ScheduledSnapshot } from './scheduled-tasks.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
 import { mergeScopedVariableDefinitions } from './scoped-context.js';
 import {
@@ -32,6 +33,8 @@ export interface RunnerBotRuntimeState {
   guildCount: number | null;
   pid: number | null;
   discordRest?: DiscordRestSnapshot;
+  /** Tâches planifiées (prochaine échéance, dernier résultat) ; seulement dans le statut d'UN bot qui tourne. */
+  scheduled?: ScheduledSnapshot;
 }
 
 /** 501 avant toute écriture : le Manager retombe sur une synchro complète (voir hotSyncIncomplete). */
@@ -78,6 +81,7 @@ export class RuntimeController {
       variableStore,
       maxBots,
       createRunner,
+      stateDir: path.join(dataDir, 'run-state'),
     });
   }
 
@@ -437,7 +441,9 @@ export class RuntimeController {
   }
 
   runtimeStateForBot(botId: string): RunnerBotRuntimeState {
-    return this.toRuntimeState(this.processManager.getState(botId));
+    const state = this.toRuntimeState(this.processManager.getState(botId));
+    const scheduled = this.processManager.getScheduledSnapshot(botId);
+    return scheduled ? { ...state, scheduled } : state;
   }
 
   aggregateWorkerRssBytes(): number {
