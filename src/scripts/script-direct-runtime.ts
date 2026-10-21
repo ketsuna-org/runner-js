@@ -8,7 +8,7 @@ import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import { compileAsyncBody, createScriptFunctions } from './script-functions.js';
 import type { CompiledBody } from './script-functions.js';
-import type { ScriptRuntime } from './script-runtime.js';
+import type { ScriptRunLifecycle, ScriptRuntime } from './script-runtime.js';
 
 const moduleRequire = createRequire(pathToFileURL(path.join(runnerPackageRoot(), 'package.json')));
 
@@ -122,6 +122,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
     context: ScriptExecutionContext,
     logger: ScriptLogger,
     timeoutMs: number,
+    lifecycle?: ScriptRunLifecycle,
   ): Promise<unknown> {
     const trimmed = script.trim();
     if (!trimmed) {
@@ -159,6 +160,10 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       warn: (message) => logger.warn(message),
     });
     const execution = compiled.run(scopeValues, functions.fn, []);
+    if (lifecycle?.onSettled) {
+      const settled = lifecycle.onSettled;
+      execution.then(settled, settled);
+    }
 
     let timeoutTimer: NodeJS.Timeout | undefined;
     try {
@@ -168,6 +173,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
           timeoutTimer = setTimeout(() => {
             // Le script continue en arrière-plan (la course ne l'annule pas) : ses `fn.x()` tardifs sont refusés.
             functions.expire();
+            lifecycle?.onTimeout?.();
             reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
           }, timeoutMs);
         }),

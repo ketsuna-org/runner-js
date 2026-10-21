@@ -238,6 +238,47 @@ describe('ScriptDirectRuntime : global fn', () => {
   });
 });
 
+describe('ScriptDirectRuntime : fin réelle d’un script après son timeout', () => {
+  const context = { client: {} as never, config: { token: 'x' } as never, variables: {} };
+
+  it('signale onTimeout au rejet du timeout, puis onSettled quand le script se termine vraiment', async () => {
+    const executor = createDirectExecutor();
+    const events: string[] = [];
+    await expect(
+      executor.execute(
+        'await new Promise((resolve) => setTimeout(resolve, 200)); return 42;',
+        context,
+        createLogger(),
+        40,
+        { onTimeout: () => events.push('timeout'), onSettled: () => events.push('settled') },
+      ),
+    ).rejects.toThrow('timed out');
+    expect(events).toEqual(['timeout']);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(events).toEqual(['timeout', 'settled']);
+    executor.dispose();
+  });
+
+  it('un script qui se termine à temps, avec succès ou en erreur, signale seulement onSettled', async () => {
+    const executor = createDirectExecutor();
+    const events: string[] = [];
+    const lifecycle = { onTimeout: () => events.push('timeout'), onSettled: () => events.push('settled') };
+    await expect(executor.execute('return 7;', context, createLogger(), 1000, lifecycle)).resolves.toBe(7);
+    await expect(
+      executor.execute('throw new Error("boom");', context, createLogger(), 1000, lifecycle),
+    ).rejects.toThrow('boom');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events).toEqual(['settled', 'settled']);
+    executor.dispose();
+  });
+
+  it('sans rappels, le comportement est inchangé', async () => {
+    const executor = createDirectExecutor();
+    await expect(executor.execute('return 1 + 1;', context, createLogger(), 1000)).resolves.toBe(2);
+    executor.dispose();
+  });
+});
+
 
 function createLogger() {
   return {

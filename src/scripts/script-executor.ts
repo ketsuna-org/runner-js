@@ -1,6 +1,6 @@
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import { ScriptDirectRuntime } from './script-direct-runtime.js';
-import type { ScriptRuntime } from './script-runtime.js';
+import type { ScriptRunLifecycle, ScriptRuntime } from './script-runtime.js';
 
 export class ScriptExecutor {
   private runtime: ScriptRuntime;
@@ -19,8 +19,9 @@ export class ScriptExecutor {
     context: ScriptExecutionContext,
     logger: ScriptLogger,
     timeoutMs = this.defaultTimeoutMs,
+    lifecycle?: ScriptRunLifecycle,
   ): Promise<unknown> {
-    return this.runtime.execute(script, context, logger, timeoutMs);
+    return this.runtime.execute(script, context, logger, timeoutMs, lifecycle);
   }
 
   dispose(): void {
