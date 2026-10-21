@@ -430,6 +430,35 @@ describe('JsBotConfig : tolérance des nouveaux champs', () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  it('dédupliquer des ids scheduled identiques reste linéaire : 20 000 entrées de même id ne figent pas le processus', () => {
+    const count = 20_000;
+    const startedAt = performance.now();
+    const config = parseJsBotConfig({
+      ...baseConfig,
+      scheduled: Array.from({ length: count }, () => ({ id: 'a', script: 'x;', everyMinutes: 1 })),
+    });
+    const elapsed = performance.now() - startedAt;
+
+    const ids = config.scheduled.map((entry) => entry.id);
+    expect(ids[0]).toBe('a');
+    expect(ids[1]).toBe('a#2');
+    expect(ids[count - 1]).toBe(`a#${count}`);
+    expect(new Set(ids).size).toBe(count);
+    // Quadratique, ce parse prenait ~12 s (la boucle d'événements de TOUS les bots du nœud gelée).
+    expect(elapsed).toBeLessThan(1500);
+    // Le journal ne recopie pas 20 000 renommages.
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0]).length).toBeLessThan(2000);
+  });
+
+  it('les renommages gardent la numérotation d’origine quand un id explicite occupe déjà un suffixe', () => {
+    const config = parseJsBotConfig({
+      ...baseConfig,
+      scheduled: ['a', 'a#2', 'a', 'a', 'b', 'a#3', 'b'].map((id) => ({ id, script: 'x;', everyMinutes: 1 })),
+    });
+    expect(config.scheduled.map((entry) => entry.id)).toEqual(['a', 'a#2', 'a#3', 'a#4', 'b', 'a#3#2', 'b#2']);
+  });
+
   it('garde-fou : un triggerType inconnu est toujours rejeté', () => {
     expect(() =>
       parseJsBotConfig({

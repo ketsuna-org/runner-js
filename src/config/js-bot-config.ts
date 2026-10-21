@@ -130,6 +130,9 @@ export const databaseConfigSchema = z
   .nullish()
   .transform((val) => val ?? { type: 'none' as const });
 
+/** Nombre de renommages recopiés dans l'avertissement (le reste est compté). */
+const MAX_LOGGED_RENAMES = 20;
+
 /**
  * Plusieurs entrées `scheduled` peuvent porter le même id : le Manager prend `id = workflowName` quand
  * l'id est vide, donc deux déclencheurs d'un même workflow donnent deux entrées de même id, tolérées
@@ -138,21 +141,28 @@ export const databaseConfigSchema = z
  */
 function dedupeScheduledIds<T extends { id: string }>(entries: T[]): T[] {
   const used = new Set<string>();
+  // Prochain suffixe à essayer par id : il ne recule jamais, donc le total reste linéaire même pour des
+  // milliers d'entrées de même id (le parse tourne dans le processus qui héberge tous les bots du nœud).
+  const nextSuffix = new Map<string, number>();
   const renamed: string[] = [];
+  let renamedCount = 0;
   const result = entries.map((entry) => {
     if (!used.has(entry.id)) {
       used.add(entry.id);
       return entry;
     }
-    let suffix = 2;
+    let suffix = nextSuffix.get(entry.id) ?? 2;
     while (used.has(`${entry.id}#${suffix}`)) suffix += 1;
+    nextSuffix.set(entry.id, suffix + 1);
     const id = `${entry.id}#${suffix}`;
     used.add(id);
-    renamed.push(`${entry.id} -> ${id}`);
+    renamedCount += 1;
+    if (renamed.length < MAX_LOGGED_RENAMES) renamed.push(`${entry.id} -> ${id}`);
     return { ...entry, id };
   });
-  if (renamed.length > 0) {
-    console.warn(`[js-bot-config] scheduled : identifiants en double renommés (${renamed.join(', ')})`);
+  if (renamedCount > 0) {
+    const more = renamedCount > renamed.length ? `, … (${renamedCount - renamed.length} autre(s))` : '';
+    console.warn(`[js-bot-config] scheduled : identifiants en double renommés (${renamed.join(', ')}${more})`);
   }
   return result;
 }
