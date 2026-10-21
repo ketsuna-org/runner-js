@@ -16,6 +16,7 @@ import {
   discordIpBlockRemainingMs,
 } from '../src/discord/discord-auth-errors.js';
 import { parseJsBotConfig, type JsBotConfig } from '../src/config/js-bot-config.js';
+import * as intentResolver from '../src/discord/intent-resolver.js';
 
 // Bits « limited » selon la doc Discord (bot non vérifié, intent activé au portail).
 const PRESENCE_LIMITED = 1 << 13;
@@ -555,7 +556,9 @@ describe('intents des routes de message (préfixes, variable de préfixe, mentio
     expect(buildEffectiveIntentsMap({ ...noCommands, prefix: '!' }, new Set())['Message Content']).toBe(false);
   });
 
-  it('la mention seule ne lève pas Message Content (Discord fournit le contenu des messages qui mentionnent le bot) mais garde Guild Messages', () => {
+  // Guild Messages et Direct Messages sont non privilégiés, donc toujours actifs : ce test prouve seulement que la
+  // mention ne lève PAS Message Content. Le câblage de `mentionAsPrefix` est prouvé par le test « câblage » plus bas.
+  it('la mention seule ne lève pas Message Content (Discord fournit le contenu des messages qui mentionnent le bot) ; les intents non privilégiés restent actifs', () => {
     const config = { ...noCommands, mentionAsPrefix: true } as JsBotConfig;
     const effective = buildEffectiveIntentsMap(config, approved);
     expect(effective['Message Content']).toBe(false);
@@ -575,5 +578,46 @@ describe('intents des routes de message (préfixes, variable de préfixe, mentio
       approvedPrivilegedIntents: approved,
     });
     expect([...both].sort()).toEqual(['Guild Messages', 'Message Content']);
+  });
+});
+
+describe('buildEffectiveIntentsMap : câblage de la configuration vers resolveRequiredIntentKeys', () => {
+  // Guild Messages est non privilégié, donc toujours actif : la table d'intents rendue ne change pas avec
+  // `mentionAsPrefix`. Seul l'argument transmis à resolveRequiredIntentKeys prouve que le réglage est branché.
+  const emptyArgs = { ...emptyConfig, commands: [] as JsBotConfig['commands'] };
+  let spy: { mock: { calls: unknown[][] }; mockRestore: () => void } | undefined;
+
+  afterEach(() => {
+    spy?.mockRestore();
+    spy = undefined;
+  });
+
+  function requestedWith(config: JsBotConfig, approved: Set<string> = new Set()): Record<string, unknown> {
+    spy = vi.spyOn(intentResolver, 'resolveRequiredIntentKeys');
+    buildEffectiveIntentsMap(config, approved);
+    expect(spy.mock.calls).toHaveLength(1);
+    const args = spy.mock.calls[0]![0] as Record<string, unknown>;
+    spy.mockRestore();
+    spy = undefined;
+    return args;
+  }
+
+  it('mentionAsPrefix du bot est transmis tel quel, et seulement s’il vaut true', () => {
+    expect(requestedWith({ ...emptyArgs, mentionAsPrefix: true }).mentionAsPrefix).toBe(true);
+    for (const value of [false, undefined, 'oui', 1]) {
+      expect(requestedWith({ ...emptyArgs, mentionAsPrefix: value } as unknown as JsBotConfig).mentionAsPrefix).toBe(false);
+    }
+  });
+
+  it('les événements, la présence de messages à lire et les intents approuvés sont transmis', () => {
+    const approved = new Set(['Message Content']);
+    const args = requestedWith(
+      { ...emptyArgs, prefix: '!', events: [{ id: 'e', name: 'guildMemberAdd', script: '', enabled: true }] } as unknown as JsBotConfig,
+      approved,
+    );
+    expect(args.eventNames).toEqual(['guildMemberAdd']);
+    expect(args.hasLegacyCommands).toBe(true);
+    expect(args.approvedPrivilegedIntents).toBe(approved);
+    expect(requestedWith(emptyArgs).hasLegacyCommands).toBe(false);
   });
 });
