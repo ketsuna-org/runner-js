@@ -1,5 +1,35 @@
 import { z } from 'zod';
 
+function describeType(value: unknown): string {
+  return value === null ? 'null' : Array.isArray(value) ? 'array' : typeof value;
+}
+
+/** Jamais le contenu de la valeur (une fonction JS ou une variable peut être sensible) : son type seulement. */
+function warnIgnored(field: string, reason: string): void {
+  console.warn(`[js-bot-config] ${field} ignoré : ${reason}`);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Champ ajouté après coup à la configuration : OPTIONNEL et TOLÉRANT. Absent ou `null` = non défini ; une
+ * valeur du mauvais type est ignorée avec un avertissement au lieu de faire rejeter la configuration
+ * entière du bot (ce que fait zod par défaut, et ce que `triggerType` fait déjà pour les valeurs inconnues :
+ * c'est pourquoi les nouveautés sont des champs orthogonaux et non de nouvelles valeurs d'enum).
+ * La clé reste absente de la sortie quand elle est absente de l'entrée.
+ */
+function tolerant<T extends z.ZodTypeAny>(field: string, schema: T) {
+  return schema
+    .nullish()
+    .transform((value): z.output<T> | undefined => value ?? undefined)
+    .catch((ctx) => {
+      warnIgnored(field, `valeur de type ${describeType(ctx.input)} non valide`);
+      return undefined;
+    });
+}
+
 const handlerBaseSchema = z.object({
   id: z.string().min(1),
   enabled: z.boolean().default(true),
@@ -19,6 +49,11 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
   legacyLocalOnly: z.boolean().optional(),
   legacyPrefixOverride: z.string().optional(),
   legacyAliases: z.array(z.string()).optional(),
+  /**
+   * Invocation sans préfixe (`ping` au lieu de `!ping`). Double opt-in : effective seulement si le bot
+   * porte aussi `allowNoPrefixCommands` (voir `commandAllowsNoPrefix`). Lue `data.noPrefix ?? noPrefix`.
+   */
+  noPrefix: tolerant('commands.noPrefix', z.boolean()),
   options: z.array(z.record(z.unknown())).default([]),
   aliases: z.array(z.string()).default([]),
   /**
@@ -37,10 +72,20 @@ export const eventHandlerSchema = handlerBaseSchema.extend({
   name: z.string().min(1),
 });
 
+/**
+ * `everyMinutes` n'est plus requis : une entrée peut ne porter que `cron`. Une entrée sans planification
+ * valide n'est PAS rejetée (ce qui ferait tomber la configuration du bot) : le planificateur l'ignore
+ * avec un avertissement. `cron` (5 champs ou macro, sans secondes) est prioritaire sur `everyMinutes`.
+ */
 export const scheduledHandlerSchema = handlerBaseSchema.extend({
   type: z.literal('scheduled').default('scheduled'),
   name: z.string().min(1).optional(),
-  everyMinutes: z.number().int().positive(),
+  everyMinutes: tolerant('scheduled.everyMinutes', z.number().int().positive()),
+  cron: tolerant('scheduled.cron', z.string()),
+  /** Fuseau IANA de `cron` ; UTC si absent. Sans effet pour `everyMinutes`. */
+  timezone: tolerant('scheduled.timezone', z.string()),
+  runOnStart: tolerant('scheduled.runOnStart', z.boolean()),
+  timeoutMs: tolerant('scheduled.timeoutMs', z.number().int().positive()),
 });
 
 export const inboundWebhookHandlerSchema = handlerBaseSchema.extend({
@@ -85,16 +130,82 @@ export const databaseConfigSchema = z
   .nullish()
   .transform((val) => val ?? { type: 'none' as const });
 
+/**
+ * Plusieurs entrées `scheduled` peuvent porter le même id : le Manager prend `id = workflowName` quand
+ * l'id est vide, donc deux déclencheurs d'un même workflow donnent deux entrées de même id, tolérées
+ * depuis toujours. Les rejeter ferait échouer la synchro de bots existants ; on suffixe donc les doublons
+ * (`id#2`, `id#3`…) pour que les consommateurs (planificateur) disposent de clés uniques, avec un warn.
+ */
+function dedupeScheduledIds<T extends { id: string }>(entries: T[]): T[] {
+  const used = new Set<string>();
+  const renamed: string[] = [];
+  const result = entries.map((entry) => {
+    if (!used.has(entry.id)) {
+      used.add(entry.id);
+      return entry;
+    }
+    let suffix = 2;
+    while (used.has(`${entry.id}#${suffix}`)) suffix += 1;
+    const id = `${entry.id}#${suffix}`;
+    used.add(id);
+    renamed.push(`${entry.id} -> ${id}`);
+    return { ...entry, id };
+  });
+  if (renamed.length > 0) {
+    console.warn(`[js-bot-config] scheduled : identifiants en double renommés (${renamed.join(', ')})`);
+  }
+  return result;
+}
+
+/** `prefixes` : liste de chaînes ; les éléments d'un autre type sont écartés (la validité de chaque préfixe se juge dans `resolveCommandPrefixes`). */
+const prefixesSchema = tolerant(
+  'prefixes',
+  z.array(z.unknown()).transform((items) => {
+    const strings = items.filter((item): item is string => typeof item === 'string');
+    if (strings.length !== items.length) {
+      warnIgnored('prefixes', `${items.length - strings.length} élément(s) non textuel(s) écarté(s)`);
+    }
+    return strings;
+  }),
+);
+
+/** `jsFunctions` : seuls les objets sont gardés ; la validation fine (nom, paramètres, taille) appartient au chargeur de fonctions. */
+const jsFunctionsSchema = tolerant(
+  'jsFunctions',
+  z.array(z.unknown()).transform((items) => {
+    const records = items.filter(isRecord);
+    if (records.length !== items.length) {
+      warnIgnored('jsFunctions', `${items.length - records.length} entrée(s) qui ne sont pas des objets écartée(s)`);
+    }
+    return records;
+  }),
+);
+
 export const jsBotConfigSchema = z.object({
   token: z.string().default(''),
   intents: z.record(z.boolean()).default({}),
   prefix: z.string().optional(),
+  /** Préfixes supplémentaires (max 5, 1 à 5 caractères sans espace) : voir `resolveCommandPrefixes`. */
+  prefixes: prefixesSchema,
+  /** Variable (nom, avec ou sans `bc_`) dont la valeur REMPLACE la liste statique de préfixes pour le serveur. */
+  prefixVariable: tolerant('prefixVariable', z.string()),
+  /** Portée de `prefixVariable` : `guild` si absent. */
+  prefixVariableScope: tolerant('prefixVariableScope', z.enum(['guild', 'global'])),
+  /** Option à activer avant tout usage de `noPrefix` sur une commande. */
+  allowNoPrefixCommands: tolerant('allowNoPrefixCommands', z.boolean()),
+  /** `<@bot> commande` se comporte comme un préfixe pour toutes les commandes prefix|hybrid. */
+  mentionAsPrefix: tolerant('mentionAsPrefix', z.boolean()),
+  /** Bibliothèque de fonctions JavaScript du bot (global `fn`) ; absent ou null = aucune. */
+  jsFunctions: jsFunctionsSchema,
   autoRestart: z.boolean().default(true),
   presence: presenceSchema,
   databaseConfig: databaseConfigSchema.default({ type: 'none' }),
   commands: z.array(commandHandlerSchema).nullish().transform((value) => value ?? []),
   events: z.array(eventHandlerSchema).nullish().transform((value) => value ?? []),
-  scheduled: z.array(scheduledHandlerSchema).nullish().transform((value) => value ?? []),
+  scheduled: z
+    .array(scheduledHandlerSchema)
+    .nullish()
+    .transform((value) => dedupeScheduledIds(value ?? [])),
   inboundWebhooks: z
     .array(inboundWebhookHandlerSchema)
     .nullish()
@@ -156,6 +267,10 @@ export function validateJsBotConfig(config: JsBotConfig): void {
     }
     webhookPaths.add(key);
   }
+
+  // Les entrées `scheduled` ne sont PAS contrôlées ici : des ids en double sont dédupliqués au parse
+  // (`dedupeScheduledIds`) et une entrée sans planification valide est ignorée par le planificateur.
+  // Les rejeter ferait échouer la synchro de bots qui fonctionnent aujourd'hui.
 }
 
 // Invocation mode is independent from Discord's application-command type.
@@ -193,4 +308,84 @@ export function resolveCommandPrefix(config: { prefix?: string; commands?: Comma
     return (data.legacyModeEnabled ?? command.legacyModeEnabled) === true;
   });
   return hasExplicitPrefixCommand ? DEFAULT_COMMAND_PREFIX : '';
+}
+
+/** Un préfixe supplémentaire (ou une entrée de la variable de préfixe) : 1 à 5 points de code, sans espace. */
+export const MAX_PREFIX_LENGTH = 5;
+/** Nombre maximal de préfixes supplémentaires (`prefixes`, ou entrées de la variable de préfixe). */
+export const MAX_PREFIX_ENTRIES = 5;
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
+/**
+ * Entrée de préfixe nettoyée, ou null si elle est invalide (non textuelle, vide, contenant un espace ou un
+ * saut de ligne, plus de 5 caractères). La longueur se compte en POINTS DE CODE (un emoji vaut 1), comme le
+ * Manager (`[]rune`), et non en unités UTF-16.
+ */
+export function normalizePrefixEntry(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const entry = raw.trim();
+  if (!entry || /\s/u.test(entry)) return null;
+  return codePointLength(entry) <= MAX_PREFIX_LENGTH ? entry : null;
+}
+
+/**
+ * Préfixes statiques effectifs : `[prefix, ...prefixes]` dédupliqués, les plus longs d'abord (`!!` avant `!`
+ * pour qu'un message `!!ping` ne soit pas lu comme `!` + `!ping`), jamais de préfixe vide.
+ *
+ * - `prefix` garde sa lecture historique (rognée, non vide, sans borne de longueur : il n'a jamais été
+ *   limité à 5 caractères côté runner) ; seules les entrées de `prefixes` sont validées, et écartées sans
+ *   rejet si elles sont invalides (au plus 5 entrées valides et distinctes).
+ * - Repli `!` (comme `resolveCommandPrefix`) seulement quand AUCUN préfixe n'est configuré et qu'une commande
+ *   prefix|hybrid active existe : `prefix: ''` avec `prefixes: ['?']` donne `['?']`, pas `['?', '!']`.
+ *
+ * `resolveCommandPrefix` (un seul préfixe) reste inchangée.
+ */
+export function resolveCommandPrefixes(config: {
+  prefix?: string;
+  prefixes?: string[];
+  commands?: CommandHandler[];
+}): string[] {
+  const list: string[] = [];
+  const seen = new Set<string>();
+
+  const primary = typeof config.prefix === 'string' ? config.prefix.trim() : '';
+  if (primary) {
+    list.push(primary);
+    seen.add(primary);
+  }
+
+  let extras = 0;
+  for (const raw of Array.isArray(config.prefixes) ? config.prefixes : []) {
+    if (extras >= MAX_PREFIX_ENTRIES) break;
+    const entry = normalizePrefixEntry(raw);
+    if (!entry || seen.has(entry)) continue;
+    seen.add(entry);
+    list.push(entry);
+    extras += 1;
+  }
+
+  if (list.length === 0) {
+    const fallback = resolveCommandPrefix({ commands: config.commands });
+    return fallback ? [fallback] : [];
+  }
+  // Tri stable : à longueur égale, l'ordre déclaré est conservé.
+  return list.sort((left, right) => codePointLength(right) - codePointLength(left));
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+/**
+ * Vrai si la commande peut être invoquée sans préfixe : prefix|hybrid, activée, et `noPrefix` à vrai
+ * (`data.noPrefix ?? noPrefix`, une valeur non booléenne étant ignorée). N'inclut PAS le réglage du bot
+ * `allowNoPrefixCommands` (double opt-in) ni la disponibilité de l'intent Message Content : l'appelant les
+ * contrôle.
+ */
+export function commandAllowsNoPrefix(command: CommandHandler): boolean {
+  if (command.enabled === false || !supportsPrefix(command)) return false;
+  return (readBoolean(command.data?.noPrefix) ?? command.noPrefix) === true;
 }

@@ -375,6 +375,12 @@ export class HandlerRegistry {
   }
 
   private attachScheduled(handler: ScheduledHandler): void {
+    // `everyMinutes` est devenu optionnel (entrée cron seule). Tant que le planificateur cron n'existe
+    // pas, une telle entrée est ignorée avec un avertissement plutôt que de planifier un NaN.
+    if (!handler.everyMinutes) {
+      this.emitLog('warn', `Scheduled task ${handler.id} ignored: no everyMinutes interval.`);
+      return;
+    }
     const intervalMs = handler.everyMinutes * 60_000;
     const timer = setInterval(() => {
       void this.runScript(handler.script, {});
