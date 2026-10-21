@@ -504,3 +504,52 @@ describe('portal sync resilience', () => {
     expect((caught as Error).message).not.toContain(SECRET);
   });
 });
+
+describe('intents des routes de message (préfixes, variable de préfixe, mention)', () => {
+  const approved = new Set(['Message Content']);
+  const noCommands = { ...emptyConfig, commands: [] as JsBotConfig['commands'] };
+
+  it('Message Content demandé quand seuls `prefixes` sont configurés (prefix vide, commandes à déclencheur implicite)', () => {
+    const config = {
+      ...noCommands,
+      prefix: '',
+      prefixes: ['?'],
+      commands: [{ id: 'c', name: 'ping', script: '', enabled: true, aliases: [], options: [], type: 'command', description: '', discordType: 'chatInput' }],
+    } as unknown as JsBotConfig;
+    expect(buildEffectiveIntentsMap(config, approved)['Message Content']).toBe(true);
+  });
+
+  it('Message Content demandé avec une variable de préfixe', () => {
+    const config = { ...noCommands, prefixVariable: 'prefix' } as JsBotConfig;
+    expect(buildEffectiveIntentsMap(config, approved)['Message Content']).toBe(true);
+    expect(buildEffectiveIntentsMap({ ...config, prefixVariable: '  ' } as JsBotConfig, approved)['Message Content']).toBe(false);
+  });
+
+  it('configurations historiques inchangées', () => {
+    expect(buildEffectiveIntentsMap({ ...noCommands, prefix: '!' }, approved)['Message Content']).toBe(true);
+    expect(buildEffectiveIntentsMap(noCommands, approved)['Message Content']).toBe(false);
+    expect(buildEffectiveIntentsMap({ ...noCommands, prefix: '!' }, new Set())['Message Content']).toBe(false);
+  });
+
+  it('la mention seule ne lève pas Message Content (Discord fournit le contenu des messages qui mentionnent le bot) mais garde Guild Messages', () => {
+    const config = { ...noCommands, mentionAsPrefix: true } as JsBotConfig;
+    const effective = buildEffectiveIntentsMap(config, approved);
+    expect(effective['Message Content']).toBe(false);
+    expect(effective['Guild Messages']).toBe(true);
+    expect(effective['Direct Messages']).toBe(true);
+  });
+
+  it('resolveRequiredIntentKeys réclame Guild Messages pour la mention, jamais Message Content', async () => {
+    const { resolveRequiredIntentKeys } = await import('../src/discord/intent-resolver.js');
+    const mention = resolveRequiredIntentKeys({ eventNames: [], mentionAsPrefix: true });
+    expect([...mention]).toEqual(['Guild Messages']);
+    expect([...resolveRequiredIntentKeys({ eventNames: [] })]).toEqual([]);
+    const both = resolveRequiredIntentKeys({
+      eventNames: [],
+      hasLegacyCommands: true,
+      mentionAsPrefix: true,
+      approvedPrivilegedIntents: approved,
+    });
+    expect([...both].sort()).toEqual(['Guild Messages', 'Message Content']);
+  });
+});

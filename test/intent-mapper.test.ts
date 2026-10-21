@@ -104,3 +104,18 @@ describe('intentsMapsEqual', () => {
     );
   });
 });
+
+describe('mentionAsPrefix', () => {
+  it('active le bit Guild Messages sans le bit Message Content', () => {
+    const config: JsBotConfig = { ...baseConfig, mentionAsPrefix: true };
+    const bits = mapIntents(buildEffectiveIntentsMap(config, new Set(['Message Content'])))[0];
+    expect(bits & GatewayIntentBits.GuildMessages).not.toBe(0);
+    expect(bits & GatewayIntentBits.MessageContent).toBe(0);
+  });
+
+  it('les préfixes supplémentaires lèvent Message Content comme le préfixe historique', () => {
+    const config: JsBotConfig = { ...baseConfig, prefixes: ['?'] };
+    const bits = mapIntents(buildEffectiveIntentsMap(config, new Set(['Message Content'])))[0];
+    expect(bits & GatewayIntentBits.MessageContent).not.toBe(0);
+  });
+});

@@ -73,6 +73,11 @@ const MESSAGE_CONTENT_EVENTS = new Set([
 export function resolveRequiredIntentKeys(options: {
   eventNames: string[];
   hasLegacyCommands?: boolean;
+  /**
+   * `<@bot> commande` sert de préfixe : il faut recevoir les messages de serveur (Guild Messages). Message
+   * Content n'est PAS demandé pour la mention seule : Discord fournit le contenu des messages qui mentionnent le bot.
+   */
+  mentionAsPrefix?: boolean;
   approvedPrivilegedIntents?: Set<string>;
   warnings?: string[];
 }): Set<string> {
@@ -99,6 +104,9 @@ export function resolveRequiredIntentKeys(options: {
   if (options.hasLegacyCommands) {
     required.add('Guild Messages');
     required.add('Message Content');
+  }
+  if (options.mentionAsPrefix) {
+    required.add('Guild Messages');
   }
 
   const resolved = new Set<string>();
