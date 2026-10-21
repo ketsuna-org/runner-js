@@ -138,7 +138,17 @@ export function sanitizePrefixValue(value: unknown): string[] {
 export const PREFIX_VARIABLE_CACHE_TTL_MS = 30_000;
 /** Une lecture en échec n'est retentée qu'après ce délai (liste statique entre-temps). */
 export const PREFIX_VARIABLE_ERROR_TTL_MS = 5_000;
-const MAX_CACHED_GUILDS = 1_000;
+/**
+ * Délai maximal d'une lecture de la variable de préfixe. Elle est sur le chemin de CHAQUE message : sans borne,
+ * un store qui ne répond pas (Manager injoignable après avoir accepté la requête) suspendrait toutes les
+ * commandes préfixées du serveur, alors que l'échec de lecture promet le repli sur la liste statique.
+ */
+export const PREFIX_VARIABLE_READ_TIMEOUT_MS = 2_000;
+/**
+ * Serveurs gardés en cache (éviction du moins récemment utilisé). Au-dessous du nombre de serveurs d'un gros
+ * bot, chaque entrée serait évincée avant sa réutilisation et presque chaque message ferait une requête.
+ */
+export const MAX_CACHED_GUILDS = 10_000;
 
 type PrefixResolverConfig = Pick<
   JsBotConfig,
@@ -152,6 +162,10 @@ export interface PrefixResolverOptions {
   getConfig: () => PrefixResolverConfig;
   now?: () => number;
   ttlMs?: number;
+  /** Délai maximal d'une lecture (voir `PREFIX_VARIABLE_READ_TIMEOUT_MS`). */
+  readTimeoutMs?: number;
+  /** Nombre maximal de serveurs en cache (voir `MAX_CACHED_GUILDS`). */
+  maxEntries?: number;
   /** Reçoit une description de l'échec de lecture (jamais la valeur de la variable). */
   onError?: (message: string) => void;
 }
@@ -180,10 +194,14 @@ export class PrefixResolver {
   private generation = 0;
   private readonly now: () => number;
   private readonly ttlMs: number;
+  private readonly readTimeoutMs: number;
+  private readonly maxEntries: number;
 
   constructor(private readonly options: PrefixResolverOptions) {
     this.now = options.now ?? Date.now;
     this.ttlMs = options.ttlMs ?? PREFIX_VARIABLE_CACHE_TTL_MS;
+    this.readTimeoutMs = options.readTimeoutMs ?? PREFIX_VARIABLE_READ_TIMEOUT_MS;
+    this.maxEntries = Math.max(1, options.maxEntries ?? MAX_CACHED_GUILDS);
   }
 
   /** Vrai si une variable de préfixe est configurée. */
@@ -207,6 +225,9 @@ export class PrefixResolver {
     let fromVariable: string[];
     if (cached && cached.expiresAt > this.now()) {
       fromVariable = cached.value;
+      // Le plus récemment utilisé passe en dernier de la table : c'est le premier de la table qui est évincé.
+      this.cache.delete(cacheKey);
+      this.cache.set(cacheKey, cached);
     } else {
       const inflight = this.pending.get(cacheKey);
       fromVariable = await (inflight ?? this.load(cacheKey, config, scope, key, guildId));
@@ -233,7 +254,7 @@ export class PrefixResolver {
       let value: string[] = [];
       let ttl = this.ttlMs;
       try {
-        value = sanitizePrefixValue(await this.read(config, scope, key, guildId));
+        value = sanitizePrefixValue(await this.readWithTimeout(config, scope, key, guildId));
       } catch (error) {
         ttl = PREFIX_VARIABLE_ERROR_TTL_MS;
         const reason = error instanceof Error ? error.message : String(error);
@@ -254,11 +275,37 @@ export class PrefixResolver {
   }
 
   private remember(cacheKey: string, value: string[], ttl: number): void {
-    if (this.cache.size >= MAX_CACHED_GUILDS) {
-      const oldest = this.cache.keys().next().value;
-      if (oldest !== undefined) this.cache.delete(oldest);
+    // Supprimer avant d'insérer : une entrée relue (expirée) redevient la plus récente de la table.
+    this.cache.delete(cacheKey);
+    while (this.cache.size >= this.maxEntries) {
+      const leastRecent = this.cache.keys().next().value;
+      if (leastRecent === undefined) break;
+      this.cache.delete(leastRecent);
     }
     this.cache.set(cacheKey, { value, expiresAt: this.now() + ttl });
+  }
+
+  /** `read` borné : au-delà du délai la lecture est abandonnée comme une erreur (liste statique). */
+  private async readWithTimeout(
+    config: PrefixResolverConfig,
+    scope: 'guild' | 'global',
+    key: string,
+    guildId: string,
+  ): Promise<unknown> {
+    const reading = this.read(config, scope, key, guildId);
+    // Si le délai gagne, un rejet tardif de la lecture ne doit pas devenir un rejet non géré.
+    reading.catch(() => undefined);
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        reading,
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error(`read timed out after ${this.readTimeoutMs}ms`)), this.readTimeoutMs);
+        }),
+      ]);
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
   }
 
   private async read(

@@ -282,6 +282,92 @@ describe('PrefixResolver', () => {
   });
 });
 
+describe('PrefixResolver : lecture bornée et cache', () => {
+  const STATIC = ['!'];
+
+  it('une lecture qui ne répond jamais est abandonnée après le délai : liste statique, erreur signalée, tous les messages libérés', async () => {
+    const config = parseJsBotConfig({ prefixVariable: 'prefix' });
+    let reads = 0;
+    const store = {
+      getScopedVariable: () => {
+        reads += 1;
+        return new Promise(() => undefined);
+      },
+      getGlobalVariables: async () => ({}),
+    } as unknown as VariableDatabase;
+    const errors: string[] = [];
+    const resolver = new PrefixResolver({
+      botId: 'bot',
+      store,
+      getConfig: () => config,
+      readTimeoutMs: 20,
+      onError: (message) => errors.push(message),
+    });
+
+    // Plusieurs messages du même serveur partagent la lecture en cours : tous sont libérés ensemble.
+    const results = await Promise.all([
+      resolver.resolve('g1', STATIC),
+      resolver.resolve('g1', STATIC),
+      resolver.resolve('g1', STATIC),
+    ]);
+    expect(results.every((result) => result === STATIC)).toBe(true);
+    expect(reads).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('timed out');
+    expect(errors[0]).toContain('prefix');
+
+    // Dans le court délai d'erreur, les messages suivants ne rouvrent pas de lecture ni n'attendent.
+    expect(await resolver.resolve('g1', STATIC)).toBe(STATIC);
+    expect(reads).toBe(1);
+  });
+
+  it('une lecture lente mais qui répond dans le délai est utilisée', async () => {
+    const config = parseJsBotConfig({ prefixVariable: 'prefix' });
+    const store = {
+      getScopedVariable: async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return '?';
+      },
+      getGlobalVariables: async () => ({}),
+    } as unknown as VariableDatabase;
+    const resolver = new PrefixResolver({ botId: 'bot', store, getConfig: () => config, readTimeoutMs: 1_000 });
+    expect(await resolver.resolve('g1', STATIC)).toEqual(['?']);
+  });
+
+  it('un bot présent dans plus de 1 000 serveurs garde ses lectures en cache (pas une requête par message)', async () => {
+    const guilds = 1_500;
+    const { resolver, calls } = resolverFor({ prefixVariable: 'prefix' }, { scoped: {} });
+    for (let round = 0; round < 2; round += 1) {
+      for (let index = 0; index < guilds; index += 1) {
+        await resolver.resolve(`g${index}`, STATIC);
+      }
+    }
+    // Variable absente = 2 lectures (clé, puis clé historique bc_) par serveur, une seule fois chacun.
+    expect(calls.scoped).toBe(guilds * 2);
+  });
+
+  it('cache plein : le serveur le moins récemment utilisé est évincé, pas le plus ancien inséré', async () => {
+    const config = parseJsBotConfig({ prefixVariable: 'prefix' });
+    const { store, calls } = fakeStore({
+      scoped: { 'guild:g1:prefix': '1', 'guild:g2:prefix': '2', 'guild:g3:prefix': '3', 'guild:g4:prefix': '4' },
+    });
+    const resolver = new PrefixResolver({ botId: 'bot', store, getConfig: () => config, maxEntries: 3 });
+    for (const guild of ['g1', 'g2', 'g3']) await resolver.resolve(guild, STATIC);
+    expect(calls.scoped).toBe(3);
+
+    await resolver.resolve('g1', STATIC); // g1 redevient le plus récent : g2 est maintenant le moins récent
+    await resolver.resolve('g4', STATIC); // cache plein : évince g2
+    expect(calls.scoped).toBe(4);
+
+    await resolver.resolve('g1', STATIC);
+    await resolver.resolve('g3', STATIC);
+    await resolver.resolve('g4', STATIC);
+    expect(calls.scoped).toBe(4); // tous en cache
+    await resolver.resolve('g2', STATIC);
+    expect(calls.scoped).toBe(5); // g2 a dû être relu
+  });
+});
+
 describe('observePrefixVariableWrites', () => {
   it('signale l écriture de la clé de la variable de préfixe, pas celle des autres', async () => {
     const { store } = fakeStore({});

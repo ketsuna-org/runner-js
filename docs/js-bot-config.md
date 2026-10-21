@@ -163,6 +163,9 @@ serveur, comme dans BDFD. Portée `guild` (défaut) ou `global`.
 - Cache de 30 secondes par serveur (5 secondes après un échec de lecture), vidé au rechargement et **tout de
   suite quand un script du bot écrit, supprime ou renomme la variable** (`db.guild.set`, `db.global.set`…). Une
   modification faite ailleurs (écran Variables de l'application, API) est prise en compte en 30 secondes au plus.
+- La lecture est bornée à **2 secondes** : au-delà (store qui ne répond pas), elle est abandonnée comme un échec et
+  la liste statique s'applique, sans retenter avant 5 secondes. Le cache garde jusqu'à 10 000 serveurs (le moins
+  récemment utilisé est évincé).
 - Un échec de lecture est journalisé en `warn` (`Prefix variable "<clé>" could not be read, using the static
   prefixes: <raison>`), jamais la valeur.
 
