@@ -12,7 +12,10 @@ import { CronSchedule } from './cron-expression.js';
  * - Les intervalles sont ancrés sur l'époque Unix (multiples de N minutes, UTC) : le prochain tir ne dépend
  *   donc ni de l'instant de montage ni du nombre de rechargements. `cron` s'évalue dans son fuseau.
  * - Pas de rattrapage (un retard n'est jamais rejoué), pas de chevauchement d'une même tâche, au plus
- *   `maxConcurrent` exécutions simultanées pour le bot. Une exécution compte jusqu'à la fin RÉELLE du script
+ *   `maxConcurrent` exécutions simultanées pour le bot. Une tâche qui arrive à échéance alors que toutes les
+ *   places sont prises ATTEND la première place libre (file d'arrivée, une seule entrée par tâche) au lieu
+ *   d'être sautée : sans cela, les dernières tâches déclarées d'un bot dont les échéances coïncident (4 tâches
+ *   `everyMinutes: 60`) ne tireraient jamais. Une exécution compte jusqu'à la fin RÉELLE du script
  *   (un timeout n'annule rien), pas jusqu'au rejet du timeout.
  * - `reconcile()` compare par signature : un rechargement ne touche pas aux tâches inchangées.
  * - L'instance vit au-dessus du registre de handlers : elle survit au remontage du registre et à la
@@ -196,6 +199,8 @@ export class ScheduledTasks {
   private readonly startHandled = new Set<string>();
   private readonly ignored = new Map<string, string>();
   private readonly ignoredWarned = new Map<string, string>();
+  /** Tâches arrivées à échéance sans place libre, dans l'ordre d'arrivée, avec la cause de leur tir. */
+  private readonly waiting = new Map<TaskState, 'schedule' | 'start'>();
   private active = 0;
 
   private readonly now: () => number;
@@ -314,6 +319,7 @@ export class ScheduledTasks {
     }
     this.startTimers.clear();
     this.pendingStart.clear();
+    this.waiting.clear();
     this.startHandled.clear();
     this.ignored.clear();
     this.ignoredWarned.clear();
@@ -386,6 +392,7 @@ export class ScheduledTasks {
 
   private remove(task: TaskState): void {
     task.active = false;
+    this.waiting.delete(task);
     this.cancelTimer(task);
     task.target = null;
   }
@@ -494,9 +501,10 @@ export class ScheduledTasks {
       return;
     }
     if (this.active >= this.maxConcurrent) {
-      this.skip(task, 'concurrency limit');
+      this.defer(task, trigger);
       return;
     }
+    this.waiting.delete(task);
     let guardKey: string | null = null;
     if (trigger === 'start') {
       const guard = this.options.startupGuard;
@@ -516,6 +524,45 @@ export class ScheduledTasks {
     this.execute(task, guardKey).catch(() => undefined);
   }
 
+  /**
+   * Toutes les places sont prises : la tâche attend la première qui se libère (voir `drainWaiting`). Elle n'attend
+   * qu'une fois : si son échéance suivante arrive avant qu'une place se libère, cette échéance-là est sautée
+   * (pas de rattrapage). Un tir de démarrage (`runOnStart`) en attente n'est jamais rétrogradé en tir ordinaire.
+   */
+  private defer(task: TaskState, trigger: 'schedule' | 'start'): void {
+    const queued = this.waiting.get(task);
+    if (queued !== undefined) {
+      if (trigger === 'start') {
+        this.waiting.set(task, 'start');
+      }
+      this.skip(task, 'concurrency limit');
+      return;
+    }
+    this.waiting.set(task, trigger);
+    this.options.log('debug', `Scheduled task ${task.entry.id} deferred: waiting for a free slot (${this.active}/${this.maxConcurrent} running)`);
+  }
+
+  /** Une place vient de se libérer : les tâches en attente partent dans l'ordre d'arrivée, tant qu'il reste de la place. */
+  private drainWaiting(): void {
+    for (const [task, trigger] of this.waiting) {
+      if (this.active >= this.maxConcurrent) {
+        return;
+      }
+      this.waiting.delete(task);
+      if (!task.active) {
+        continue;
+      }
+      try {
+        this.dispatch(task, trigger);
+      } catch (error) {
+        this.options.log(
+          'error',
+          `Scheduled task ${task.entry.id}: scheduling error (${error instanceof Error ? error.message : String(error)})`,
+        );
+      }
+    }
+  }
+
   private async execute(task: TaskState, guardKey: string | null): Promise<void> {
     const startedAt = this.now();
     task.running = true;
@@ -530,6 +577,7 @@ export class ScheduledTasks {
       task.runningSince = null;
       task.startGuardKey = null;
       this.active -= 1;
+      this.drainWaiting();
     };
 
     let outcome: TaskRunOutcome;

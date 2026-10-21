@@ -439,7 +439,10 @@ rien et le signale une fois.
 - **Pas de rattrapage** : une échéance manquée n'est jamais rejouée. Un réveil en retard de plus d'une minute
   (processus bloqué, machine suspendue) tire **une seule fois** et avertit.
 - **Pas de chevauchement** d'une même tâche : si l'exécution précédente tourne encore, l'échéance est sautée.
-- **3 exécutions simultanées au plus par bot** ; les suivantes sont sautées (`concurrency limit`). Une exécution
+- **3 exécutions simultanées au plus par bot**. Une tâche qui arrive à échéance quand les 3 places sont prises
+  **attend la première place libre** (file dans l'ordre d'arrivée), elle n'est pas perdue : 4 tâches `everyMinutes: 60`
+  tirent toutes les 4 à chaque heure, la 4e un peu après les autres. Elle n'attend qu'une fois : si son échéance
+  suivante arrive avant qu'une place se libère, celle-là est sautée (`concurrency limit`), sans rattrapage. Une exécution
   compte **jusqu'à la fin réelle du script** : un timeout n'annule rien, le script continue et garde sa place, avec
   un avertissement. Un script synchrone qui boucle fige tout le processus : aucun timeout ne l'arrête.
 - **Client non prêt** (connexion en cours ou reconnexion) : tir sauté (`client not ready`).

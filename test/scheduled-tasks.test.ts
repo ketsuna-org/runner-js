@@ -571,36 +571,146 @@ describe('ScheduledTasks : exécutions', () => {
     instance.stop();
   });
 
-  it('plafond de 3 exécutions simultanées par bot : les autres sont sautées avec un avertissement', async () => {
+  /** Exécution factice dont chaque tir attend qu'on le libère (une E/S en vol) : `settle()` les termine tous. */
+  function gatedRuns(clock: ManualClock) {
+    const open: Array<() => void> = [];
+    const runs: Array<{ id: string; at: string }> = [];
+    const run = async (entry: ScheduledTaskEntry): Promise<TaskRunOutcome> => {
+      runs.push({ id: entry.id, at: new Date(clock.now).toISOString() });
+      await new Promise<void>((resolve) => open.push(resolve));
+      return { ok: true, ms: 1 };
+    };
+    const settle = async () => {
+      while (open.length > 0) {
+        open.shift()!();
+        await flush();
+      }
+    };
+    return { run, runs, settle, inFlight: () => open.length };
+  }
+
+  it('plafond de 3 exécutions simultanées par bot : les tâches coïncidentes en trop sont DIFFÉRÉES, pas sautées', async () => {
     const clock = new ManualClock('2026-03-10T00:00:30Z');
-    let release!: () => void;
-    const gate = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    const { instance, logs, runs } = scheduler(clock, {
-      run: async (entry) => {
-        runs.push({ id: entry.id, script: entry.script, at: new Date(clock.now).toISOString() });
-        await gate;
-        return { ok: true, ms: 1 };
-      },
-    });
+    const gated = gatedRuns(clock);
+    const { instance, logs } = scheduler(clock, { run: gated.run });
     instance.reconcile(
       ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, script: 's', everyMinutes: 1 })),
     );
     await clock.advanceTo(at('2026-03-10T00:01:30Z'));
 
-    expect(runs).toHaveLength(3);
-    const snapshot = instance.snapshot();
-    expect(snapshot.running).toBe(3);
-    expect(snapshot.tasks.reduce((sum, task) => sum + task.skippedConcurrency, 0)).toBe(2);
-    expect(
-      logs.filter((line) => line.level === 'warn' && line.message.includes('skipped: concurrency limit')),
-    ).toHaveLength(2);
+    // Le plafond tient : 3 en vol, les 2 autres attendent une place.
+    expect(gated.runs.map((run) => run.id)).toEqual(['a', 'b', 'c']);
+    expect(instance.snapshot().running).toBe(3);
 
-    release();
-    await flush();
-    expect(instance.snapshot().running).toBe(0);
+    // Dès qu'une place se libère, les tâches en attente partent, dans l'ordre d'arrivée.
+    await gated.settle();
+    expect(gated.runs.map((run) => run.id)).toEqual(['a', 'b', 'c', 'd', 'e']);
+    const snapshot = instance.snapshot();
+    expect(snapshot.running).toBe(0);
+    expect(snapshot.tasks.map((task) => [task.id, task.runs, task.skippedConcurrency])).toEqual([
+      ['a', 1, 0],
+      ['b', 1, 0],
+      ['c', 1, 0],
+      ['d', 1, 0],
+      ['e', 1, 0],
+    ]);
+    expect(logs.filter((line) => line.message.includes('skipped'))).toEqual([]);
     instance.stop();
+  });
+
+  it('4 tâches sur la même échéance (60 min) : la 4e tire à chaque heure, aucune famine', async () => {
+    const clock = new ManualClock('2026-03-10T00:10:00Z');
+    const gated = gatedRuns(clock);
+    const { instance } = scheduler(clock, { run: gated.run });
+    instance.reconcile(['a', 'b', 'c', 'd'].map((id) => ({ id, script: 's', everyMinutes: 60 })));
+
+    for (const hour of ['01', '02', '03']) {
+      await clock.advanceTo(at(`2026-03-10T${hour}:00:30Z`));
+      await gated.settle();
+    }
+    expect(gated.runs.map((run) => run.id)).toEqual(['a', 'b', 'c', 'd', 'a', 'b', 'c', 'd', 'a', 'b', 'c', 'd']);
+    expect(instance.snapshot().tasks.map((task) => task.skippedConcurrency)).toEqual([0, 0, 0, 0]);
+    instance.stop();
+  });
+
+  it('4 tâches runOnStart : la 4e, différée, tire dès qu’une place se libère et ne rejoue pas ensuite', async () => {
+    const clock = new ManualClock('2026-03-10T00:10:00Z');
+    const gated = gatedRuns(clock);
+    const { instance } = scheduler(clock, { run: gated.run });
+    instance.reconcile(
+      ['a', 'b', 'c', 'd'].map((id) => ({ id, script: 's', everyMinutes: 60, runOnStart: true })),
+    );
+    await clock.advanceBy(DEFAULT_RUN_ON_START_DELAY_MS);
+    expect(gated.runs.map((run) => run.id)).toEqual(['a', 'b', 'c']);
+
+    await gated.settle();
+    expect(gated.runs.map((run) => run.id)).toEqual(['a', 'b', 'c', 'd']);
+
+    // Un rechargement ne le rejoue pas : le tir de démarrage différé compte comme traité.
+    instance.reconcile(['a', 'b', 'c', 'd'].map((id) => ({ id, script: 's', everyMinutes: 60, runOnStart: true })));
+    await clock.advanceBy(10 * MIN);
+    await gated.settle();
+    expect(gated.runs).toHaveLength(4);
+    instance.stop();
+  });
+
+  it('une tâche déjà en attente qui revient à échéance est sautée (concurrency limit), sans rattrapage', async () => {
+    const clock = new ManualClock('2026-03-10T00:00:30Z');
+    const gated = gatedRuns(clock);
+    const { instance, logs } = scheduler(clock, { run: gated.run, maxConcurrent: 1 });
+    instance.reconcile([
+      { id: 'hog', script: 's', everyMinutes: 1 },
+      { id: 'waiter', script: 's', everyMinutes: 1 },
+    ]);
+    await clock.advanceTo(at('2026-03-10T00:03:30Z'));
+    // `hog` tient la seule place depuis 00:01. `waiter` a été mise en attente à 00:01, puis sautée à 00:02 et 00:03.
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog']);
+    const waiter = instance.snapshot().tasks.find((task) => task.id === 'waiter');
+    expect(waiter).toMatchObject({ runs: 0, skippedConcurrency: 2 });
+    expect(logs.some((line) => line.level === 'warn' && line.message.includes('Scheduled task waiter skipped: concurrency limit'))).toBe(true);
+
+    await gated.settle();
+    // Un seul tir pour `waiter`, pas un par échéance manquée.
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog', 'waiter']);
+    await gated.settle();
+    instance.stop();
+  });
+
+  it('une tâche retirée alors qu’elle attend une place ne tire pas', async () => {
+    const clock = new ManualClock('2026-03-10T00:00:30Z');
+    const gated = gatedRuns(clock);
+    const { instance } = scheduler(clock, { run: gated.run, maxConcurrent: 1 });
+    instance.reconcile([
+      { id: 'hog', script: 's', everyMinutes: 1 },
+      { id: 'removed', script: 's', everyMinutes: 1 },
+      { id: 'kept', script: 's', everyMinutes: 1 },
+    ]);
+    await clock.advanceTo(at('2026-03-10T00:01:30Z'));
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog']);
+
+    instance.reconcile([
+      { id: 'hog', script: 's', everyMinutes: 1 },
+      { id: 'kept', script: 's', everyMinutes: 1 },
+    ]);
+    await gated.settle();
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog', 'kept']);
+    instance.stop();
+  });
+
+  it('stop() vide la file d’attente : rien ne démarre quand la place se libère ensuite', async () => {
+    const clock = new ManualClock('2026-03-10T00:00:30Z');
+    const gated = gatedRuns(clock);
+    const { instance } = scheduler(clock, { run: gated.run, maxConcurrent: 1 });
+    instance.reconcile([
+      { id: 'hog', script: 's', everyMinutes: 1 },
+      { id: 'waiting', script: 's', everyMinutes: 1 },
+    ]);
+    await clock.advanceTo(at('2026-03-10T00:01:30Z'));
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog']);
+
+    instance.stop();
+    await gated.settle();
+    expect(gated.runs.map((run) => run.id)).toEqual(['hog']);
   });
 
   it('une exécution qui lève est journalisée en erreur (id, planification, durée) et la tâche est ré-armée', async () => {
