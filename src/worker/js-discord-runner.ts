@@ -343,6 +343,11 @@ export class JsDiscordRunner {
       this.reconnecting = true;
       try {
         await this.start();
+      } catch (error) {
+        // start() a déjà détruit le client et le registre (teardown) : les tâches gardées pour la reconnexion
+        // ne doivent pas rester armées sans eux. Le superviseur passe le bot en erreur sans appeler stop().
+        this.scheduler.stop();
+        throw error;
       } finally {
         this.reconnecting = false;
       }

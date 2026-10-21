@@ -8,6 +8,7 @@ import { Client, Events } from 'discord.js';
 
 import { parseJsBotConfig } from '../src/config/js-bot-config.js';
 import { clearLastKnownPortalIntents } from '../src/discord/application-intent-sync.js';
+import { armDiscordIpBlock, clearDiscordIpBlock } from '../src/discord/discord-auth-errors.js';
 import { HandlerRegistry } from '../src/discord/handler-registry.js';
 import { CronSchedule, normalizeCronExpression, normalizeCronTimezone } from '../src/runtime/cron-expression.js';
 import {
@@ -1161,6 +1162,7 @@ describe('JsDiscordRunner : le planificateur survit à la reconnexion', () => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
     clearLastKnownPortalIntents();
+    clearDiscordIpBlock();
     delete (globalThis as Record<string, unknown>).__schedTicks;
   });
 
@@ -1252,6 +1254,61 @@ describe('JsDiscordRunner : le planificateur survit à la reconnexion', () => {
     expect(logs.filter((line) => line.level === 'error')).toEqual([]);
     expect(runner.getScheduledSnapshot().tasks).toEqual([]);
   });
+
+  it.each([
+    ['blocage d’IP Discord actif', 'block'],
+    ['échec de la résolution des intents', 'intents'],
+  ] as const)(
+    'une reconnexion décidée par reload() qui échoue (%s) arrête le planificateur : aucune tâche armée sans client',
+    async (_name, cause) => {
+      startAt('2026-03-10T00:07:00Z');
+      const discord = mockDiscord();
+      (globalThis as Record<string, unknown>).__schedTicks = 0;
+      const logs: Array<{ level: Level; message: string }> = [];
+      const config = (token: string) =>
+        parseJsBotConfig({
+          token,
+          scheduled: [
+            { id: 'tick', script: 'globalThis.__schedTicks = (globalThis.__schedTicks ?? 0) + 1;', everyMinutes: 1 },
+          ],
+        });
+      const runner = new JsDiscordRunner(
+        'bot-sched',
+        config('token'),
+        { getGlobalVariables: async () => ({}) } as unknown as VariableDatabase,
+        (level, message) => logs.push({ level, message }),
+      );
+      const internals = runner as unknown as { client: Client | null; registry: unknown };
+      await runner.start();
+      discord.setConnected(true);
+      expect(runner.getScheduledSnapshot().tasks.map((task) => task.id)).toEqual(['tick']);
+
+      const resolve = vi.spyOn(
+        runner as unknown as { resolveEffectiveIntents: () => Promise<Record<string, boolean>> },
+        'resolveEffectiveIntents',
+      );
+      if (cause === 'block') {
+        resolve.mockResolvedValue({ Guilds: true });
+        armDiscordIpBlock(120);
+      } else {
+        // Le premier appel est celui de reload() ; le second, dans start(), échoue après teardown().
+        resolve.mockResolvedValueOnce({ Guilds: true }).mockRejectedValue(new Error('intents unavailable'));
+      }
+
+      // Un jeton différent force start() : le client et le registre sont détruits avant l'échec.
+      await expect(runner.reload(config('other-token'))).rejects.toThrow();
+      expect(internals.client).toBeNull();
+      expect(internals.registry).toBeNull();
+
+      // Sans client ni registre, plus rien ne doit rester armé (ni exposé dans le statut).
+      expect(runner.getScheduledSnapshot().tasks).toEqual([]);
+      vi.advanceTimersByTime(5 * 60_000);
+      await flush(300);
+      expect((globalThis as Record<string, unknown>).__schedTicks).toBe(0);
+      expect(logs.filter((line) => line.message.includes('skipped'))).toEqual([]);
+      await runner.stop();
+    },
+  );
 
   describe('marqueur de runOnStart dans le dossier d’état', () => {
     const script = 'globalThis.__schedTicks = (globalThis.__schedTicks ?? 0) + 1;';
