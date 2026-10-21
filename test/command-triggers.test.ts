@@ -578,6 +578,39 @@ describe('commandes sans préfixe (double opt-in)', () => {
     expect(t.runs).toHaveLength(NO_PREFIX_MAX_PER_WINDOW + 2);
   });
 
+  it('les tentatives refusées par la permission de la commande ne consomment pas le plafond du bot', async () => {
+    const { NO_PREFIX_MAX_PER_WINDOW, NO_PREFIX_USER_COOLDOWN_MS } = await import('../src/discord/message-invocation.js');
+    const adminOnly = Array.from({ length: 10 }, (_, index) => ({
+      id: `adm${index}`,
+      name: `t_adm${index}`,
+      triggerType: 'hybrid',
+      noPrefix: true,
+      defaultMemberPermissions: '8',
+      script: `adm${index}`,
+    }));
+    const t = routeHarness(
+      config({ commands: [...adminOnly, { id: 'open', name: 't_open', triggerType: 'hybrid', noPrefix: true, script: 'open' }] }),
+    );
+    const admin = { id: 'admin', bot: false };
+    const adminMember = { id: 'admin', permissions: new PermissionsBitField(PermissionsBitField.Flags.Administrator) };
+
+    // Un membre sans droit essaie chacun des 10 noms réservés aux admins, 5 fois par fenêtre (le délai est par
+    // couple utilisateur+commande) : 50 passages, aucun script exécuté pour lui.
+    for (let round = 0; round < NO_PREFIX_MAX_PER_WINDOW / 10; round += 1) {
+      if (round > 0) t.clock.now += NO_PREFIX_USER_COOLDOWN_MS;
+      for (let index = 0; index < 10; index += 1) {
+        await t.send(`t_adm${index}`);
+      }
+    }
+    expect(t.runs).toEqual([]);
+
+    // Les commandes des autres (admins comme utilisateurs ordinaires) fonctionnent toujours dans la même fenêtre.
+    await t.send('t_adm0', { author: admin, member: adminMember });
+    await t.send('t_open', { author: { id: 'someone', bot: false } });
+    expect(t.scripts()).toEqual(['adm0', 'open']);
+    expect(t.warnings().filter((line) => line.includes('rate'))).toEqual([]);
+  });
+
   it('expose message.invocation (source noPrefix) aux scripts', async () => {
     const real = new ScriptExecutor(5000);
     const results: unknown[] = [];

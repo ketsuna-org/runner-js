@@ -219,8 +219,9 @@ Garde-fous (un message ordinaire qui s'écrit comme une commande l'exécute) :
 
 - délai de **2 secondes** par couple (utilisateur, commande) ;
 - au plus **50 exécutions par fenêtre de 10 secondes** pour le bot ; l'excédent est ignoré en silence, avec
-  un avertissement par fenêtre (`No-prefix commands rate limited: …`). Les routes préfixe et mention ne sont
-  pas limitées.
+  un avertissement par fenêtre (`No-prefix commands rate limited: …`). Seules les exécutions réelles comptent :
+  une tentative refusée par la permission de la commande (`defaultMemberPermissions`) n'entame pas ce plafond.
+  Les routes préfixe et mention ne sont pas limitées.
 
 Choisissez des noms distinctifs : `help` ou `ok` se déclencheront dans une conversation normale.
 

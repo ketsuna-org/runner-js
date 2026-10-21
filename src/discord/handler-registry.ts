@@ -262,10 +262,15 @@ export class HandlerRegistry {
     if (!handler) {
       return;
     }
-    if (invocation.source === 'noPrefix' && !this.allowNoPrefixTrigger(message.author?.id, handler)) {
+    if (invocation.source === 'noPrefix' && !this.passNoPrefixCooldown(message.author?.id, handler)) {
       return;
     }
     if (invocation.source !== 'prefix' && !(await this.memberMeetsDefaultPermissions(handler, message, invocation.source))) {
+      return;
+    }
+    // Le plafond du bot ne compte que les exécutions réelles : une tentative refusée par la permission de la
+    // commande ne doit pas priver les autres membres de leurs commandes sans préfixe.
+    if (invocation.source === 'noPrefix' && !this.takeNoPrefixSlot()) {
       return;
     }
 
@@ -309,16 +314,33 @@ export class HandlerRegistry {
   }
 
   /**
-   * Garde-fous du sans-préfixe (n'importe quel message qui s'écrit comme un nom de commande peut déclencher) :
-   * délai par (utilisateur, commande) et plafond d'exécutions par fenêtre pour tout le bot. L'excédent est ignoré.
+   * Garde-fous du sans-préfixe (n'importe quel message qui s'écrit comme un nom de commande peut déclencher),
+   * en deux temps. D'abord le délai par (utilisateur, commande), posé dès la tentative : il ne pénalise que
+   * l'auteur du message. Puis, une fois la permission de la commande contrôlée, `takeNoPrefixSlot` : plafond
+   * d'exécutions par fenêtre pour tout le bot. L'excédent est ignoré.
    */
-  private allowNoPrefixTrigger(userId: string | undefined, command: CommandHandler): boolean {
+  private passNoPrefixCooldown(userId: string | undefined, command: CommandHandler): boolean {
     const now = this.now();
     const cooldownKey = `${userId ?? ''}:${command.id}`;
     const last = this.noPrefixCooldowns.get(cooldownKey);
     if (last !== undefined && now - last < NO_PREFIX_USER_COOLDOWN_MS) {
       return false;
     }
+    this.noPrefixCooldowns.set(cooldownKey, now);
+    if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
+      for (const [key, at] of this.noPrefixCooldowns) {
+        if (now - at >= NO_PREFIX_USER_COOLDOWN_MS) this.noPrefixCooldowns.delete(key);
+      }
+      if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
+        this.noPrefixCooldowns.clear();
+      }
+    }
+    return true;
+  }
+
+  /** Prend une place dans la fenêtre d'exécutions sans préfixe du bot ; faux (avec un seul avertissement) si elle est pleine. */
+  private takeNoPrefixSlot(): boolean {
+    const now = this.now();
     if (now - this.noPrefixWindowStart >= NO_PREFIX_WINDOW_MS) {
       this.noPrefixWindowStart = now;
       this.noPrefixWindowCount = 0;
@@ -335,15 +357,6 @@ export class HandlerRegistry {
       return false;
     }
     this.noPrefixWindowCount += 1;
-    this.noPrefixCooldowns.set(cooldownKey, now);
-    if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
-      for (const [key, at] of this.noPrefixCooldowns) {
-        if (now - at >= NO_PREFIX_USER_COOLDOWN_MS) this.noPrefixCooldowns.delete(key);
-      }
-      if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
-        this.noPrefixCooldowns.clear();
-      }
-    }
     return true;
   }
 
