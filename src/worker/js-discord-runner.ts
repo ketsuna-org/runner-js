@@ -204,6 +204,9 @@ export class JsDiscordRunner {
       // Journaux des scripts et des handlers : leur volume suit le trafic, pas le runner.
       (level, message) => this.onLog(level, message, 'script'),
       this.databaseManager.handles,
+      // État réel de la connexion (approuvé au portail ET demandé), pas le réglage de la configuration :
+      // sans Message Content, les commandes sans préfixe ne peuvent pas lire les messages.
+      { messageContentAvailable: Boolean(this.effectiveIntents['Message Content']) },
     );
 
     this.mountGatewayLifecycleHandlers();

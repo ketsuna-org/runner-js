@@ -59,7 +59,13 @@ export interface ScriptViewOverrides {
   member?: unknown;
   guild?: unknown;
   channel?: unknown;
+  /** Message seulement : analyse de l'invocation (`message.invocation`), absente d'un message discord.js. */
+  invocation?: unknown;
+  /** Message seulement : `message.mentions` sans le bot, sur la route mention. */
+  mentions?: unknown;
 }
+
+const SCRIPT_VIEW_KEYS = ['member', 'guild', 'channel', 'invocation', 'mentions'] as const;
 
 /**
  * Vue de `target` (interaction / message) dont `member`, `guild` et `channel`
@@ -71,7 +77,7 @@ export function withScriptView<T extends object>(target: T, overrides: ScriptVie
   if (!target) {
     return target;
   }
-  const keys = (['member', 'guild', 'channel'] as const).filter(
+  const keys = SCRIPT_VIEW_KEYS.filter(
     (key) =>
       key in overrides &&
       (key === 'member' ? overrides[key] !== undefined : overrides[key] != null) &&

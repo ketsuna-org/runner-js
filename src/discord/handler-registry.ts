@@ -1,5 +1,6 @@
 import {
   Events,
+  PermissionsBitField,
   type Channel,
   type Client,
   type Guild,
@@ -9,10 +10,12 @@ import {
 } from 'discord.js';
 
 import {
+  commandAllowsNoPrefix,
   commandTriggerType,
   supportsSlash,
   supportsPrefix,
   resolveCommandPrefix,
+  resolveCommandPrefixes,
   type CommandHandler,
   type EventHandler,
   type InboundWebhookHandler,
@@ -20,6 +23,18 @@ import {
   type ScheduledHandler,
 } from '../config/js-bot-config.js';
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
+import {
+  NO_PREFIX_MAX_PER_WINDOW,
+  NO_PREFIX_USER_COOLDOWN_MS,
+  NO_PREFIX_WINDOW_MS,
+  PrefixResolver,
+  mentionsWithoutUser,
+  observePrefixVariableWrites,
+  parseInvocation,
+  prefixVariableStorageKey,
+  type InvocationSource,
+  type MessageInvocation,
+} from './message-invocation.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
 import {
@@ -41,10 +56,24 @@ import {
 
 type HandlerDisposer = () => void;
 
+export interface HandlerRegistryOptions {
+  /**
+   * L'intent Message Content est réellement actif sur la connexion (approuvé au portail ET demandé).
+   * Sans lui, les commandes sans préfixe sont désactivées (avertissement unique) ; la mention continue de
+   * marcher, Discord fournit le contenu des messages qui mentionnent le bot. Faux si non précisé.
+   */
+  messageContentAvailable?: boolean;
+  /** Horloge injectable (cache de la variable de préfixe, garde-fous sans préfixe). */
+  now?: () => number;
+}
+
+const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
+
 export class HandlerRegistry {
   private readonly disposers: HandlerDisposer[] = [];
   private readonly scheduledTimers: NodeJS.Timeout[] = [];
   private readonly prefixMap = new Map<string, CommandHandler>();
+  private readonly noPrefixMap = new Map<string, CommandHandler>();
   private readonly commandMap = new Map<string, CommandHandler>();
   private readonly webhookMap = new Map<string, InboundWebhookHandler>();
   private readonly inFlightInteractions = new Set<string>();
@@ -52,17 +81,47 @@ export class HandlerRegistry {
   private autocompleteBindings: AutocompleteBinding[] = [];
   private readonly scriptLogger: ScriptLogger;
   private databaseHandles?: DatabaseHandles;
+  private readonly variableStore: VariableDatabase;
+  private readonly prefixResolver: PrefixResolver;
+  private readonly messageContentAvailable: boolean;
+  private readonly now: () => number;
+  /** Préfixes de la configuration (`prefix` + `prefixes`), recalculés à chaque `mount()`. */
+  private staticPrefixes: string[] = [];
+  /** Commandes qui déclarent `noPrefix`, que le bot l'autorise ou non (sert à expliquer l'inaction). */
+  private noPrefixDeclared = 0;
+  private warnedNoPrefixOptIn = false;
+  private warnedNoPrefixIntent = false;
+  private noPrefixWindowStart = Number.NEGATIVE_INFINITY;
+  private noPrefixWindowCount = 0;
+  private warnedNoPrefixRate = false;
+  private readonly noPrefixCooldowns = new Map<string, number>();
 
   constructor(
     private readonly client: Client,
     private config: JsBotConfig,
     private readonly botId: string,
     private readonly executor: ScriptExecutor,
-    private readonly variableStore: VariableDatabase,
+    variableStore: VariableDatabase,
     private readonly emitLog: (level: 'info' | 'warn' | 'error' | 'debug', message: string) => void,
     databaseHandles?: DatabaseHandles,
+    options: HandlerRegistryOptions = {},
   ) {
     this.databaseHandles = databaseHandles;
+    this.messageContentAvailable = options.messageContentAvailable === true;
+    this.now = options.now ?? Date.now;
+    this.prefixResolver = new PrefixResolver({
+      botId,
+      store: variableStore,
+      getConfig: () => this.config,
+      now: this.now,
+      onError: (message) => this.emitLog('warn', message),
+    });
+    // Les scripts écrivent par cette enveloppe : changer la variable de préfixe (db.guild.set…) vide le cache.
+    this.variableStore = observePrefixVariableWrites(
+      variableStore,
+      () => prefixVariableStorageKey(this.config.prefixVariable),
+      () => this.prefixResolver.invalidate(),
+    );
     this.scriptLogger = {
       log: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
       info: (...args: unknown[]) => this.emitLog('info', args.map(String).join(' ')),
@@ -74,6 +133,7 @@ export class HandlerRegistry {
 
   mount(): void {
     this.clear();
+    this.staticPrefixes = resolveCommandPrefixes(this.config);
 
     for (const command of this.config.commands ?? []) {
       if (command.enabled === false) {
@@ -81,6 +141,7 @@ export class HandlerRegistry {
       }
       this.addCommand(command);
     }
+    this.warnIfNoPrefixCannotWork();
 
     for (const event of this.config.events ?? []) {
       if (event.enabled === false) {
@@ -145,33 +206,150 @@ export class HandlerRegistry {
     this.disposers.push(() => this.client.off(Events.InteractionCreate, onInteraction));
 
     {
-      const onMessage = async (message: Message) => {
-        const prefix = resolveCommandPrefix(this.config);
-        if (!prefix || message.author.bot || !message.content.startsWith(prefix)) {
-          return;
-        }
-
-        const withoutPrefix = message.content.slice(prefix.length).trim();
-        const commandName = withoutPrefix.split(/\s+/)[0]?.toLowerCase();
-        if (!commandName) {
-          return;
-        }
-
-        const handler = this.prefixMap.get(commandName);
-        if (!handler) {
-          return;
-        }
-
-        await this.runScript(handler.script, {
-          message,
-          guild: message.guild,
-          member: message.member,
-          channel: message.channel,
-        });
-      };
+      const onMessage = (message: Message) => this.handleMessage(message);
 
       this.client.on(Events.MessageCreate, onMessage);
       this.disposers.push(() => this.client.off(Events.MessageCreate, onMessage));
+    }
+  }
+
+  /**
+   * Route un message vers une commande : préfixe (statique ou variable), mention du bot placée en tête
+   * (`mentionAsPrefix`), puis nom seul (`noPrefix`, double opt-in). Voir `parseInvocation`.
+   */
+  private async handleMessage(message: Message): Promise<void> {
+    if (!message || message.author?.bot || message.webhookId || message.system) {
+      return;
+    }
+    if (typeof message.content !== 'string' || !message.content) {
+      return;
+    }
+    if (this.prefixMap.size === 0) {
+      return;
+    }
+
+    const guildId = message.guildId ?? message.guild?.id ?? null;
+    const prefixes = await this.prefixResolver.resolve(guildId, this.staticPrefixes);
+    const invocation = parseInvocation(message.content, {
+      botId: this.client.user?.id ?? null,
+      prefixes,
+      mentionEnabled: this.config.mentionAsPrefix === true,
+      noPrefixEnabled: this.noPrefixMap.size > 0 && this.messageContentAvailable && guildId !== null,
+    });
+    if (!invocation) {
+      return;
+    }
+
+    const handler = (invocation.source === 'noPrefix' ? this.noPrefixMap : this.prefixMap).get(invocation.name);
+    if (!handler) {
+      return;
+    }
+    if (invocation.source === 'noPrefix' && !this.allowNoPrefixTrigger(message.author?.id, handler)) {
+      return;
+    }
+    if (invocation.source !== 'prefix' && !(await this.memberMeetsDefaultPermissions(handler, message, invocation.source))) {
+      return;
+    }
+
+    await this.runScript(handler.script, {
+      message,
+      guild: message.guild,
+      member: message.member,
+      channel: message.channel,
+      invocation,
+    });
+  }
+
+  /**
+   * `default_member_permissions` de la commande appliqué aux routes mention et sans préfixe (la route préfixe
+   * garde son comportement historique). Refus silencieux, journal debug ; sans membre résolvable (message
+   * privé) ou avec une valeur illisible, la commande est refusée plutôt qu'ouverte à tous.
+   */
+  private async memberMeetsDefaultPermissions(
+    command: CommandHandler,
+    message: Message,
+    source: InvocationSource,
+  ): Promise<boolean> {
+    const required = requiredMemberPermissions(command);
+    if (required === null) {
+      return true;
+    }
+    const member = normalizeScriptMember(await resolveScriptMember(message, message.member ?? null));
+    const permissions = (member as { permissions?: { has?: (bits: bigint) => boolean } } | null)?.permissions;
+    const allowed =
+      typeof permissions?.has === 'function' &&
+      (required === 0n
+        ? permissions.has(PermissionsBitField.Flags.Administrator)
+        : permissions.has(required));
+    if (!allowed) {
+      this.emitLog(
+        'debug',
+        `Command ${command.name} refused for user ${message.author?.id ?? 'unknown'}: missing default member permissions (${source} route)`,
+      );
+    }
+    return allowed;
+  }
+
+  /**
+   * Garde-fous du sans-préfixe (n'importe quel message qui s'écrit comme un nom de commande peut déclencher) :
+   * délai par (utilisateur, commande) et plafond d'exécutions par fenêtre pour tout le bot. L'excédent est ignoré.
+   */
+  private allowNoPrefixTrigger(userId: string | undefined, command: CommandHandler): boolean {
+    const now = this.now();
+    const cooldownKey = `${userId ?? ''}:${command.id}`;
+    const last = this.noPrefixCooldowns.get(cooldownKey);
+    if (last !== undefined && now - last < NO_PREFIX_USER_COOLDOWN_MS) {
+      return false;
+    }
+    if (now - this.noPrefixWindowStart >= NO_PREFIX_WINDOW_MS) {
+      this.noPrefixWindowStart = now;
+      this.noPrefixWindowCount = 0;
+      this.warnedNoPrefixRate = false;
+    }
+    if (this.noPrefixWindowCount >= NO_PREFIX_MAX_PER_WINDOW) {
+      if (!this.warnedNoPrefixRate) {
+        this.warnedNoPrefixRate = true;
+        this.emitLog(
+          'warn',
+          `No-prefix commands rate limited: more than ${NO_PREFIX_MAX_PER_WINDOW} runs in ${NO_PREFIX_WINDOW_MS / 1000}s, extra messages are ignored.`,
+        );
+      }
+      return false;
+    }
+    this.noPrefixWindowCount += 1;
+    this.noPrefixCooldowns.set(cooldownKey, now);
+    if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
+      for (const [key, at] of this.noPrefixCooldowns) {
+        if (now - at >= NO_PREFIX_USER_COOLDOWN_MS) this.noPrefixCooldowns.delete(key);
+      }
+      if (this.noPrefixCooldowns.size > NO_PREFIX_MAX_TRACKED_COOLDOWNS) {
+        this.noPrefixCooldowns.clear();
+      }
+    }
+    return true;
+  }
+
+  /** Une seule explication par registre quand des commandes `noPrefix` existent mais ne peuvent pas servir. */
+  private warnIfNoPrefixCannotWork(): void {
+    if (this.noPrefixDeclared === 0) {
+      return;
+    }
+    if (this.config.allowNoPrefixCommands !== true) {
+      if (!this.warnedNoPrefixOptIn) {
+        this.warnedNoPrefixOptIn = true;
+        this.emitLog(
+          'warn',
+          'Ignoring no-prefix commands: allowNoPrefixCommands is not enabled for this bot.',
+        );
+      }
+      return;
+    }
+    if (!this.messageContentAvailable && !this.warnedNoPrefixIntent) {
+      this.warnedNoPrefixIntent = true;
+      this.emitLog(
+        'warn',
+        'Ignoring no-prefix commands: the Message Content intent is not available for this bot (enable it in the Discord Developer Portal).',
+      );
     }
   }
 
@@ -193,18 +371,34 @@ export class HandlerRegistry {
     this.addCommand(command);
   }
 
+  /**
+   * Mots qui déclenchent la commande hors slash : `prefixName` / `legacyPrefixOverride`, sinon le nom, puis les
+   * alias. Un nom principal remplace une entrée existante, un alias ne remplace jamais. Mêmes mots pour la
+   * route préfixe, la route mention et la route sans préfixe.
+   */
+  private registerTriggerWords(map: Map<string, CommandHandler>, command: CommandHandler): void {
+    const primaryName = command.name.trim().toLowerCase();
+    const prefixName = command.prefixName ||
+      String(command.data?.legacyPrefixOverride ?? command.legacyPrefixOverride ?? '') || primaryName;
+    map.set(prefixName.trim().toLowerCase(), command);
+    const aliases = command.aliases.length ? command.aliases :
+      command.legacyAliases ?? (Array.isArray(command.data?.legacyAliases) ? command.data.legacyAliases : []);
+    for (const alias of aliases) {
+      if (typeof alias !== 'string') continue;
+      const cleanAlias = alias.trim().toLowerCase();
+      if (cleanAlias && !map.has(cleanAlias)) map.set(cleanAlias, command);
+    }
+  }
+
   private addCommand(command: CommandHandler): void {
     const primaryName = command.name.trim().toLowerCase();
     if (supportsPrefix(command)) {
-      const prefixName = command.prefixName ||
-        String(command.data?.legacyPrefixOverride ?? command.legacyPrefixOverride ?? '') || primaryName;
-      this.prefixMap.set(prefixName.trim().toLowerCase(), command);
-      const aliases = command.aliases.length ? command.aliases :
-        command.legacyAliases ?? (Array.isArray(command.data?.legacyAliases) ? command.data.legacyAliases : []);
-      for (const alias of aliases) {
-        if (typeof alias !== 'string') continue;
-        const cleanAlias = alias.trim().toLowerCase();
-        if (cleanAlias && !this.prefixMap.has(cleanAlias)) this.prefixMap.set(cleanAlias, command);
+      this.registerTriggerWords(this.prefixMap, command);
+      if (commandAllowsNoPrefix(command)) {
+        this.noPrefixDeclared += 1;
+        if (this.config.allowNoPrefixCommands === true) {
+          this.registerTriggerWords(this.noPrefixMap, command);
+        }
       }
     }
     if (supportsSlash(command)) {
@@ -219,7 +413,7 @@ export class HandlerRegistry {
     const cleanName = commandName?.trim().toLowerCase();
     const cleanId = commandId?.trim();
 
-    for (const map of [this.commandMap, this.prefixMap]) {
+    for (const map of [this.commandMap, this.prefixMap, this.noPrefixMap]) {
       for (const [key, cmd] of map.entries()) {
         const matchesId = Boolean(cleanId && cmd.id === cleanId);
         const matchesName = Boolean(cleanName && cmd.name.trim().toLowerCase() === cleanName);
@@ -270,8 +464,11 @@ export class HandlerRegistry {
 
     this.commandMap.clear();
     this.prefixMap.clear();
+    this.noPrefixMap.clear();
+    this.noPrefixDeclared = 0;
     this.webhookMap.clear();
     this.autocompleteBindings = [];
+    this.prefixResolver.invalidate();
   }
 
   private async handleAutocomplete(interaction: Interaction): Promise<void> {
@@ -395,6 +592,8 @@ export class HandlerRegistry {
       message?: Message;
       /** Script-only `message` stand-in (hybrid slash); never used for scoping. */
       compatMessage?: unknown;
+      /** Comment le message a invoqué la commande ; exposé en `message.invocation`. */
+      invocation?: MessageInvocation;
       guild?: Message['guild'] | Interaction['guild'] | null;
       member?: Message['member'] | Interaction['member'] | null;
       channel?: Message['channel'] | Interaction['channel'] | null;
@@ -467,6 +666,12 @@ export class HandlerRegistry {
                 member,
                 guild: scriptGuild,
                 channel: scriptChannel,
+                invocation: partial.invocation,
+                // La mention d'en-tête n'est qu'un déclencheur : les scripts ne la voient pas dans `mentions`.
+                mentions:
+                  partial.invocation?.source === 'mention' && this.client.user?.id && partial.message.mentions
+                    ? mentionsWithoutUser(partial.message.mentions, this.client.user.id)
+                    : undefined,
               })
             : partial.compatMessage
               ? withScriptView(partial.compatMessage as object, {
@@ -524,6 +729,28 @@ export class HandlerRegistry {
         this.handledInteractions.delete(oldest);
       }
     }
+  }
+}
+
+/**
+ * `default_member_permissions` de la commande (`data.defaultMemberPermissions ?? defaultMemberPermissions`),
+ * en champ de bits : `null` = aucune restriction, `0n` = administrateurs seulement (comme Discord). Une valeur
+ * illisible ou négative est traitée comme `0n` (fermé par défaut).
+ */
+function requiredMemberPermissions(command: CommandHandler): bigint | null {
+  const raw = command.data?.defaultMemberPermissions ?? command.defaultMemberPermissions;
+  if (raw === undefined || raw === null) {
+    return null;
+  }
+  const text = String(raw).trim();
+  if (!text) {
+    return null;
+  }
+  try {
+    const bits = BigInt(text);
+    return bits < 0n ? 0n : bits;
+  } catch {
+    return 0n;
   }
 }
 

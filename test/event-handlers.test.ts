@@ -67,3 +67,42 @@ it('answers an unanswered interaction when its script throws', async () => {
   expect((calls[0][1] as { content: string; ephemeral: boolean }).ephemeral).toBe(true);
   expect((calls[1][1] as { content: string }).content).toBe(SCRIPT_FAILURE_NOTICE);
 });
+
+it('isPrefixCommandMessage (caractérisation, non corrigée) : seul un message préfixé dont la commande est aussi slash masque les handlers messageCreate ; mention et sans-préfixe ne les masquent pas', async () => {
+  const client = new EventEmitter() as EventEmitter & { user?: { id: string } };
+  client.user = { id: '900' };
+  const config = parseJsBotConfig({
+    prefix: '!',
+    mentionAsPrefix: true,
+    allowNoPrefixCommands: true,
+    commands: [
+      { id: 'h', name: 'hyb', triggerType: 'hybrid', noPrefix: true, script: 'cmd:hyb' },
+      { id: 'p', name: 'pfx', triggerType: 'prefix', noPrefix: true, script: 'cmd:pfx' },
+    ],
+    events: [{ id: 'ev', name: 'messageCreate', script: 'event' }],
+  });
+  const executed: string[] = [];
+  const executor = { execute: async (script: string) => { executed.push(script); } } as unknown as ScriptExecutor;
+  const registry = new HandlerRegistry(client as unknown as Client, config, 'bot-1', executor,
+    { getGlobalVariables: async () => ({}) } as VariableDatabase, () => undefined, undefined,
+    { messageContentAvailable: true, now: () => 1_000_000 });
+  registry.mount();
+  let sequence = 0;
+  const send = async (content: string) => {
+    executed.length = 0;
+    sequence += 1;
+    await Promise.all(client.listeners('messageCreate').map(listener => listener({
+      author: { id: `u${sequence}`, bot: false }, content, guild: null, guildId: 'g1', channelId: 'c1', member: null, channel: null,
+    })));
+    return [...executed].sort();
+  };
+  // Route préfixe, commande aussi présente dans commandMap (hybride) : le handler est masqué.
+  expect(await send('!hyb')).toEqual(['cmd:hyb']);
+  // Route préfixe, commande préfixe seule (absente de commandMap) : le handler s exécute aussi (défaut probable, figé ici).
+  expect(await send('!pfx')).toEqual(['cmd:pfx', 'event']);
+  // Mention et sans préfixe : la commande ET le handler s exécutent.
+  expect(await send('<@900> hyb')).toEqual(['cmd:hyb', 'event']);
+  expect(await send('hyb')).toEqual(['cmd:hyb', 'event']);
+  // Un message qui ne déclenche aucune commande atteint le handler.
+  expect(await send('bonjour')).toEqual(['event']);
+});
