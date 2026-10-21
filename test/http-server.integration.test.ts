@@ -4,6 +4,7 @@ import { createHttpServer } from '../src/http/server.js';
 import { loadRunnerEnv } from '../src/config/env.js';
 import { LogStore } from '../src/runtime/log-store.js';
 import { RuntimeController } from '../src/runtime/runtime-controller.js';
+import type { VariableDatabase } from '../src/runtime/variable-database.js';
 
 describe('HTTP server integration', () => {
   it('serves health and syncs a bot config', async () => {
@@ -305,6 +306,73 @@ describe('HTTP server integration', () => {
     expect(entryAfterDel?.config.commands?.length).toBe(0);
 
     await runtime.dispose();
+  });
+
+  it('tells the running bot about a scoped variable written through the API (set/remove, both aliases)', async () => {
+    const env = {
+      ...loadRunnerEnv(),
+      dataDir: './data/test-http-variable-notify',
+      logFile: './data/test-http-variable-notify/logs/runner.log',
+      webHost: '127.0.0.1',
+      webPort: 0,
+      apiToken: '',
+    };
+    const logStore = new LogStore(env.logFile);
+    const writes: string[] = [];
+    const store = {
+      setScopedVariable: async (_bot: string, scope: string, contextId: string, key: string) => {
+        writes.push(`set:${scope}:${contextId}:${key}`);
+      },
+      removeScopedVariable: async (_bot: string, scope: string, contextId: string, key: string) => {
+        writes.push(`remove:${scope}:${contextId}:${key}`);
+      },
+    } as unknown as VariableDatabase;
+    const notified: string[] = [];
+    const runtime = new RuntimeController(env.dataDir, logStore, store, 1, () => ({
+      start: async () => undefined,
+      stop: async () => undefined,
+      reload: async () => undefined,
+      triggerWebhook: async () => true,
+      getGuildCount: () => 0,
+      getHeapUsedBytes: () => null,
+      notifyVariableWrite: (key: string) => {
+        notified.push(key);
+      },
+    }));
+    const app = createHttpServer({ env, runtime, logStore });
+    const post = (route: string, body: Record<string, unknown>) =>
+      app.request(`/bots/notify-bot/variables/${route}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+    try {
+      await runtime.syncBot('notify-bot', 'Notify Bot', { token: 'test-token', commands: [] });
+      await runtime.startBot('notify-bot', 'Notify Bot');
+
+      // Le préfixe d'une guilde fixé par l'API (chemin du Manager, du MCP et de l'application).
+      expect((await post('scoped-values/set', { scope: 'guild', key: 'prefix', contextId: 'g1', value: '?' })).status).toBe(200);
+      expect((await post('scoped/set', { scope: 'guild', key: 'bc_prefix', contextId: 'g1', value: '#' })).status).toBe(200);
+      expect((await post('scoped-values/remove', { scope: 'guild', key: 'prefix', contextId: 'g1' })).status).toBe(200);
+      expect((await post('scoped/remove', { scope: 'guild', key: 'prefix', contextId: 'g1' })).status).toBe(200);
+
+      expect(writes).toEqual([
+        'set:guild:g1:prefix',
+        'set:guild:g1:prefix',
+        'remove:guild:g1:prefix',
+        'remove:guild:g1:prefix',
+      ]);
+      // Notifié APRÈS l'écriture, avec la clé de stockage (sans bc_), une fois par écriture.
+      expect(notified).toEqual(['prefix', 'prefix', 'prefix', 'prefix']);
+
+      // Un bot arrêté n'a personne à notifier : l'écriture réussit quand même.
+      await runtime.stopBot('notify-bot');
+      expect((await post('scoped-values/set', { scope: 'guild', key: 'prefix', contextId: 'g1', value: '!' })).status).toBe(200);
+      expect(notified).toHaveLength(4);
+    } finally {
+      await runtime.dispose();
+    }
   });
 
   // Le secret du webhook est le SEUL contrôle d'accès de cette route : `auth.ts`

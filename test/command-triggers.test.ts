@@ -274,6 +274,45 @@ describe('variable de préfixe', () => {
     expect(t.reads.prefix).toBe(3);
   });
 
+  it('notifyVariableWrite : une écriture de la variable faite hors script (API) vide le cache tout de suite', async () => {
+    const t = routeHarness(config(), { scoped: { 'guild:g1:prefix': '?' } });
+    await t.send('?t_ping');
+    expect(t.scripts()).toEqual(['ping']);
+
+    // Écriture directe dans le store (ce que fait POST /variables/scoped-values/set) : le cache garde l'ancien « ? ».
+    t.scoped.set('guild:g1:prefix', '#');
+    await t.send('#t_ping');
+    expect(t.scripts()).toEqual(['ping']);
+
+    // Une autre variable ne touche pas au cache ; la bonne clé (avec ou sans bc_) le vide.
+    t.registry.notifyVariableWrite('color');
+    await t.send('#t_ping');
+    expect(t.scripts()).toEqual(['ping']);
+    t.registry.notifyVariableWrite('bc_prefix');
+    await t.send('?t_ping');
+    await t.send('#t_ping');
+    expect(t.scripts()).toEqual(['ping', 'ping']);
+  });
+
+  it('notifyVariableWrite : une lecture « absente » mémorisée avant l’écriture est elle aussi oubliée', async () => {
+    const t = routeHarness(config());
+    await t.send('?t_ping'); // variable absente : liste statique « ! », mémorisée
+    expect(t.runs).toEqual([]);
+    t.scoped.set('guild:g1:prefix', '?');
+    t.registry.notifyVariableWrite('prefix');
+    await t.send('?t_ping');
+    await t.send('!t_ping');
+    expect(t.scripts()).toEqual(['ping']);
+  });
+
+  it('notifyVariableWrite : sans variable de préfixe configurée, rien à invalider et aucune lecture', async () => {
+    const t = routeHarness({ prefix: '!', commands: routeCommands() });
+    t.registry.notifyVariableWrite('prefix');
+    await t.send('!t_ping');
+    expect(t.scripts()).toEqual(['ping']);
+    expect(t.reads.prefix).toBe(0);
+  });
+
   it('aucune lecture sans commande prefix|hybrid active', async () => {
     const t = routeHarness(
       config({ commands: [{ id: 's', name: 't_slash', triggerType: 'slash', script: 'slash' }] }),

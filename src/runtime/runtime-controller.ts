@@ -117,6 +117,14 @@ export class RuntimeController {
     this.processManager.clearTokenInvalid(botId);
   }
 
+  /**
+   * Une variable à portée vient d'être écrite par l'API (hors scripts du bot) : le runner du bot, s'il tourne,
+   * oublie ses lectures mises en cache (variable de préfixe) au lieu d'attendre leur expiration.
+   */
+  notifyVariableWrite(botId: string, storageKey: string): void {
+    this.processManager.notifyVariableWrite(botId, storageKey);
+  }
+
   async startBot(botId: string, botName = ''): Promise<void> {
     await this.processManager.startBot(botId, botName);
   }

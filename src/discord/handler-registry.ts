@@ -392,6 +392,18 @@ export class HandlerRegistry {
     this.mount();
   }
 
+  /**
+   * Une variable vient d'être écrite HORS des scripts (API du runner : Manager, MCP, application). Si c'est la
+   * variable de préfixe, la lecture mémorisée est oubliée pour que le nouveau préfixe serve tout de suite, comme
+   * pour une écriture par script (`observePrefixVariableWrites`). `storageKey` : avec ou sans `bc_`.
+   */
+  notifyVariableWrite(storageKey: string): void {
+    const watched = prefixVariableStorageKey(this.config.prefixVariable);
+    if (watched !== null && prefixVariableStorageKey(storageKey) === watched) {
+      this.prefixResolver.invalidate();
+    }
+  }
+
   upsertCommand(command: CommandHandler): void {
     this.deleteCommand(command.id, command.name);
 

@@ -161,8 +161,10 @@ serveur, comme dans BDFD. Portée `guild` (défaut) ou `global`.
   `scopedVariableDefinitions` de portée `guild`. Pour `global` : `globalVariables` de la configuration, surchargées
   par les variables globales enregistrées. Un DM n'a pas de serveur : liste statique, même en portée `global`.
 - Cache de 30 secondes par serveur (5 secondes après un échec de lecture), vidé au rechargement et **tout de
-  suite quand un script du bot écrit, supprime ou renomme la variable** (`db.guild.set`, `db.global.set`…). Une
-  modification faite ailleurs (écran Variables de l'application, API) est prise en compte en 30 secondes au plus.
+  suite quand un script du bot écrit, supprime ou renomme la variable** (`db.guild.set`, `db.global.set`…), ou
+  quand l'API du runner l'écrit ou la supprime (`POST /bots/:id/variables/scoped-values/set` et `/remove`, donc
+  l'écran Variables de l'application, le Manager et le MCP). Toute autre modification est prise en compte en
+  30 secondes au plus.
 - La lecture est bornée à **2 secondes** : au-delà (store qui ne répond pas), elle est abandonnée comme un échec et
   la liste statique s'applique, sans retenter avant 5 secondes. Le cache garde jusqu'à 10 000 serveurs (le moins
   récemment utilisé est évincé).

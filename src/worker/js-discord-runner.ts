@@ -417,6 +417,11 @@ export class JsDiscordRunner {
     void this.propagateRemovals(previousCommands, nextCommands, this.config.token);
   }
 
+  /** Écriture d'une variable par l'API du runner (hors scripts) : voir `HandlerRegistry.notifyVariableWrite`. */
+  notifyVariableWrite(storageKey: string): void {
+    this.registry?.notifyVariableWrite(storageKey);
+  }
+
   async triggerWebhook(
     pathKey: string,
     payload: unknown,

@@ -50,6 +50,8 @@ export interface BotRunnerHandle {
   getHeapUsedBytes(): number | null;
   /** Tâches planifiées du bot (prochaine échéance, dernier résultat) ; absent pour un runner qui n'en a pas. */
   getScheduledSnapshot?(): ScheduledSnapshot;
+  /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
+  notifyVariableWrite?(storageKey: string): void;
 }
 
 export interface CreateRunnerParams {
@@ -414,6 +416,11 @@ export class BotSupervisor {
       });
     }
     return true;
+  }
+
+  /** Écriture d'une variable par l'API : prévient le runner du bot, s'il tourne. */
+  notifyVariableWrite(botId: string, storageKey: string): void {
+    this.bots.get(botId)?.runner.notifyVariableWrite?.(storageKey);
   }
 
   async upsertCommand(botId: string, command: CommandHandler): Promise<void> {
