@@ -435,6 +435,45 @@ describe('ScheduledTasks : échéances (horloge manuelle)', () => {
     instance.stop();
   });
 
+  it('everyMinutes au-dessus de 10080, valide pour l’ancien schéma (20160 min = 2 semaines), reste exécuté', async () => {
+    const clock = new ManualClock('2026-03-10T00:00:00Z');
+    const { instance, runs, logs } = scheduler(clock);
+    instance.reconcile([{ id: 'biweekly', script: 's', everyMinutes: 20_160 }]);
+
+    expect(instance.snapshot().ignored).toEqual([]);
+    expect(logs.filter((line) => line.level === 'warn')).toEqual([]);
+    const period = 20_160 * MIN;
+    const next = (Math.floor(clock.now / period) + 1) * period;
+    expect(instance.snapshot().tasks[0]).toMatchObject({
+      kind: 'interval',
+      schedule: 'every 20160 min',
+      nextRunAt: new Date(next).toISOString(),
+    });
+
+    await clock.advanceTo(next - 1);
+    expect(runs).toEqual([]);
+    expect(Math.max(...clock.delays)).toBeLessThanOrEqual(MAX_TIMER_DELAY_MS);
+    await clock.advanceTo(next);
+    expect(runs.map((run) => run.at)).toEqual([new Date(next).toISOString()]);
+    instance.stop();
+  });
+
+  it('un intervalle de plusieurs mois reste accepté, mais pas au-delà d’un an', () => {
+    const clock = new ManualClock('2026-03-10T00:00:00Z');
+    const { instance } = scheduler(clock);
+    instance.reconcile([
+      { id: 'quarter', script: 's', everyMinutes: 131_040 },
+      { id: 'year', script: 's', everyMinutes: 525_600 },
+      { id: 'beyond', script: 's', everyMinutes: 525_601 },
+    ]);
+    const snapshot = instance.snapshot();
+    expect(snapshot.tasks.map((task) => task.id)).toEqual(['quarter', 'year']);
+    expect(snapshot.ignored).toEqual([
+      { id: 'beyond', reason: 'no valid schedule (set a cron expression or everyMinutes between 1 and 525600)' },
+    ]);
+    instance.stop();
+  });
+
   it('un réveil en retard de plus d’une minute tire UNE fois, avertit, et ne rattrape pas les échéances manquées', async () => {
     const clock = new ManualClock('2026-03-10T00:00:30Z');
     const { instance, runs, logs } = scheduler(clock);
@@ -985,7 +1024,7 @@ describe('ScheduledTasks : réconciliation', () => {
       { id: 'zone', script: 's', cron: '0 9 * * *', timezone: 'Mars/Phobos' },
       { id: 'none', script: 's' },
       { id: 'zero', script: 's', everyMinutes: 0 },
-      { id: 'huge', script: 's', everyMinutes: 20_000 },
+      { id: 'huge', script: 's', everyMinutes: 600_000 },
       { id: 'fraction', script: 's', everyMinutes: 1.5 },
       // `cron` fait foi : un cron invalide n'est PAS remplacé par le repli everyMinutes du Manager.
       { id: 'fallback', script: 's', cron: '* * * * * *', everyMinutes: 10_080 },

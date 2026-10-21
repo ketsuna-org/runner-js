@@ -389,7 +389,7 @@ secrets des webhooks et les identifiants de base de données ne sont pas exposé
 | `name` | Nom du workflow d'éditeur dont la tâche porte le script (sert à la synchro d'un workflow). Facultatif. |
 | `script` | Corps du script. `interaction` et `message` sont `undefined` ; `guild`, `member` et `channel` valent `null`. |
 | `enabled` | `false` : tâche absente. Défaut `true`. |
-| `everyMinutes` | Intervalle entier de 1 à 10 080 minutes. |
+| `everyMinutes` | Intervalle entier de 1 à 10 080 minutes (l'éditeur et le Manager n'acceptent pas plus). Le runner exécute aussi une valeur plus grande déjà stockée, jusqu'à 525 600 (un an). |
 | `cron` | Expression à 5 champs ou macro (voir plus bas). **Prioritaire sur `everyMinutes`**, même si les deux sont présents. |
 | `timezone` | Fuseau IANA du `cron` (`Europe/Paris`). UTC si absent. Sans effet pour `everyMinutes`. |
 | `runOnStart` | `true` : un tir supplémentaire au démarrage du bot (voir plus bas). Défaut `false`. |
@@ -510,7 +510,7 @@ Les avertissements de configuration (`[js-bot-config] …`) vont sur la console 
       "skippedOverlap": 0, "skippedNotReady": 0, "skippedConcurrency": 0
     }
   ],
-  "ignored": [{ "id": "casse", "reason": "no valid schedule (set a cron expression or everyMinutes between 1 and 10080)" }]
+  "ignored": [{ "id": "casse", "reason": "no valid schedule (set a cron expression or everyMinutes between 1 and 525600)" }]
 }
 ```
 

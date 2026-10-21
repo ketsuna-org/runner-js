@@ -27,7 +27,13 @@ type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 /** Au-delà, `setTimeout` se déclenche immédiatement (avertissement de dépassement 32 bits). */
 export const MAX_TIMER_DELAY_MS = 2 ** 31 - 1;
-export const MAX_EVERY_MINUTES = 10_080;
+/**
+ * Plus grand `everyMinutes` exécuté (un an). L'éditeur et le Manager bornent à 10 080 (une semaine), mais
+ * l'ancien schéma acceptait n'importe quel entier positif et l'ancien runner exécutait jusqu'à ~35 790 minutes :
+ * une configuration déjà stockée au-dessus de 10 080 doit continuer à tirer, pas être ignorée en silence. Le
+ * délai est chaîné par paliers de 2^31-1 ms, ce plafond n'est donc qu'une politique contre les valeurs absurdes.
+ */
+export const MAX_EVERY_MINUTES = 525_600;
 export const DEFAULT_MAX_CONCURRENT_RUNS = 3;
 /** Délai entre le client prêt (ou le montage) et le tir `runOnStart` : laisse le cache des serveurs se remplir. */
 export const DEFAULT_RUN_ON_START_DELAY_MS = 5_000;
