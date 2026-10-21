@@ -439,19 +439,26 @@ describe('JsBotConfig : tolérance des nouveaux champs', () => {
   });
 });
 
-describe('HandlerRegistry : entrée scheduled sans intervalle', () => {
-  it('ignore avec un warn une entrée cron seule (aucun setInterval sur un NaN) et planifie toujours everyMinutes', () => {
+describe('HandlerRegistry : entrées scheduled', () => {
+  it('arme une entrée cron seule et une entrée everyMinutes par setTimeout (jamais de setInterval), et ignore avec un warn une entrée sans planification valide', () => {
     const intervals: unknown[] = [];
+    const delays: number[] = [];
     const setIntervalSpy = spyOn(globalThis, 'setInterval').mockImplementation(((_fn: unknown, delay: unknown) => {
       intervals.push(delay);
       return 0;
     }) as never);
+    const setTimeoutSpy = spyOn(globalThis, 'setTimeout').mockImplementation(((_fn: unknown, delay: unknown) => {
+      delays.push(Number(delay));
+      return 0;
+    }) as never);
+    const clearTimeoutSpy = spyOn(globalThis, 'clearTimeout').mockImplementation((() => undefined) as never);
     const logs: string[] = [];
     try {
       const registry = new HandlerRegistry(
         new EventEmitter() as unknown as Client,
         parseJsBotConfig({
           scheduled: [
+            { id: 'seconds', script: 'true;', cron: '* * * * * *' },
             { id: 'cron-only', script: 'true;', cron: '0 9 * * *' },
             { id: 'every', script: 'true;', everyMinutes: 5 },
           ],
@@ -467,10 +474,16 @@ describe('HandlerRegistry : entrée scheduled sans intervalle', () => {
       registry.clear();
     } finally {
       setIntervalSpy.mockRestore();
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
     }
 
-    expect(intervals).toEqual([5 * 60_000]);
-    expect(logs.some((line) => line.includes('cron-only'))).toBe(true);
+    expect(intervals).toEqual([]);
+    // `every` (au plus 5 min) et `cron-only` (au plus 24 h) : un timer chacun ; `seconds` (6 champs) est refusée.
+    expect(delays).toHaveLength(2);
+    expect(delays.every((delay) => delay > 0 && delay <= 24 * 3_600_000)).toBe(true);
+    expect(logs.some((line) => line.includes('Scheduled task seconds ignored'))).toBe(true);
+    expect(logs.some((line) => line.includes('cron-only'))).toBe(false);
   });
 });
 

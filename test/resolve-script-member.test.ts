@@ -95,4 +95,11 @@ describe('describeScriptSource', () => {
     expect(describeScriptSource({ webhook: { path: '/h' } })).toBe('inbound webhook /h');
     expect(describeScriptSource({})).toBe('event or scheduled handler');
   });
+
+  it('names the scheduled task, and keeps the generic fallback for anything else', async () => {
+    const { describeScriptSource } = await import('../src/discord/handler-registry.js');
+    expect(describeScriptSource({ scheduled: { id: 'daily-report' } })).toBe('scheduled task daily-report');
+    expect(describeScriptSource({ message: {} as never })).toBe('message handler');
+    expect(describeScriptSource({})).toBe('event or scheduled handler');
+  });
 });

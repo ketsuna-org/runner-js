@@ -20,7 +20,6 @@ import {
   type EventHandler,
   type InboundWebhookHandler,
   type JsBotConfig,
-  type ScheduledHandler,
 } from '../config/js-bot-config.js';
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import {
@@ -35,7 +34,9 @@ import {
   type InvocationSource,
   type MessageInvocation,
 } from './message-invocation.js';
+import { ScheduledTasks, type ScheduledTaskEntry, type TaskRunOutcome } from '../runtime/scheduled-tasks.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
+import type { ScriptRunLifecycle } from '../scripts/script-runtime.js';
 import type { ScriptLogger } from '../scripts/script-context.js';
 import {
   normalizeScriptMember,
@@ -65,13 +66,19 @@ export interface HandlerRegistryOptions {
   messageContentAvailable?: boolean;
   /** Horloge injectable (cache de la variable de préfixe, garde-fous sans préfixe). */
   now?: () => number;
+  /**
+   * Planificateur des tâches `scheduled`, fourni par le propriétaire du client (le runner) : il survit au
+   * remontage du registre et à la reconnexion. Sans lui, le registre crée le sien et l'arrête dans `clear()`.
+   */
+  scheduler?: ScheduledTasks;
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
 
 export class HandlerRegistry {
   private readonly disposers: HandlerDisposer[] = [];
-  private readonly scheduledTimers: NodeJS.Timeout[] = [];
+  private readonly scheduler: ScheduledTasks;
+  private readonly ownsScheduler: boolean;
   private readonly prefixMap = new Map<string, CommandHandler>();
   private readonly noPrefixMap = new Map<string, CommandHandler>();
   private readonly commandMap = new Map<string, CommandHandler>();
@@ -129,10 +136,22 @@ export class HandlerRegistry {
       error: (...args: unknown[]) => this.emitLog('error', args.map(String).join(' ')),
       debug: (...args: unknown[]) => this.emitLog('debug', args.map(String).join(' ')),
     };
+    this.ownsScheduler = options.scheduler === undefined;
+    this.scheduler =
+      options.scheduler ??
+      new ScheduledTasks({
+        run: (entry) => this.runScheduled(entry),
+        // Un client sans `isReady` (EventEmitter de test) compte comme prêt.
+        isReady: () => {
+          const isReady = (this.client as { isReady?: () => boolean }).isReady;
+          return typeof isReady === 'function' ? isReady.call(this.client) : true;
+        },
+        log: (level, message) => this.emitLog(level, message),
+      });
   }
 
   mount(): void {
-    this.clear();
+    this.unmountRoutes();
     this.staticPrefixes = resolveCommandPrefixes(this.config);
 
     for (const command of this.config.commands ?? []) {
@@ -157,12 +176,11 @@ export class HandlerRegistry {
       this.webhookMap.set(webhook.path.trim().toLowerCase(), webhook);
     }
 
-    for (const scheduled of this.config.scheduled ?? []) {
-      if (scheduled.enabled === false) {
-        continue;
-      }
-      this.attachScheduled(scheduled);
-    }
+    // Réconciliation, pas recréation : une tâche inchangée garde son timer (un rechargement ne remet rien à zéro).
+    this.scheduler.reconcile(this.config.scheduled);
+    const onClientReady = () => this.scheduler.markReady();
+    this.client.once(Events.ClientReady, onClientReady);
+    this.disposers.push(() => this.client.off(Events.ClientReady, onClientReady));
 
     const onInteraction = async (interaction: Interaction) => {
       if (interaction.isAutocomplete()) {
@@ -451,16 +469,28 @@ export class HandlerRegistry {
     return true;
   }
 
+  /**
+   * Arrêt complet : démontage des routes ET des tâches planifiées du registre. Un planificateur fourni par le
+   * propriétaire du client n'est pas touché ici (il survit à la reconnexion ; son propriétaire l'arrête).
+   */
   clear(): void {
+    this.unmountRoutes();
+    if (this.ownsScheduler) {
+      this.scheduler.stop();
+    }
+  }
+
+  /** Planificateur utilisé par ce registre (diagnostic, tests). */
+  getScheduler(): ScheduledTasks {
+    return this.scheduler;
+  }
+
+  /** Démontage des routes (écouteurs, cartes de commandes) sans toucher aux tâches planifiées : sert à `mount()`. */
+  private unmountRoutes(): void {
     for (const dispose of this.disposers) {
       dispose();
     }
     this.disposers.length = 0;
-
-    for (const timer of this.scheduledTimers) {
-      clearInterval(timer);
-    }
-    this.scheduledTimers.length = 0;
 
     this.commandMap.clear();
     this.prefixMap.clear();
@@ -571,23 +601,23 @@ export class HandlerRegistry {
     return this.commandMap.has(commandName);
   }
 
-  private attachScheduled(handler: ScheduledHandler): void {
-    // `everyMinutes` est devenu optionnel (entrée cron seule). Tant que le planificateur cron n'existe
-    // pas, une telle entrée est ignorée avec un avertissement plutôt que de planifier un NaN.
-    if (!handler.everyMinutes) {
-      this.emitLog('warn', `Scheduled task ${handler.id} ignored: no everyMinutes interval.`);
-      return;
-    }
-    const intervalMs = handler.everyMinutes * 60_000;
-    const timer = setInterval(() => {
-      void this.runScript(handler.script, {});
-    }, intervalMs);
-    this.scheduledTimers.push(timer);
+  /**
+   * Exécute le script d'une tâche planifiée (appelé par le planificateur). `interaction` et `message` sont
+   * indéfinis dans un script planifié. Le timeout propre à la tâche ne dépasse jamais `scriptTimeoutMs`.
+   * Le résultat est journalisé par le planificateur, pas ici.
+   */
+  async runScheduled(entry: ScheduledTaskEntry): Promise<TaskRunOutcome> {
+    const limit = this.config.scriptTimeoutMs;
+    const timeoutMs =
+      entry.timeoutMs === undefined ? limit : limit === undefined ? entry.timeoutMs : Math.min(entry.timeoutMs, limit);
+    return this.runScript(entry.script, { scheduled: { id: entry.id } }, { timeoutMs });
   }
 
   private async runScript(
     script: string,
     partial: {
+      /** Tâche planifiée qui exécute le script (nommée dans les journaux). */
+      scheduled?: { id: string };
       interaction?: Interaction;
       message?: Message;
       /** Script-only `message` stand-in (hybrid slash); never used for scoping. */
@@ -599,7 +629,22 @@ export class HandlerRegistry {
       channel?: Message['channel'] | Interaction['channel'] | null;
       webhook?: { path: string; payload: unknown; headers: Record<string, string> };
     },
-  ): Promise<void> {
+    options: { timeoutMs?: number } = {},
+  ): Promise<TaskRunOutcome> {
+    const startedAt = Date.now();
+    // Le timeout ne tue pas le script : `settled` dit au planificateur quand il se termine vraiment.
+    let timedOut = false;
+    let markSettled!: () => void;
+    const scriptSettled = new Promise<void>((resolve) => {
+      markSettled = resolve;
+    });
+    const lifecycle: ScriptRunLifecycle = {
+      onTimeout: () => {
+        timedOut = true;
+      },
+      onSettled: () => markSettled(),
+    };
+
     // Cache minimal : guilde / salon peuvent manquer (threads évincés, guilde
     // indisponible). Résolus à la demande (cache d'abord, un fetch sinon).
     const origin = partial.interaction ?? partial.message;
@@ -686,10 +731,19 @@ export class HandlerRegistry {
           webhook: partial.webhook,
         },
         this.scriptLogger,
-        this.config.scriptTimeoutMs,
+        options.timeoutMs ?? this.config.scriptTimeoutMs,
+        lifecycle,
       );
+      return { ok: true, ms: Date.now() - startedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      const failure: TaskRunOutcome = {
+        ok: false,
+        ms: Date.now() - startedAt,
+        error: message,
+        stack: error instanceof Error ? error.stack : undefined,
+        settled: timedOut ? scriptSettled : undefined,
+      };
       if (
         isUnknownInteractionError(message) &&
         partial.interaction?.isRepliable() &&
@@ -699,7 +753,12 @@ export class HandlerRegistry {
           'debug',
           `Ignored duplicate interaction response for ${partial.interaction.id}`,
         );
-        return;
+        return failure;
+      }
+      // Une tâche planifiée est journalisée par le planificateur, en une seule ligne (tâche, planification,
+      // durée, pile) : pas de seconde ligne ici.
+      if (partial.scheduled) {
+        return failure;
       }
       // Sans la source ni la pile, « Handler script failed: x is not a function »
       // ne dit ni quelle commande, ni quelle ligne.
@@ -707,6 +766,7 @@ export class HandlerRegistry {
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
       await notifyScriptFailure(partial.interaction);
+      return failure;
     }
   }
 
@@ -834,6 +894,7 @@ export async function upgradeInteractionMember<M>(
 
 /** Ce qui a déclenché le script, pour les journaux d'erreur. */
 export function describeScriptSource(partial: {
+  scheduled?: { id: string };
   interaction?: Interaction;
   message?: Message;
   webhook?: { path: string };
@@ -842,6 +903,7 @@ export function describeScriptSource(partial: {
   if (interaction?.commandName) return `command /${interaction.commandName}`;
   if (interaction?.customId) return `component ${interaction.customId}`;
   if (partial.webhook) return `inbound webhook ${partial.webhook.path}`;
+  if (partial.scheduled) return `scheduled task ${partial.scheduled.id}`;
   if (partial.message) return 'message handler';
   return 'event or scheduled handler';
 }
