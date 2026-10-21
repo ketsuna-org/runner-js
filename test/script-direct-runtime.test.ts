@@ -170,6 +170,75 @@ describe('ScriptDirectRuntime', () => {
   });
 });
 
+describe('ScriptDirectRuntime : global fn', () => {
+  it('fn est le 19e et dernier paramètre de portée (aucun autre paramètre ajouté)', async () => {
+    const executor = createDirectExecutor();
+    const result = await executor.execute(
+      'return [arguments.length, typeof fn];',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      createLogger(),
+    );
+    expect(result).toEqual([19, 'object']);
+    executor.dispose();
+  });
+
+  it('un script contenant `const fn = 1` s execute toujours (repli sans fn, moteur courant) et émet un avertissement', async () => {
+    const executor = createDirectExecutor();
+    const logger = createLogger();
+    const result = await executor.execute(
+      '/* direct-const-fn */ const fn = 1; return fn + 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(result).toBe(2);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(String(logger.warn.mock.calls[0]?.[0])).toMatch(/\bfn\b/);
+    // Le repli est mis en cache : une deuxième exécution du même script ne ré-émet pas l avertissement.
+    await executor.execute(
+      '/* direct-const-fn */ const fn = 1; return fn + 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    executor.dispose();
+  });
+
+  it('le script et ses fonctions partagent les mêmes valeurs de portée', async () => {
+    const executor = createDirectExecutor();
+    const variables = { a: 1 };
+    const db = { marker: 'db' };
+    const config = { token: 'x', jsFunctions: [{ name: 'probe', script: 'return [variables, db, console, setTimeout, fetch, require];' }] };
+    const result = (await executor.execute(
+      `const own = [variables, db, console, setTimeout, fetch, require];
+       const viaFn = await fn.probe();
+       return own.map((value, index) => value === viaFn[index]);`,
+      { client: {} as never, config: config as never, variables, db: db as never },
+      createLogger(),
+    )) as boolean[];
+    expect(result).toEqual([true, true, true, true, true, true]);
+    executor.dispose();
+  });
+
+  it('après le timeout, le drapeau expiré empêche tout nouvel appel fn', async () => {
+    const executor = createDirectExecutor(40);
+    const variables: Record<string, unknown> = {};
+    const config = { token: 'x', jsFunctions: [{ name: 'later', script: 'variables.ran = true;' }] };
+    await expect(
+      executor.execute(
+        `await new Promise((resolve) => setTimeout(resolve, 120));
+         variables.outcome = await fn.later().then(() => 'ran', (error) => error.message);`,
+        { client: {} as never, config: config as never, variables },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/timed out/i);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(String(variables.outcome)).toMatch(/timed out/i);
+    expect(variables.ran).toBeUndefined();
+    executor.dispose();
+  });
+});
+
+
 function createLogger() {
   return {
     log: vi.fn(),

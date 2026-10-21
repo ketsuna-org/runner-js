@@ -6,15 +6,11 @@ import { runnerPackageRoot } from '../config/env.js';
 import { createCappedFetch } from '../runtime/memory-hygiene.js';
 import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
+import { compileAsyncBody, createScriptFunctions } from './script-functions.js';
+import type { CompiledBody } from './script-functions.js';
 import type { ScriptRuntime } from './script-runtime.js';
 
 const moduleRequire = createRequire(pathToFileURL(path.join(runnerPackageRoot(), 'package.json')));
-
-const AsyncFunction = Object.getPrototypeOf(async function () {
-  /* noop */
-}).constructor as new (
-  ...args: string[]
-) => (...values: unknown[]) => Promise<unknown>;
 
 function createConsoleProxy(logger: ScriptLogger): Console {
   return {
@@ -70,7 +66,11 @@ export function createTokenSafeClientProxy(client: ScriptExecutionContext['clien
   return proxy;
 }
 
-const SCOPE_PARAM_NAMES = [
+/**
+ * Paramètres de portée d'un script, dans l'ordre. `fn` (bibliothèque de fonctions du bot) est toujours le
+ * DERNIER : les valeurs des autres sont dans `scopeValues`, partagé avec les fonctions appelées.
+ */
+export const SCOPE_PARAM_NAMES = [
   'client',
   'config',
   'variables',
@@ -89,25 +89,31 @@ const SCOPE_PARAM_NAMES = [
   'require',
   'setTimeout',
   'clearTimeout',
+  'fn',
 ] as const;
 
-type CompiledScriptFn = (...args: unknown[]) => Promise<unknown>;
 const SCRIPT_CACHE_MAX = 500;
-const compiledScriptCache = new Map<string, CompiledScriptFn>();
+const compiledScriptCache = new Map<string, CompiledBody>();
 
-function getOrCompileScript(trimmedScript: string): CompiledScriptFn {
-  let fn = compiledScriptCache.get(trimmedScript);
-  if (!fn) {
-    fn = new AsyncFunction(...SCOPE_PARAM_NAMES, trimmedScript) as CompiledScriptFn;
+function getOrCompileScript(trimmedScript: string, logger: ScriptLogger): CompiledBody {
+  let compiled = compiledScriptCache.get(trimmedScript);
+  if (!compiled) {
+    // Un script qui déclare déjà `const fn` est recompilé sans le global `fn` (il garde sa propre liaison).
+    compiled = compileAsyncBody(SCOPE_PARAM_NAMES, [], trimmedScript);
+    if (compiled.shadowsFn) {
+      logger.warn(
+        'The script declares its own "fn" binding: the functions library (fn.name(...)) is not available in this script.',
+      );
+    }
     if (compiledScriptCache.size >= SCRIPT_CACHE_MAX) {
       const oldest = compiledScriptCache.keys().next().value;
       if (oldest !== undefined) {
         compiledScriptCache.delete(oldest);
       }
     }
-    compiledScriptCache.set(trimmedScript, fn);
+    compiledScriptCache.set(trimmedScript, compiled);
   }
-  return fn;
+  return compiled;
 }
 
 export class ScriptDirectRuntime implements ScriptRuntime {
@@ -122,8 +128,9 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       return undefined;
     }
 
-    const fn = getOrCompileScript(trimmed);
-    const execution = fn(
+    const compiled = getOrCompileScript(trimmed, logger);
+    // Même tableau pour le script et pour les fonctions du bot qu'il appelle (même portée ambiante).
+    const scopeValues: unknown[] = [
       createTokenSafeClientProxy(context.client),
       sanitizeConfigForScript(context.config),
       context.variables,
@@ -144,7 +151,14 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       moduleRequire,
       setTimeout,
       clearTimeout,
-    );
+    ];
+    const functions = createScriptFunctions({
+      jsFunctions: context.config?.jsFunctions,
+      scopeNames: SCOPE_PARAM_NAMES,
+      scopeValues,
+      warn: (message) => logger.warn(message),
+    });
+    const execution = compiled.run(scopeValues, functions.fn, []);
 
     let timeoutTimer: NodeJS.Timeout | undefined;
     try {
@@ -152,6 +166,8 @@ export class ScriptDirectRuntime implements ScriptRuntime {
         execution,
         new Promise<never>((_, reject) => {
           timeoutTimer = setTimeout(() => {
+            // Le script continue en arrière-plan (la course ne l'annule pas) : ses `fn.x()` tardifs sont refusés.
+            functions.expire();
             reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
           }, timeoutMs);
         }),
