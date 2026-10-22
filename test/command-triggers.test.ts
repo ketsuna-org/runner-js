@@ -513,6 +513,25 @@ describe('permission par défaut du membre sur les routes mention et sans préfi
     await t.send(`<@${BOT_ID}> t_ban u2`, { guildId: null, member: null });
     expect(t.runs).toEqual([]);
   });
+
+  it('route préfixe : refus silencieux sans la permission, exécution avec, commande ouverte inchangée', async () => {
+    const t = routeHarness(config());
+    await t.send('!t_ban u2', { member: member(0n) });
+    await t.send('!t_admin', { member: member(PermissionsBitField.Flags.BanMembers) });
+    await t.send('!t_data', { member: member(PermissionsBitField.Flags.BanMembers) });
+    await t.send('!t_ban u2', { guildId: null, member: null });
+    expect(t.runs).toEqual([]);
+    const refusals = t.logs.filter((line) => line.level === 'debug' && line.message.includes('refused'));
+    expect(refusals.map((line) => line.message.match(/t_\w+/)?.[0])).toEqual(['t_ban', 't_admin', 't_data', 't_ban']);
+    expect(refusals.every((line) => line.message.includes('prefix route'))).toBe(true);
+    expect(t.warnings()).toEqual([]);
+
+    await t.send('!t_ban u2', { member: member(PermissionsBitField.Flags.BanMembers) });
+    await t.send('!t_admin', { member: member(PermissionsBitField.Flags.Administrator) });
+    await t.send('!t_data', { member: member(PermissionsBitField.Flags.Administrator) });
+    await t.send('!t_open', { member: member(0n) });
+    expect(t.scripts()).toEqual(['ban', 'admin', 'data', 'open']);
+  });
 });
 
 describe('commandes sans préfixe (double opt-in)', () => {

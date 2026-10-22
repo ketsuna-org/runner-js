@@ -265,7 +265,7 @@ export class HandlerRegistry {
     if (invocation.source === 'noPrefix' && !this.passNoPrefixCooldown(message.author?.id, handler)) {
       return;
     }
-    if (invocation.source !== 'prefix' && !(await this.memberMeetsDefaultPermissions(handler, message, invocation.source))) {
+    if (!(await this.memberMeetsDefaultPermissions(handler, message, invocation.source))) {
       return;
     }
     // Le plafond du bot ne compte que les exécutions réelles : une tentative refusée par la permission de la
@@ -284,8 +284,8 @@ export class HandlerRegistry {
   }
 
   /**
-   * `default_member_permissions` de la commande appliqué aux routes mention et sans préfixe (la route préfixe
-   * garde son comportement historique). Refus silencieux, journal debug ; sans membre résolvable (message
+   * `default_member_permissions` de la commande appliqué aux trois routes (préfixe, mention, sans préfixe).
+   * Refus silencieux, journal debug ; sans membre résolvable (message
    * privé) ou avec une valeur illisible, la commande est refusée plutôt qu'ouverte à tous.
    */
   private async memberMeetsDefaultPermissions(

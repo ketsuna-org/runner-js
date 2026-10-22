@@ -278,16 +278,15 @@ cache sinon par une requête.
 ### 4.7 Permission par défaut du membre
 
 `defaultMemberPermissions` (`data.defaultMemberPermissions`, sinon la racine de la commande) est vérifiée sur les
-routes **mention** et **sans préfixe**, pour qu'une commande réservée aux administrateurs ne devienne pas
-exécutable par tous en tapant `@Bot ban …` ou `ban …`.
+routes **préfixe**, **mention** et **sans préfixe**, pour qu'une commande réservée aux administrateurs ne devienne
+pas exécutable par tous en tapant `!ban …`, `@Bot ban …` ou `ban …`.
 
 - Absente ou vide : commande ouverte. `"0"` : administrateurs seulement. Une valeur illisible ou négative est
   traitée comme `"0"`. Le droit Administrateur implique tout.
 - Membre non résolvable (message privé) : refus.
 - Refus **silencieux** : aucune réponse, une ligne `debug` dans le journal du bot
   (`Command <nom> refused for user <id>: missing default member permissions (<route> route)`).
-- **La route préfixe n'effectue pas ce contrôle** (comportement historique inchangé) : une commande sensible doit
-  vérifier `member.permissions` dans son script.
+- Une commande sans `defaultMemberPermissions` reste ouverte à tous sur les trois routes.
 
 ### 4.8 Intents
 
