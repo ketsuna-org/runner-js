@@ -619,6 +619,8 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       storageKey,
       body.value,
     );
+    // Hors scripts : le runner du bot n'a pas vu l'écriture (variable de préfixe mise en cache).
+    deps.runtime.notifyVariableWrite(botId, storageKey);
     return c.json({ ok: true });
   };
 
@@ -647,6 +649,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       contextId,
       storageKey,
     );
+    deps.runtime.notifyVariableWrite(botId, storageKey);
     return c.json({ ok: true });
   };
 

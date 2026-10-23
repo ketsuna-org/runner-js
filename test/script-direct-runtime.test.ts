@@ -170,6 +170,116 @@ describe('ScriptDirectRuntime', () => {
   });
 });
 
+describe('ScriptDirectRuntime : global fn', () => {
+  it('fn est le 19e et dernier paramètre de portée (aucun autre paramètre ajouté)', async () => {
+    const executor = createDirectExecutor();
+    const result = await executor.execute(
+      'return [arguments.length, typeof fn];',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      createLogger(),
+    );
+    expect(result).toEqual([19, 'object']);
+    executor.dispose();
+  });
+
+  it('un script contenant `const fn = 1` s execute toujours (repli sans fn, moteur courant) et émet un avertissement', async () => {
+    const executor = createDirectExecutor();
+    const logger = createLogger();
+    const result = await executor.execute(
+      '/* direct-const-fn */ const fn = 1; return fn + 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(result).toBe(2);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(String(logger.warn.mock.calls[0]?.[0])).toMatch(/\bfn\b/);
+    // Le repli est mis en cache : une deuxième exécution du même script ne ré-émet pas l avertissement.
+    await executor.execute(
+      '/* direct-const-fn */ const fn = 1; return fn + 1;',
+      { client: {} as never, config: { token: 'x' } as never, variables: {} },
+      logger,
+    );
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    executor.dispose();
+  });
+
+  it('le script et ses fonctions partagent les mêmes valeurs de portée', async () => {
+    const executor = createDirectExecutor();
+    const variables = { a: 1 };
+    const db = { marker: 'db' };
+    const config = { token: 'x', jsFunctions: [{ name: 'probe', script: 'return [variables, db, console, setTimeout, fetch, require];' }] };
+    const result = (await executor.execute(
+      `const own = [variables, db, console, setTimeout, fetch, require];
+       const viaFn = await fn.probe();
+       return own.map((value, index) => value === viaFn[index]);`,
+      { client: {} as never, config: config as never, variables, db: db as never },
+      createLogger(),
+    )) as boolean[];
+    expect(result).toEqual([true, true, true, true, true, true]);
+    executor.dispose();
+  });
+
+  it('après le timeout, le drapeau expiré empêche tout nouvel appel fn', async () => {
+    const executor = createDirectExecutor(40);
+    const variables: Record<string, unknown> = {};
+    const config = { token: 'x', jsFunctions: [{ name: 'later', script: 'variables.ran = true;' }] };
+    await expect(
+      executor.execute(
+        `await new Promise((resolve) => setTimeout(resolve, 120));
+         variables.outcome = await fn.later().then(() => 'ran', (error) => error.message);`,
+        { client: {} as never, config: config as never, variables },
+        createLogger(),
+      ),
+    ).rejects.toThrow(/timed out/i);
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(String(variables.outcome)).toMatch(/timed out/i);
+    expect(variables.ran).toBeUndefined();
+    executor.dispose();
+  });
+});
+
+describe('ScriptDirectRuntime : fin réelle d’un script après son timeout', () => {
+  const context = { client: {} as never, config: { token: 'x' } as never, variables: {} };
+
+  it('signale onTimeout au rejet du timeout, puis onSettled quand le script se termine vraiment', async () => {
+    const executor = createDirectExecutor();
+    const events: string[] = [];
+    await expect(
+      executor.execute(
+        'await new Promise((resolve) => setTimeout(resolve, 200)); return 42;',
+        context,
+        createLogger(),
+        40,
+        { onTimeout: () => events.push('timeout'), onSettled: () => events.push('settled') },
+      ),
+    ).rejects.toThrow('timed out');
+    expect(events).toEqual(['timeout']);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(events).toEqual(['timeout', 'settled']);
+    executor.dispose();
+  });
+
+  it('un script qui se termine à temps, avec succès ou en erreur, signale seulement onSettled', async () => {
+    const executor = createDirectExecutor();
+    const events: string[] = [];
+    const lifecycle = { onTimeout: () => events.push('timeout'), onSettled: () => events.push('settled') };
+    await expect(executor.execute('return 7;', context, createLogger(), 1000, lifecycle)).resolves.toBe(7);
+    await expect(
+      executor.execute('throw new Error("boom");', context, createLogger(), 1000, lifecycle),
+    ).rejects.toThrow('boom');
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(events).toEqual(['settled', 'settled']);
+    executor.dispose();
+  });
+
+  it('sans rappels, le comportement est inchangé', async () => {
+    const executor = createDirectExecutor();
+    await expect(executor.execute('return 1 + 1;', context, createLogger(), 1000)).resolves.toBe(2);
+    executor.dispose();
+  });
+});
+
+
 function createLogger() {
   return {
     log: vi.fn(),

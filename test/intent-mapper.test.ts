@@ -104,3 +104,21 @@ describe('intentsMapsEqual', () => {
     );
   });
 });
+
+describe('mentionAsPrefix', () => {
+  // Guild Messages est un intent non privilégié, donc toujours actif : ce test prouve seulement que la mention ne
+  // lève PAS Message Content. Le câblage de `mentionAsPrefix` vers l'intent résolu est prouvé dans
+  // application-intent-sync.test.ts (argument transmis à resolveRequiredIntentKeys).
+  it('la mention seule laisse le bit Message Content éteint ; Guild Messages reste actif (non privilégié)', () => {
+    const config: JsBotConfig = { ...baseConfig, mentionAsPrefix: true };
+    const bits = mapIntents(buildEffectiveIntentsMap(config, new Set(['Message Content'])))[0];
+    expect(bits & GatewayIntentBits.GuildMessages).not.toBe(0);
+    expect(bits & GatewayIntentBits.MessageContent).toBe(0);
+  });
+
+  it('les préfixes supplémentaires lèvent Message Content comme le préfixe historique', () => {
+    const config: JsBotConfig = { ...baseConfig, prefixes: ['?'] };
+    const bits = mapIntents(buildEffectiveIntentsMap(config, new Set(['Message Content'])))[0];
+    expect(bits & GatewayIntentBits.MessageContent).not.toBe(0);
+  });
+});

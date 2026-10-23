@@ -1,4 +1,4 @@
-import { resolveCommandPrefix, type JsBotConfig } from '../config/js-bot-config.js';
+import { commandAllowsNoPrefix, resolveCommandPrefixes, type JsBotConfig } from '../config/js-bot-config.js';
 import {
   DiscordTokenUnauthorizedError,
   armDiscordIpBlock,
@@ -352,8 +352,19 @@ function configEventNames(config: JsBotConfig): string[] {
   return (config.events ?? []).map((event) => event.name);
 }
 
+/**
+ * Vrai si des messages sont à lire (donc Message Content) : un préfixe statique (`prefix`, `prefixes`, ou le
+ * repli « ! » des commandes préfixe), une variable de préfixe, ou des commandes sans préfixe (double opt-in
+ * `allowNoPrefixCommands` + `noPrefix`), qui lisent le contenu de tout message même quand aucun préfixe n'est
+ * configuré. Règle élargie, jamais resserrée : la mention seule (`mentionAsPrefix`) n'en fait pas partie,
+ * Discord fournit le contenu des messages qui mentionnent le bot.
+ */
 export function configHasLegacyPrefixCommands(config: JsBotConfig): boolean {
-  return Boolean(resolveCommandPrefix(config));
+  return (
+    resolveCommandPrefixes(config).length > 0 ||
+    Boolean(config.prefixVariable?.trim()) ||
+    (config.allowNoPrefixCommands === true && (config.commands ?? []).some(commandAllowsNoPrefix))
+  );
 }
 
 export function buildEffectiveIntentsMap(
@@ -364,6 +375,7 @@ export function buildEffectiveIntentsMap(
   const requiredKeys = resolveRequiredIntentKeys({
     eventNames: configEventNames(config),
     hasLegacyCommands: configHasLegacyPrefixCommands(config),
+    mentionAsPrefix: config.mentionAsPrefix === true,
     approvedPrivilegedIntents: portalEnabledPrivileged,
     warnings,
   });

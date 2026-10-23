@@ -1,16 +1,21 @@
-import { afterEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, describe, expect, it, setSystemTime, vi } from 'bun:test';
+import { EventEmitter } from 'node:events';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { Client } from 'discord.js';
 
 import type { RunnerEnv } from '../src/config/env.js';
 import { loadRunnerEnv } from '../src/config/env.js';
 import type { JsBotConfig } from '../src/config/js-bot-config.js';
 import { parseJsBotConfig } from '../src/config/js-bot-config.js';
+import { HandlerRegistry } from '../src/discord/handler-registry.js';
 import { createHttpServer } from '../src/http/server.js';
 import type { BotRunnerHandle } from '../src/runtime/bot-supervisor.js';
 import { LogStore } from '../src/runtime/log-store.js';
 import { RuntimeController } from '../src/runtime/runtime-controller.js';
+import type { ScheduledSnapshot } from '../src/runtime/scheduled-tasks.js';
+import type { ScriptExecutor } from '../src/scripts/script-executor.js';
 import type { VariableDatabase } from '../src/runtime/variable-database.js';
 import {
   applyWorkflowToConfig,
@@ -230,6 +235,164 @@ describe('POST /bots/:id/workflows/sync', () => {
       ['t2', 'untouched();'],
     ]);
   });
+
+  it('keeps cron, timezone, runOnStart, timeoutMs and the interval of a scheduled entry: only the script changes', async () => {
+    const { post, syncBot, runtime, runners, stored } = await harness();
+    const cronEntry = {
+      id: 'daily',
+      name: 'tick',
+      cron: '0 9 * * 1-5',
+      timezone: 'Europe/Paris',
+      runOnStart: true,
+      timeoutMs: 5000,
+      everyMinutes: 10080,
+      script: 'old();',
+    };
+    await syncBot('b1', { scheduled: [cronEntry] });
+    await runtime.startBot('b1');
+
+    const response = await post('/bots/b1/workflows/sync', {
+      workflowName: 'tick',
+      workflow: { name: 'tick', workflowType: 'general', jsScriptContent: 'new();' },
+    });
+    expect(response.status).toBe(200);
+
+    expect((await stored('b1')).scheduled).toEqual([{ ...cronEntry, type: 'scheduled', enabled: true, script: 'new();' }]);
+    const reloaded = runners[0]!.reload.mock.calls[0]![0] as JsBotConfig;
+    expect(reloaded.scheduled[0]).toMatchObject({
+      cron: '0 9 * * 1-5',
+      timezone: 'Europe/Paris',
+      runOnStart: true,
+      timeoutMs: 5000,
+      everyMinutes: 10080,
+      script: 'new();',
+    });
+  });
+});
+
+describe('GET /bots/:id/status : tâches planifiées', () => {
+  const snapshot: ScheduledSnapshot = {
+    running: 0,
+    maxConcurrent: 3,
+    tasks: [
+      {
+        id: 'daily',
+        kind: 'cron',
+        schedule: 'cron "0 9 * * *" (Europe/Paris)',
+        nextRunAt: '2026-03-11T08:00:00.000Z',
+        lastRunAt: '2026-03-10T08:00:00.000Z',
+        lastOk: true,
+        lastDurationMs: 12,
+        lastError: null,
+        running: false,
+        runs: 1,
+        failures: 0,
+        skippedOverlap: 0,
+        skippedNotReady: 0,
+        skippedConcurrency: 0,
+      },
+    ],
+    ignored: [{ id: 'bad', reason: 'no valid schedule' }],
+  };
+
+  it('exposes the scheduler snapshot of a running bot (next run, last result) for bot_diagnose', async () => {
+    const { app, syncBot, runtime, runners } = await harness();
+    await syncBot('b1');
+    await runtime.startBot('b1');
+    runners[0]!.getScheduledSnapshot = vi.fn(() => snapshot);
+
+    const body = (await (await app.request('/bots/b1/status')).json()) as {
+      bot: { state: string; scheduled?: ScheduledSnapshot };
+    };
+    expect(body.bot.state).toBe('running');
+    expect(body.bot.scheduled).toEqual(snapshot);
+
+    // Les listes (/status) restent légères : le détail des tâches n'y figure pas.
+    const list = (await (await app.request('/status')).json()) as { bots: Array<Record<string, unknown>> };
+    expect(list.bots[0]).not.toHaveProperty('scheduled');
+  });
+
+  it('omits it for a stopped bot and for a runner that has no scheduler', async () => {
+    const { app, syncBot, runtime } = await harness();
+    await syncBot('b1');
+    expect(((await (await app.request('/bots/b1/status')).json()) as { bot: object }).bot).not.toHaveProperty(
+      'scheduled',
+    );
+
+    await runtime.startBot('b1');
+    expect(((await (await app.request('/bots/b1/status')).json()) as { bot: object }).bot).not.toHaveProperty(
+      'scheduled',
+    );
+  });
+});
+
+describe('RuntimeController : dossier d’état des runners', () => {
+  it('transmet à chaque runner un dossier d’état sous le dossier de données (marqueurs de runOnStart)', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'runner-state-'));
+    const seen: Array<string | undefined> = [];
+    const runtime = new RuntimeController(
+      dir,
+      new LogStore(path.join(dir, 'logs', 'runner.log')),
+      {} as VariableDatabase,
+      4,
+      (params) => {
+        seen.push(params.stateDir);
+        return fakeRunner();
+      },
+    );
+    cleanups.push(async () => {
+      await runtime.dispose();
+      await rm(dir, { recursive: true, force: true });
+    });
+    await runtime.syncBot('b1', 'b1', { token: 'test-token' });
+    await runtime.startBot('b1');
+
+    expect(seen).toEqual([path.join(dir, 'run-state')]);
+  });
+});
+
+describe('hot-sync d’une tâche planifiée dans un bot qui tourne', () => {
+  afterEach(() => {
+    if (vi.isFakeTimers()) vi.clearAllTimers();
+    vi.useRealTimers();
+    setSystemTime();
+  });
+
+  it('ne remplace que le script : le timer n’est pas ré-armé, le nouveau script part à l’échéance suivante', async () => {
+    vi.useFakeTimers();
+    setSystemTime(new Date('2026-03-10T00:07:00Z'));
+    const executed: string[] = [];
+    const registry = new HandlerRegistry(
+      new EventEmitter() as unknown as Client,
+      parseJsBotConfig({
+        token: 'x',
+        scheduled: [
+          { id: 'daily', name: 'tick', cron: '0 * * * *', timezone: 'Europe/Paris', script: 'old();' },
+        ],
+      }),
+      'bot-1',
+      { execute: async (script: string) => void executed.push(script) } as unknown as ScriptExecutor,
+      { getGlobalVariables: async () => ({}) } as VariableDatabase,
+      () => undefined,
+    );
+    registry.mount();
+    const before = registry.getScheduler().snapshot().tasks[0]!;
+    expect(vi.getTimerCount()).toBe(1);
+
+    const next = applyWorkflowToConfig(parseJsBotConfig({ token: 'x', scheduled: [
+      { id: 'daily', name: 'tick', cron: '0 * * * *', timezone: 'Europe/Paris', script: 'old();' },
+    ] }), 'tick', { name: 'tick', workflowType: 'general', jsScriptContent: 'new();' });
+    registry.updateConfig(next);
+
+    const after = registry.getScheduler().snapshot().tasks[0]!;
+    expect(after.nextRunAt).toBe(before.nextRunAt);
+    expect(vi.getTimerCount()).toBe(1);
+
+    vi.advanceTimersByTime(60 * 60_000);
+    for (let turn = 0; turn < 60; turn += 1) await Promise.resolve();
+    expect(executed).toEqual(['new();']);
+    registry.clear();
+  });
 });
 
 describe('bots with inbound webhooks', () => {
@@ -366,6 +529,31 @@ describe('workflow projection', () => {
     expect(next.events.map((event) => [event.id, event.name])).toEqual([
       ['guildMemberAdd', 'guildMemberAdd'],
     ]);
+  });
+
+  it('keeps every other field of a scheduled entry (cron, timezone, runOnStart, timeoutMs, everyMinutes) and replaces only the script', () => {
+    const config = parseJsBotConfig({
+      token: 'x',
+      scheduled: [
+        {
+          id: 't1',
+          name: 'tick',
+          cron: '30 2 * * *',
+          timezone: 'America/New_York',
+          runOnStart: true,
+          timeoutMs: 1234,
+          everyMinutes: 10080,
+          script: 'a();',
+        },
+        { id: 't2', name: 'other', cron: '@hourly', script: 'keep();' },
+      ],
+    });
+    const next = applyWorkflowToConfig(config, 'tick', {
+      name: 'tick',
+      workflowType: 'general',
+      jsScriptContent: 'b();',
+    });
+    expect(next.scheduled).toEqual([{ ...config.scheduled[0]!, script: 'b();' }, config.scheduled[1]!]);
   });
 
   it('does not mutate its input', () => {

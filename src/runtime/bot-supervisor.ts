@@ -12,6 +12,7 @@ import {
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
 import type { LogOrigin, LogStore } from './log-store.js';
+import type { ScheduledSnapshot } from './scheduled-tasks.js';
 import type { VariableDatabase } from './variable-database.js';
 
 export interface ManagedBotState {
@@ -47,6 +48,10 @@ export interface BotRunnerHandle {
   ): Promise<boolean>;
   getGuildCount(): number;
   getHeapUsedBytes(): number | null;
+  /** Tâches planifiées du bot (prochaine échéance, dernier résultat) ; absent pour un runner qui n'en a pas. */
+  getScheduledSnapshot?(): ScheduledSnapshot;
+  /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
+  notifyVariableWrite?(storageKey: string): void;
 }
 
 export interface CreateRunnerParams {
@@ -61,6 +66,8 @@ export interface CreateRunnerParams {
   onFatalDisconnect: (reason: string) => void;
   /** Compteurs REST du bot : les mêmes pour tous les runners successifs d'un même bot. */
   restStats: DiscordRestStats;
+  /** Dossier d'état du nœud (marqueurs de `runOnStart`). */
+  stateDir?: string;
 }
 
 export interface BotSupervisorOptions {
@@ -78,6 +85,8 @@ export interface BotSupervisorOptions {
   restartDelayMs?: number;
   /** Interval of the metrics/memory maintenance tick. */
   metricsIntervalMs?: number;
+  /** Dossier d'état du nœud, transmis aux runners (marqueurs de `runOnStart`). */
+  stateDir?: string;
 }
 
 const DEFAULT_RESTART_DELAY_MS = 2000;
@@ -128,6 +137,7 @@ export class BotSupervisor {
           params.onLog,
           params.onFatalDisconnect,
           params.restStats,
+          { stateDir: params.stateDir },
         ));
     this.maxBots = options.maxBots;
     this.restartDelayMs = options.restartDelayMs ?? DEFAULT_RESTART_DELAY_MS;
@@ -170,6 +180,11 @@ export class BotSupervisor {
         autoRestart: true,
       },
     );
+  }
+
+  /** Tâches planifiées d'un bot qui tourne (null sinon). */
+  getScheduledSnapshot(botId: string): ScheduledSnapshot | null {
+    return this.bots.get(botId)?.runner.getScheduledSnapshot?.() ?? null;
   }
 
   /** Lecture seule : un identifiant inconnu n'ajoute rien à la table des compteurs. */
@@ -242,6 +257,7 @@ export class BotSupervisor {
         this.options.logStore.append(level, message, botId, origin),
       onFatalDisconnect: (reason) => this.handleFatalDisconnect(botId, reason),
       restStats: this.restStatsFor(botId),
+      stateDir: this.options.stateDir,
     });
     this.bots.set(botId, { runner });
 
@@ -400,6 +416,11 @@ export class BotSupervisor {
       });
     }
     return true;
+  }
+
+  /** Écriture d'une variable par l'API : prévient le runner du bot, s'il tourne. */
+  notifyVariableWrite(botId: string, storageKey: string): void {
+    this.bots.get(botId)?.runner.notifyVariableWrite?.(storageKey);
   }
 
   async upsertCommand(botId: string, command: CommandHandler): Promise<void> {

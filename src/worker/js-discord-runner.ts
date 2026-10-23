@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { Client, Events } from 'discord.js';
 
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
@@ -34,6 +36,26 @@ import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import type { LogOrigin } from '../runtime/log-store.js';
+import {
+  FileStartupGuard,
+  ScheduledTasks,
+  type ScheduledSnapshot,
+  type ScheduledTaskEntry,
+  type TaskRunOutcome,
+} from '../runtime/scheduled-tasks.js';
+
+/** Nom de fichier sûr pour un identifiant de bot (même règle que le stockage des configurations). */
+function safeSegment(value: string): string {
+  return value.replace(/[^\w-]/g, '_');
+}
+
+export interface JsDiscordRunnerOptions {
+  /**
+   * Dossier d'état du nœud (marqueurs de `runOnStart`). Absent = aucun marqueur : un `runOnStart` interrompu
+   * par un crash se rejoue au redémarrage suivant.
+   */
+  stateDir?: string;
+}
 
 export class JsDiscordRunner {
   private client: Client | null = null;
@@ -45,6 +67,13 @@ export class JsDiscordRunner {
   private effectiveIntents: Record<string, boolean> = {};
   private guildCount = 0;
   private fatalDisconnectHandled = false;
+  /**
+   * Tâches planifiées : l'état (échéances, `runOnStart` déjà joué, exécutions en vol) vit ici, pas dans le
+   * registre, recréé à chaque `start()` : une reconnexion pour changement d'intents ne remet rien à zéro.
+   */
+  private readonly scheduler: ScheduledTasks;
+  /** Vrai pendant le `start()` d'une reconnexion décidée par `reload()` : le planificateur est alors conservé. */
+  private reconnecting = false;
 
   constructor(
     private readonly botId: string,
@@ -61,10 +90,35 @@ export class JsDiscordRunner {
      * les compteurs doivent survivre aux redémarrages.
      */
     private readonly restStats: DiscordRestStats = new DiscordRestStats(),
-  ) {}
+    options: JsDiscordRunnerOptions = {},
+  ) {
+    this.scheduler = new ScheduledTasks({
+      run: (entry) => this.runScheduledEntry(entry),
+      // Prêt = client connecté ET registre monté (pas pendant une reconnexion).
+      isReady: () => this.client?.isReady() === true && this.registry !== null,
+      // Un tir toutes les minutes au plus par tâche : le volume suit les échéances, pas le trafic.
+      log: (level, message) => this.onLog(level, message, 'script'),
+      startupGuard: options.stateDir
+        ? new FileStartupGuard(path.join(options.stateDir, 'scheduled-start', safeSegment(botId)))
+        : undefined,
+    });
+  }
 
   getGuildCount(): number {
     return this.guildCount;
+  }
+
+  /** Tâches planifiées du bot (prochaine échéance, dernier résultat) pour `/bots/:id/status`. */
+  getScheduledSnapshot(): ScheduledSnapshot {
+    return this.scheduler.snapshot();
+  }
+
+  private async runScheduledEntry(entry: ScheduledTaskEntry): Promise<TaskRunOutcome> {
+    const registry = this.registry;
+    if (!registry) {
+      return { ok: false, ms: 0, error: 'the bot is not running' };
+    }
+    return registry.runScheduled(entry);
   }
 
   /** Process V8 heap used bytes while the bot is running. */
@@ -161,7 +215,7 @@ export class JsDiscordRunner {
   }
 
   async start(): Promise<void> {
-    await this.stop();
+    await this.teardown(this.reconnecting);
 
     this.fatalDisconnectHandled = false;
     this.effectiveIntents = await this.resolveEffectiveIntents();
@@ -204,6 +258,12 @@ export class JsDiscordRunner {
       // Journaux des scripts et des handlers : leur volume suit le trafic, pas le runner.
       (level, message) => this.onLog(level, message, 'script'),
       this.databaseManager.handles,
+      // État réel de la connexion (approuvé au portail ET demandé), pas le réglage de la configuration :
+      // sans Message Content, les commandes sans préfixe ne peuvent pas lire les messages.
+      {
+        messageContentAvailable: Boolean(this.effectiveIntents['Message Content']),
+        scheduler: this.scheduler,
+      },
     );
 
     this.mountGatewayLifecycleHandlers();
@@ -279,7 +339,18 @@ export class JsDiscordRunner {
     const blockedMs = discordIpBlockRemainingMs();
     if (tokenChanged || (intentsChanged && blockedMs === 0)) {
       this.onLog('info', 'Intents or token changed — reconnecting Discord client...');
-      await this.start();
+      // Le client est recréé, pas les tâches planifiées : leurs échéances et leur `runOnStart` déjà joué restent.
+      this.reconnecting = true;
+      try {
+        await this.start();
+      } catch (error) {
+        // start() a déjà détruit le client et le registre (teardown) : les tâches gardées pour la reconnexion
+        // ne doivent pas rester armées sans eux. Le superviseur passe le bot en erreur sans appeler stop().
+        this.scheduler.stop();
+        throw error;
+      } finally {
+        this.reconnecting = false;
+      }
       return;
     }
     if (intentsChanged) {
@@ -346,6 +417,11 @@ export class JsDiscordRunner {
     void this.propagateRemovals(previousCommands, nextCommands, this.config.token);
   }
 
+  /** Écriture d'une variable par l'API du runner (hors scripts) : voir `HandlerRegistry.notifyVariableWrite`. */
+  notifyVariableWrite(storageKey: string): void {
+    this.registry?.notifyVariableWrite(storageKey);
+  }
+
   async triggerWebhook(
     pathKey: string,
     payload: unknown,
@@ -358,8 +434,16 @@ export class JsDiscordRunner {
   }
 
   async stop(): Promise<void> {
+    await this.teardown(false);
+  }
+
+  /** Démontage du client et du registre ; `keepScheduler` garde les tâches planifiées (reconnexion seulement). */
+  private async teardown(keepScheduler: boolean): Promise<void> {
     this.registry?.clear();
     this.registry = null;
+    if (!keepScheduler) {
+      this.scheduler.stop();
+    }
     this.executor?.dispose();
     this.executor = null;
     await this.databaseManager?.dispose();
