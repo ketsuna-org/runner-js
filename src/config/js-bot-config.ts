@@ -210,6 +210,8 @@ export const jsBotConfigSchema = z.object({
   allowNoPrefixCommands: tolerant('allowNoPrefixCommands', z.boolean()),
   /** `<@bot> commande` se comporte comme un préfixe pour toutes les commandes prefix|hybrid. */
   mentionAsPrefix: tolerant('mentionAsPrefix', z.boolean()),
+  /** Salon où le Manager fait tester pour de vrai les commandes à préfixe par le bot lui-même ; vide = inactif. */
+  testChannelId: tolerant('testChannelId', z.string()),
   /** Bibliothèque de fonctions JavaScript du bot (global `fn`) ; absent ou null = aucune. */
   jsFunctions: jsFunctionsSchema,
   autoRestart: z.boolean().default(true),

@@ -211,6 +211,38 @@ describe('gardes communes aux routes de message', () => {
     expect(t.runs).toEqual([]);
   });
 
+  describe('test réel : message du bot lui-même', () => {
+    const withTestChannel = () => ({ ...config(), testChannelId: 'c1' });
+    const own = (extra: Record<string, unknown> = {}) => ({
+      author: { id: BOT_ID, bot: true },
+      nonce: 'bctest:abc',
+      ...extra,
+    });
+
+    it('salon de test + marque + préfixe : la commande s exécute', async () => {
+      const t = routeHarness(withTestChannel());
+      await t.send('!t_ping', own());
+      expect(t.scripts()).toEqual(['ping']);
+    });
+
+    it.each([
+      ['sans marque (réponse du bot)', { nonce: null }],
+      ['marque d un autre préfixe', { nonce: 'other:abc' }],
+      ['autre salon', { channelId: 'c2' }],
+      ['un autre bot', { author: { id: 'b9', bot: true } }],
+    ])('%s : ignoré', async (_name, extra) => {
+      const t = routeHarness(withTestChannel());
+      await t.send('!t_ping', own(extra));
+      expect(t.runs).toEqual([]);
+    });
+
+    it('sans testChannelId réglé : ignoré', async () => {
+      const t = routeHarness(config());
+      await t.send('!t_ping', own());
+      expect(t.runs).toEqual([]);
+    });
+  });
+
   it('contenu vide ou client.user absent : pas de plantage, le préfixe fonctionne encore', async () => {
     const t = routeHarness(config(), { botId: null });
     await t.send('');

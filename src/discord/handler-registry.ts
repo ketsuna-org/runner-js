@@ -232,11 +232,31 @@ export class HandlerRegistry {
   }
 
   /**
+   * Test réel d'une commande à préfixe : le Manager fait écrire le bot lui-même dans le salon de test réglé
+   * par son propriétaire, avec une marque (`nonce` commençant par `bctest:`). Les trois conditions sont requises ;
+   * les réponses du bot n'ont pas la marque, donc pas de boucle.
+   */
+  private isSelfTestMessage(message: Message): boolean {
+    const testChannel = this.config.testChannelId;
+    return (
+      typeof testChannel === 'string' &&
+      testChannel !== '' &&
+      message.author?.id === this.client.user?.id &&
+      message.channelId === testChannel &&
+      typeof message.nonce === 'string' &&
+      message.nonce.startsWith('bctest:')
+    );
+  }
+
+  /**
    * Route un message vers une commande : préfixe (statique ou variable), mention du bot placée en tête
    * (`mentionAsPrefix`), puis nom seul (`noPrefix`, double opt-in). Voir `parseInvocation`.
    */
   private async handleMessage(message: Message): Promise<void> {
-    if (!message || message.author?.bot || message.webhookId || message.system) {
+    if (!message || message.webhookId || message.system) {
+      return;
+    }
+    if (message.author?.bot && !this.isSelfTestMessage(message)) {
       return;
     }
     if (typeof message.content !== 'string' || !message.content) {
