@@ -70,6 +70,11 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
 export const eventHandlerSchema = handlerBaseSchema.extend({
   type: z.literal('event').default('event'),
   name: z.string().min(1),
+  /**
+   * `customId` du bouton, menu ou formulaire que ce workflow traite (événement `interactionCreate`). Absent ou
+   * vide : aucun filtre. Présent : toute autre interaction (autre composant, commande slash) est ignorée.
+   */
+  customIdFilter: z.string().trim().optional(),
 });
 
 /**

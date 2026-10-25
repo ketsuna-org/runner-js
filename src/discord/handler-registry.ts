@@ -593,6 +593,10 @@ export class HandlerRegistry {
         }
       }
 
+      if (handler.customIdFilter && !interactionMatchesCustomId(context.interaction, handler.customIdFilter)) {
+        return;
+      }
+
       if (context.message && this.isPrefixCommandMessage(context.message)) {
         return;
       }
@@ -839,6 +843,14 @@ function requiredMemberPermissions(command: CommandHandler): bigint | null {
   }
 }
 
+/** Même règle que le moteur Dart : seul un composant ou un formulaire du `customId` demandé passe le filtre. */
+function interactionMatchesCustomId(interaction: Interaction | undefined, customId: string): boolean {
+  if (!interaction) return false;
+  const isComponent = typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent();
+  const isModal = typeof interaction.isModalSubmit === 'function' && interaction.isModalSubmit();
+  return (isComponent || isModal) && (interaction as { customId?: string }).customId === customId;
+}
+
 function isMessage(value: unknown): value is Message {
   return typeof value === 'object' && value !== null && 'author' in value && 'content' in value;
 }
@@ -872,6 +884,12 @@ export async function notifyScriptFailure(interaction: Interaction | undefined):
       return;
     }
     if (interaction.deferred) {
+      // Sur un bouton ou un menu, `deferUpdate` rend editReply = modifier le message d'origine : l'erreur d'un
+      // second script effacerait le menu déjà affiché. Un suivi éphémère le laisse intact.
+      if (typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent()) {
+        await interaction.followUp({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+        return;
+      }
       await interaction.editReply({ content: SCRIPT_FAILURE_NOTICE, embeds: [], components: [] });
       return;
     }
