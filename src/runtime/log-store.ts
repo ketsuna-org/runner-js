@@ -65,6 +65,7 @@ export class LogStore {
   private readonly maxLines: number;
   private readonly maxFileBytes: number;
   private fileBytes = 0;
+  private readonly keepDebug: boolean;
   private readonly scriptMirror = new Map<string, { windowStart: number; count: number }>();
   // Writes are chained so lines keep their order and a rotation never races an append.
   private writeQueue: Promise<void> = Promise.resolve();
@@ -75,9 +76,12 @@ export class LogStore {
     // The file used to grow forever on a long-lived node. Past this size it is moved to
     // `<file>.1` (one generation kept, the previous `.1` is replaced).
     maxFileBytes = 10 * 1024 * 1024,
+    // Les lignes debug n'entrent ni dans le journal ni dans l'API de logs, sauf BOT_CREATOR_RUNNER_LOG_LEVEL=debug.
+    keepDebug = process.env.BOT_CREATOR_RUNNER_LOG_LEVEL?.toLowerCase() === 'debug',
   ) {
     this.maxLines = maxLines;
     this.maxFileBytes = maxFileBytes;
+    this.keepDebug = keepDebug;
   }
 
   async init(): Promise<void> {
@@ -145,6 +149,9 @@ export class LogStore {
     botId?: string,
     origin: LogOrigin = 'runner',
   ): void {
+    if (level === 'debug' && !this.keepDebug) {
+      return;
+    }
     const line: LogLine = {
       ts: new Date().toISOString(),
       level,
