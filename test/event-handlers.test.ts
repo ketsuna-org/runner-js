@@ -50,22 +50,27 @@ it('executes all enabled event handlers, isolates failures, and cleans up on rem
 it('answers an unanswered interaction when its script throws', async () => {
   const { notifyScriptFailure, SCRIPT_FAILURE_NOTICE } = await import('../src/discord/handler-registry.js');
   const calls: Array<[string, unknown]> = [];
-  const make = (state: { replied?: boolean; deferred?: boolean; repliable?: boolean }) => ({
+  const make = (state: { replied?: boolean; deferred?: boolean; repliable?: boolean; component?: boolean }) => ({
     replied: state.replied ?? false,
     deferred: state.deferred ?? false,
     isRepliable: () => state.repliable ?? true,
     isAutocomplete: () => false,
     reply: async (arg: unknown) => { calls.push(['reply', arg]); },
     editReply: async (arg: unknown) => { calls.push(['editReply', arg]); },
+    followUp: async (arg: unknown) => { calls.push(['followUp', arg]); },
+    isMessageComponent: () => state.component ?? false,
   });
   await notifyScriptFailure(make({}) as never);
   await notifyScriptFailure(make({ deferred: true }) as never);
+  await notifyScriptFailure(make({ deferred: true, component: true }) as never);
   await notifyScriptFailure(make({ replied: true }) as never);
   await notifyScriptFailure(make({ repliable: false }) as never);
   await notifyScriptFailure(undefined);
-  expect(calls.map(([kind]) => kind)).toEqual(['reply', 'editReply']);
+  expect(calls.map(([kind]) => kind)).toEqual(['reply', 'editReply', 'followUp']);
   expect((calls[0][1] as { content: string; ephemeral: boolean }).ephemeral).toBe(true);
   expect((calls[1][1] as { content: string }).content).toBe(SCRIPT_FAILURE_NOTICE);
+  // Composant différé : message d'origine intact, avis en suivi éphémère.
+  expect((calls[2][1] as { ephemeral: boolean }).ephemeral).toBe(true);
 });
 
 it('isPrefixCommandMessage (caractérisation, non corrigée) : seul un message préfixé dont la commande est aussi slash masque les handlers messageCreate ; mention et sans-préfixe ne les masquent pas', async () => {

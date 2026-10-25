@@ -872,6 +872,12 @@ export async function notifyScriptFailure(interaction: Interaction | undefined):
       return;
     }
     if (interaction.deferred) {
+      // Sur un bouton ou un menu, `deferUpdate` rend editReply = modifier le message d'origine : l'erreur d'un
+      // second script effacerait le menu déjà affiché. Un suivi éphémère le laisse intact.
+      if (typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent()) {
+        await interaction.followUp({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+        return;
+      }
       await interaction.editReply({ content: SCRIPT_FAILURE_NOTICE, embeds: [], components: [] });
       return;
     }
