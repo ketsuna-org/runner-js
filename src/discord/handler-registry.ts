@@ -593,6 +593,10 @@ export class HandlerRegistry {
         }
       }
 
+      if (handler.customIdFilter && !interactionMatchesCustomId(context.interaction, handler.customIdFilter)) {
+        return;
+      }
+
       if (context.message && this.isPrefixCommandMessage(context.message)) {
         return;
       }
@@ -837,6 +841,14 @@ function requiredMemberPermissions(command: CommandHandler): bigint | null {
   } catch {
     return 0n;
   }
+}
+
+/** Même règle que le moteur Dart : seul un composant ou un formulaire du `customId` demandé passe le filtre. */
+function interactionMatchesCustomId(interaction: Interaction | undefined, customId: string): boolean {
+  if (!interaction) return false;
+  const isComponent = typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent();
+  const isModal = typeof interaction.isModalSubmit === 'function' && interaction.isModalSubmit();
+  return (isComponent || isModal) && (interaction as { customId?: string }).customId === customId;
 }
 
 function isMessage(value: unknown): value is Message {

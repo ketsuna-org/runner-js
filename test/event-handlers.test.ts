@@ -111,3 +111,40 @@ it('isPrefixCommandMessage (caractérisation, non corrigée) : seul un message p
   // Un message qui ne déclenche aucune commande atteint le handler.
   expect(await send('bonjour')).toEqual(['event']);
 });
+
+it('customIdFilter : un workflow interactionCreate ne tourne que pour le composant demandé', async () => {
+  const client = new EventEmitter();
+  const config = parseJsBotConfig({ events: [
+    { id: 'a', name: 'interactionCreate', script: 'a', customIdFilter: 'wild_fight' },
+    { id: 'b', name: 'interactionCreate', script: 'b', customIdFilter: 'battle_move' },
+    { id: 'all', name: 'interactionCreate', script: 'all' },
+  ] });
+  validateJsBotConfig(config);
+  const executed: string[] = [];
+  const executor = { execute: async (script: string) => { executed.push(script); } } as unknown as ScriptExecutor;
+  const variables = { getGlobalVariables: async () => ({}) } as VariableDatabase;
+  const registry = new HandlerRegistry(client as unknown as Client, config, 'bot-1', executor, variables, () => {});
+  registry.mount();
+  const make = (id: string, customId?: string) => ({
+    id,
+    customId,
+    commandName: 'x',
+    isAutocomplete: () => false,
+    isChatInputCommand: () => customId === undefined,
+    isContextMenuCommand: () => false,
+    isMessageComponent: () => customId !== undefined,
+    isModalSubmit: () => false,
+    isButton: () => customId !== undefined,
+    isRepliable: () => false,
+  });
+  const fire = (interaction: unknown) =>
+    Promise.all(client.listeners('interactionCreate').map(listener => listener(interaction)));
+  await fire(make('i1', 'wild_fight'));
+  expect(executed.sort()).toEqual(['a', 'all']);
+  executed.length = 0;
+  await fire(make('i2', 'other'));
+  expect(executed).toEqual(['all']);
+  executed.length = 0;
+  await fire(make('i3'));
+  expect(executed).toEqual(['all']);
+});
