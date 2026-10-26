@@ -1,6 +1,6 @@
 # Build stage
 # Base pinned by digest (oven/bun:1-slim); Dependabot or a manual bump moves it.
-FROM oven/bun:1-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288 AS builder
+FROM oven/bun:1-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
@@ -28,7 +28,7 @@ RUN bun run build
 RUN rm -rf node_modules && bun install --production --frozen-lockfile
 
 # Runtime stage
-FROM oven/bun:1-slim@sha256:14a223fa35747ec728bce300ef85888bc5f7958164d15bbba6a54b22b52a3288
+FROM oven/bun:1-slim@sha256:1846adf22496bd711036aae8be147e57bdebbaea2e5264e3e0b5af1db187d9a4
 
 RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     ca-certificates \
