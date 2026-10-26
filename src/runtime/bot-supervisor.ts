@@ -604,7 +604,7 @@ export class BotSupervisor {
 
     if (this.tickCount % MEMORY_LOG_EVERY_TICKS === 0) {
       this.options.logStore.append(
-        'info',
+        'debug',
         `[Memory] rss=${rssMb}MB bots=${this.bots.size} guilds=${totalGuilds}`,
       );
     }

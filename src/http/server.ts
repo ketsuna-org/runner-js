@@ -190,7 +190,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
     try {
       await deps.runtime.syncBot(botId, (body.botName ?? '').trim(), body.config);
-      deps.logStore.append('info', `Synced bot ${botId}`, botId);
+      deps.logStore.append('debug', `Synced bot ${botId}`, botId);
       return c.json({ ok: true });
     } catch (error) {
       throw configError(error);
@@ -272,7 +272,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
     try {
       const parsed = await deps.runtime.upsertCommand(botId, rawCommand, commandId);
-      deps.logStore.append('info', `Synced command "${parsed.name}" (${parsed.id}) for bot ${botId}`, botId);
+      deps.logStore.append('debug', `Synced command "${parsed.name}" (${parsed.id}) for bot ${botId}`, botId);
       return c.json({
         ok: true,
         botId,
@@ -306,7 +306,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
     try {
       await deps.runtime.deleteCommand(botId, commandId);
-      deps.logStore.append('info', `Deleted command "${commandId}" for bot ${botId}`, botId);
+      deps.logStore.append('debug', `Deleted command "${commandId}" for bot ${botId}`, botId);
       return c.json({
         ok: true,
         botId,
@@ -351,7 +351,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     } catch (error) {
       throw workflowError(error);
     }
-    deps.logStore.append('info', `Synced workflow "${workflowName}" for bot ${botId}`, botId);
+    deps.logStore.append('debug', `Synced workflow "${workflowName}" for bot ${botId}`, botId);
     return c.json({
       ok: true,
       botId,
@@ -379,7 +379,7 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     } catch (error) {
       throw workflowError(error);
     }
-    deps.logStore.append('info', `Deleted workflow "${workflowName}" for bot ${botId}`, botId);
+    deps.logStore.append('debug', `Deleted workflow "${workflowName}" for bot ${botId}`, botId);
     return c.json({
       ok: true,
       botId,

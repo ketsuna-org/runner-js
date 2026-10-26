@@ -241,9 +241,9 @@ export class JsDiscordRunner {
       this.restStats,
     );
 
-    this.onLog('info', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
+    this.onLog('debug', '[ScriptRuntime] Direct (process isolation via pod/cgroup)');
     this.onLog(
-      'info',
+      'debug',
       `[DiscordCache] Minimal cache enabled; intents: ${this.enabledIntentNames().join(', ') || 'Guilds only'}`,
     );
 
@@ -276,7 +276,7 @@ export class JsDiscordRunner {
         `Discord client ready as ${client.user?.tag ?? client.user?.username ?? 'unknown'} (${this.guildCount} server(s))`,
       );
       // Les commandes sont publiées par le Manager (bot Cloud) ou l'application (bot local), jamais ici.
-      this.onLog('info', 'Slash commands are published by the Manager or the app; this runner only executes them.');
+      this.onLog('debug', 'Slash commands are published by the Manager or the app; this runner only executes them.');
     });
 
     this.client.on('error', (error: Error) => {
