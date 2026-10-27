@@ -106,7 +106,7 @@ export const presenceSchema = z
       .array(
         z.object({
           type: z
-            .enum(['playing', 'streaming', 'listening', 'watching', 'competing'])
+            .enum(['playing', 'streaming', 'listening', 'watching', 'competing', 'custom'])
             .default('playing'),
           name: z.string(),
           url: z.string().optional(),

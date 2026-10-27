@@ -13,6 +13,7 @@ const ACTIVITY_TYPE_MAP: Record<string, ActivityTypeEnum> = {
   listening: ActivityType.Listening,
   watching: ActivityType.Watching,
   competing: ActivityType.Competing,
+  custom: ActivityType.Custom,
 };
 
 const DEFAULT_ROTATION_SECONDS = 60;
@@ -43,11 +44,15 @@ export function applyPresence(client: Client, config: JsBotConfig): void {
 
   const status = config.presence.status as PresenceStatusData;
   const list = config.presence.activities ?? [];
-  const toDiscord = (activity: PresenceActivity) => ({
-    name: activity.name,
-    type: ACTIVITY_TYPE_MAP[activity.type] ?? ActivityType.Playing,
-    url: activity.url,
-  });
+  const toDiscord = (activity: PresenceActivity) =>
+    activity.type === 'custom'
+      ? // Statut personnalisé: Discord n'affiche que `state`, `name` est requis mais ignoré.
+        { name: 'Custom Status', type: ActivityType.Custom, state: activity.name }
+      : {
+          name: activity.name,
+          type: ACTIVITY_TYPE_MAP[activity.type] ?? ActivityType.Playing,
+          url: activity.url,
+        };
 
   if (list.length <= 1) {
     client.user.setPresence({ status, activities: list.map(toDiscord) });
