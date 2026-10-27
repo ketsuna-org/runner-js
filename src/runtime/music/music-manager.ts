@@ -401,8 +401,7 @@ export class MusicManager {
 
   async stop(guildId: string): Promise<void> {
     const state = this.requireState(guildId);
-    state.queue.clear();
-    state.queue.current = null;
+    state.queue.reset();
     await state.player.stopTrack();
     this.armIdle(guildId, state);
   }
@@ -596,9 +595,10 @@ export class VoiceApi {
     await this.manager.stop(this.guild().id);
   }
 
-  /** Se place à `positionMs` (millisecondes) dans la piste en cours. */
-  async seek(positionMs: number): Promise<void> {
-    await this.manager.seek(this.guild().id, Number(positionMs));
+  /** Se place à `position` dans la piste en cours : en millisecondes par défaut, `'seconds'` en second argument. */
+  async seek(position: number, unit: 'ms' | 'seconds' = 'ms'): Promise<void> {
+    const factor = unit === 'seconds' ? 1000 : 1;
+    await this.manager.seek(this.guild().id, Number(position) * factor);
   }
 
   /** Volume de 0 à 200 (100 = normal) ; renvoie la valeur appliquée. */

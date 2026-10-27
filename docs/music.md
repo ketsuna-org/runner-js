@@ -26,8 +26,8 @@ la file avance toute seule, le bot quitte le salon après 5 minutes sans piste o
 | `await voice.play(requête \| url, { channelId?, source?, next? })` | Rejoint le salon de l'auteur (ou `channelId`) et lit ou met en file. Renvoie `{ track, queued, position, playlist? }`. `source` : `youtube` (défaut), `youtubemusic`, `soundcloud`, `spotify`. |
 | `await voice.search(requête, { limit?, source? })` | Cherche des pistes (10 max) sans rien jouer. |
 | `await voice.pause()` / `resume()` / `stop()` | `stop` vide la file et arrête la lecture, le bot reste dans le salon. |
-| `await voice.skip()` | Piste suivante ; renvoie la nouvelle piste ou `null`. |
-| `await voice.seek(ms)` | Se place dans la piste en cours. |
+| `await voice.skip()` | Piste suivante ; renvoie la nouvelle piste ou `null`. Un skip ne boucle jamais : sur la dernière piste il arrête la file, même en boucle `queue`. |
+| `await voice.seek(position, unit?)` | Se place dans la piste en cours : millisecondes par défaut, `'seconds'` en second argument. |
 | `await voice.setVolume(0-200)` / `voice.getVolume()` | Volume (100 = normal). |
 | `voice.setLoopMode('off' \| 'track' \| 'queue')` / `getLoopMode()` | Boucle. |
 | `voice.getQueue()` | `{ connected, channelId, current, upcoming, loop, volume, paused }`. |

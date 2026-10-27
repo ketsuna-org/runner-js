@@ -43,13 +43,59 @@ describe('TrackQueue', () => {
     expect(queue.advance('skip')?.identifier).toBe('b');
   });
 
-  it('boucle sur la file', () => {
+  it('boucle sur la file à la fin naturelle', () => {
     const queue = new TrackQueue();
     queue.loop = 'queue';
     queue.add([track('a'), track('b')]);
     queue.advance('finished');
     expect(queue.advance('finished')?.identifier).toBe('b');
     expect(queue.advance('finished')?.identifier).toBe('a');
+  });
+
+  it('un skip sur la dernière piste arrête la file, même en boucle', () => {
+    const queue = new TrackQueue();
+    queue.loop = 'queue';
+    queue.add([track('a'), track('b')]);
+    queue.advance('finished');
+    expect(queue.advance('skip')?.identifier).toBe('b');
+    expect(queue.advance('skip')).toBeNull();
+    expect(queue.current).toBeNull();
+  });
+
+  it('une file d une seule piste en boucle la rejoue, mais un skip l arrête', () => {
+    const queue = new TrackQueue();
+    queue.loop = 'queue';
+    queue.add([track('a')]);
+    queue.advance('finished');
+    expect(queue.advance('finished')?.identifier).toBe('a');
+    expect(queue.advance('skip')).toBeNull();
+  });
+
+  it('un skip ne retombe jamais sur une entrée identique à la courante', () => {
+    const queue = new TrackQueue();
+    queue.add([track('a'), track('a'), track('b')]);
+    queue.advance('finished');
+    expect(queue.advance('skip')?.identifier).toBe('b');
+  });
+
+  it('accepte de nouvelles pistes après épuisement de la file', () => {
+    const queue = new TrackQueue();
+    queue.loop = 'queue';
+    queue.add([track('a')]);
+    queue.advance('finished');
+    expect(queue.advance('skip')).toBeNull();
+    queue.add([track('b')]);
+    expect(queue.upcoming.map((t) => t.identifier)).toEqual(['b']);
+    expect(queue.advance('finished')?.identifier).toBe('b');
+  });
+
+  it('reset vide tout', () => {
+    const queue = new TrackQueue();
+    queue.add([track('a'), track('b')]);
+    queue.advance('finished');
+    queue.reset();
+    expect(queue.current).toBeNull();
+    expect(queue.upcoming).toEqual([]);
   });
 
   it('retire par rang à partir de 1 et refuse un rang invalide', () => {
