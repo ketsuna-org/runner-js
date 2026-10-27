@@ -28,6 +28,7 @@
     "mysql2": "^3.24.3",
     "opusscript": "^0.1.1",
     "pg": "^8.23.0",
+    "shoukaku": "^4.3.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {

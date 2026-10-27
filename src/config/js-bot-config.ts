@@ -135,6 +135,34 @@ export const databaseConfigSchema = z
   .nullish()
   .transform((val) => val ?? { type: 'none' as const });
 
+/**
+ * Musique (Lavalink), même schéma figé que côté Dart : `enabled` plus des serveurs personnels de repli. Le
+ * Manager force `enabled` à faux pour un compte sans Premium ; absent = musique éteinte. Une entrée sans hôte
+ * est écartée (jamais de rejet de la configuration entière).
+ */
+export const lavalinkServerSchema = z.object({
+  host: z.string().trim().min(1),
+  port: z.coerce.number().int().min(1).max(65535).catch(2333),
+  password: z.string().default('youshallnotpass'),
+  secure: z.boolean().catch(false),
+});
+
+const lavalinkConfigSchema = tolerant(
+  'lavalink',
+  z.object({
+    enabled: z.boolean().catch(false),
+    custom_servers: z
+      .array(z.unknown())
+      .catch([])
+      .transform((items) =>
+        items.flatMap((item) => {
+          const parsed = lavalinkServerSchema.safeParse(item);
+          return parsed.success ? [parsed.data] : [];
+        }),
+      ),
+  }),
+);
+
 /** Nombre de renommages recopiés dans l'avertissement (le reste est compté). */
 const MAX_LOGGED_RENAMES = 20;
 
@@ -214,6 +242,8 @@ export const jsBotConfigSchema = z.object({
   testChannelId: tolerant('testChannelId', z.string()),
   /** Bibliothèque de fonctions JavaScript du bot (global `fn`) ; absent ou null = aucune. */
   jsFunctions: jsFunctionsSchema,
+  /** Musique Lavalink (objet `voice` des scripts) ; absent = éteinte. Réservé au Premium (appliqué par le Manager). */
+  lavalink: lavalinkConfigSchema,
   autoRestart: z.boolean().default(true),
   presence: presenceSchema,
   databaseConfig: databaseConfigSchema.default({ type: 'none' }),
@@ -241,6 +271,7 @@ export type CommandHandler = z.infer<typeof commandHandlerSchema>;
 export type EventHandler = z.infer<typeof eventHandlerSchema>;
 export type ScheduledHandler = z.infer<typeof scheduledHandlerSchema>;
 export type InboundWebhookHandler = z.infer<typeof inboundWebhookHandlerSchema>;
+export type LavalinkServer = z.infer<typeof lavalinkServerSchema>;
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
 export type JsBotConfig = z.infer<typeof jsBotConfigSchema>;
 

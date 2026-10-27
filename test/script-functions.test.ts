@@ -473,6 +473,7 @@ const EXPECTED_SCOPE_NAMES = [
   'sql',
   'pgsql',
   'mongo',
+  'voice',
   'console',
   'fetch',
   'require',

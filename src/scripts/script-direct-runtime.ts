@@ -84,6 +84,7 @@ export const SCOPE_PARAM_NAMES = [
   'sql',
   'pgsql',
   'mongo',
+  'voice',
   'console',
   'fetch',
   'require',
@@ -145,6 +146,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       context.sql,
       context.pgsql,
       context.mongo,
+      context.voice,
       createConsoleProxy(logger),
       // Bounded: the node hosts EVERY bot of the process, so an unbounded
       // script-side download is not a mistake local to the bot that made it.
