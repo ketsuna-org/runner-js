@@ -599,4 +599,33 @@ describe('commandAllowsNoPrefix', () => {
     expect(commandAllowsNoPrefix(make({ triggerType: 'prefix', noPrefix: true, data: { noPrefix: 'no' } }))).toBe(true);
     expect(commandAllowsNoPrefix(make({ triggerType: 'prefix', data: { noPrefix: 'true' } }))).toBe(false);
   });
+
+  it('dérive la présence de statuses et presenceStatus quand presence est absent', () => {
+    const parsed = parseJsBotConfig({
+      token: 't',
+      presenceStatus: 'dnd',
+      statuses: [
+        { type: 'custom', text: 'Prêt à aider', minIntervalSeconds: 30 },
+        { type: 'inconnu', name: 'x' },
+        { type: 'playing', text: '  ' },
+      ],
+    });
+    expect(parsed.presence).toEqual({
+      status: 'dnd',
+      activities: [
+        { type: 'custom', name: 'Prêt à aider', minIntervalSeconds: 30 },
+        { type: 'playing', name: 'x' },
+      ],
+    });
+  });
+
+  it('garde presence telle quelle quand elle est fournie', () => {
+    const parsed = parseJsBotConfig({
+      token: 't',
+      presence: { status: 'idle', activities: [] },
+      presenceStatus: 'dnd',
+      statuses: [{ type: 'custom', name: 'ignoré' }],
+    });
+    expect(parsed.presence).toEqual({ status: 'idle', activities: [] });
+  });
 });
