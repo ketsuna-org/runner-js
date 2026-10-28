@@ -30,7 +30,7 @@ import {
 } from '../discord/discord-auth-errors.js';
 import { discordRest, removeStaleSlashCommands } from '../discord/command-registerer.js';
 import { HandlerRegistry } from '../discord/handler-registry.js';
-import { applyPresence, stopPresenceRotation } from '../discord/presence.js';
+import { applyPresence, presenceTextScript, stopPresenceRotation } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -104,6 +104,30 @@ export class JsDiscordRunner {
         ? new FileStartupGuard(path.join(options.stateDir, 'scheduled-start', safeSegment(botId)))
         : undefined,
     });
+  }
+
+  /** Évalue les `${...}` d'un texte de statut avec les mêmes globaux que les scripts (client, config, variables…). */
+  private presenceEvaluator(): (text: string) => Promise<string> {
+    return async (text) => {
+      const executor = this.executor;
+      const client = this.client;
+      if (!executor || !client) {
+        return text;
+      }
+      const result = await executor.execute(
+        presenceTextScript(text),
+        { client, config: this.config, variables: {} },
+        {
+          log: (...args) => this.onLog('debug', args.map(String).join(' '), 'script'),
+          info: (...args) => this.onLog('debug', args.map(String).join(' '), 'script'),
+          warn: (...args) => this.onLog('warn', args.map(String).join(' '), 'script'),
+          error: (...args) => this.onLog('warn', args.map(String).join(' '), 'script'),
+          debug: (...args) => this.onLog('debug', args.map(String).join(' '), 'script'),
+        },
+        5000,
+      );
+      return String(result ?? '');
+    };
   }
 
   getGuildCount(): number {
@@ -274,7 +298,7 @@ export class JsDiscordRunner {
     this.mountGatewayLifecycleHandlers();
 
     this.client.once(Events.ClientReady, (client) => {
-      applyPresence(client, this.config);
+      applyPresence(client, this.config, this.presenceEvaluator());
       this.guildCount = client.guilds.cache.size;
       this.onLog(
         'info',
@@ -371,7 +395,7 @@ export class JsDiscordRunner {
     }
 
     this.registry.updateConfig(config, this.databaseManager?.handles);
-    applyPresence(this.client, config);
+    applyPresence(this.client, config, this.presenceEvaluator());
     await this.propagateRemovals(previousCommands, config.commands ?? [], config.token);
   }
 
