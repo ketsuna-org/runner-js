@@ -281,8 +281,56 @@ export const botSyncPayloadSchema = z.object({
   config: z.record(z.unknown()),
 });
 
+const PRESENCE_ACTIVITY_TYPES = new Set(['playing', 'streaming', 'listening', 'watching', 'competing', 'custom']);
+const PRESENCE_STATUSES = new Set(['online', 'idle', 'dnd', 'invisible']);
+
+/**
+ * Le Manager, le Studio, le Copilot et le MCP enregistrent la présence sous `presenceStatus` et `statuses`
+ * (ou `activities`) ; seule l'app écrit `presence`. Sans `presence`, on la dérive de ces clés.
+ */
+function withDerivedPresence(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return raw;
+  }
+  const config = raw as Record<string, unknown>;
+  if (config.presence != null) {
+    return raw;
+  }
+  const list = Array.isArray(config.activities) ? config.activities : config.statuses;
+  const hasStatus = typeof config.presenceStatus === 'string' && PRESENCE_STATUSES.has(config.presenceStatus);
+  if (!Array.isArray(list) && !hasStatus) {
+    return raw;
+  }
+  const activities = (Array.isArray(list) ? list : []).flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+    const item = entry as Record<string, unknown>;
+    const name = String(item.name ?? item.text ?? '').trim();
+    if (!name) {
+      return [];
+    }
+    const type = String(item.type ?? 'playing').trim().toLowerCase();
+    const url = typeof item.url === 'string' && item.url.trim() ? item.url.trim() : undefined;
+    const positive = (value: unknown): number | undefined => {
+      const n = Number(value);
+      return Number.isFinite(n) && n > 0 ? n : undefined;
+    };
+    return [
+      {
+        type: PRESENCE_ACTIVITY_TYPES.has(type) ? type : 'playing',
+        name,
+        ...(url ? { url } : {}),
+        ...(positive(item.minIntervalSeconds) ? { minIntervalSeconds: positive(item.minIntervalSeconds) } : {}),
+        ...(positive(item.maxIntervalSeconds) ? { maxIntervalSeconds: positive(item.maxIntervalSeconds) } : {}),
+      },
+    ];
+  });
+  return { ...config, presence: { status: hasStatus ? config.presenceStatus : 'online', activities } };
+}
+
 export function parseJsBotConfig(raw: unknown): JsBotConfig {
-  return jsBotConfigSchema.parse(raw);
+  return jsBotConfigSchema.parse(withDerivedPresence(raw));
 }
 
 export function validateJsBotConfig(config: JsBotConfig): void {
