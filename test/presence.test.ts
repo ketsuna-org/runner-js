@@ -33,4 +33,12 @@ describe('applyPresence', () => {
     expect(((c.calls[0] as { activities: { name: string }[] }).activities)[0].name).toBe('a');
     stopPresenceRotation(c as never);
   });
+
+  it('sends a custom status (type 4) with the text in state', () => {
+    const c = fakeClient();
+    applyPresence(c as never, { presence: { status: 'online', activities: [{ type: 'custom', name: 'Ready to help' }] } } as never);
+    expect((c.calls[0] as { activities: unknown[] }).activities).toEqual([
+      { name: 'Custom Status', type: 4, state: 'Ready to help' },
+    ]);
+  });
 });

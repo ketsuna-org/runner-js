@@ -35,6 +35,7 @@ import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
+import { MusicManager } from '../runtime/music/music-manager.js';
 import type { LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
@@ -62,6 +63,7 @@ export class JsDiscordRunner {
   private registry: HandlerRegistry | null = null;
   private executor: ScriptExecutor | null = null;
   private databaseManager: DatabaseManager | null = null;
+  private music: MusicManager | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
   private effectiveIntents: Record<string, boolean> = {};
@@ -249,6 +251,8 @@ export class JsDiscordRunner {
 
     this.executor = new ScriptExecutor(this.config.scriptTimeoutMs);
     this.databaseManager = new DatabaseManager(this.config.databaseConfig);
+    this.music = new MusicManager(this.client, (level, message) => this.onLog(level, message, 'script'));
+    this.music.setConfig(this.config.lavalink);
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
@@ -263,6 +267,7 @@ export class JsDiscordRunner {
       {
         messageContentAvailable: Boolean(this.effectiveIntents['Message Content']),
         scheduler: this.scheduler,
+        music: this.music,
       },
     );
 
@@ -331,6 +336,7 @@ export class JsDiscordRunner {
     }
 
     this.config = config;
+    this.music?.setConfig(config.lavalink);
 
     // Pendant un blocage d'IP, une reconnexion ne peut pas aboutir et start() détruirait d'abord
     // le client sain : seul un changement de jeton force le passage par start(). Pour les intents,
@@ -446,6 +452,8 @@ export class JsDiscordRunner {
     }
     this.executor?.dispose();
     this.executor = null;
+    await this.music?.dispose();
+    this.music = null;
     await this.databaseManager?.dispose();
     this.databaseManager = null;
 

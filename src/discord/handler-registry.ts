@@ -47,6 +47,7 @@ import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import type { DatabaseHandles } from '../runtime/database-manager.js';
+import type { MusicManager } from '../runtime/music/music-manager.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -71,6 +72,8 @@ export interface HandlerRegistryOptions {
    * remontage du registre et à la reconnexion. Sans lui, le registre crée le sien et l'arrête dans `clear()`.
    */
   scheduler?: ScheduledTasks;
+  /** Musique du bot, fournie par le runner (global `voice` des scripts) ; absente = `voice` indéfini. */
+  music?: MusicManager;
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
@@ -88,6 +91,7 @@ export class HandlerRegistry {
   private autocompleteBindings: AutocompleteBinding[] = [];
   private readonly scriptLogger: ScriptLogger;
   private databaseHandles?: DatabaseHandles;
+  private readonly music?: MusicManager;
   private readonly variableStore: VariableDatabase;
   private readonly prefixResolver: PrefixResolver;
   private readonly messageContentAvailable: boolean;
@@ -114,6 +118,7 @@ export class HandlerRegistry {
     options: HandlerRegistryOptions = {},
   ) {
     this.databaseHandles = databaseHandles;
+    this.music = options.music;
     this.messageContentAvailable = options.messageContentAvailable === true;
     this.now = options.now ?? Date.now;
     this.prefixResolver = new PrefixResolver({
@@ -746,6 +751,14 @@ export class HandlerRegistry {
           sql: this.databaseHandles?.sql,
           pgsql: this.databaseHandles?.pgsql,
           mongo: this.databaseHandles?.mongo,
+          voice: this.music?.forContext({
+            guild: scriptGuild as Guild | null,
+            userId:
+              partial.interaction?.user?.id ??
+              partial.message?.author?.id ??
+              (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
+              null,
+          }),
           // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
           // et `channel` résolus, même hors cache.
           interaction: partial.interaction

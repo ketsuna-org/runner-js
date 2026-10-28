@@ -9,6 +9,7 @@ Runner Bot Creator des bots Discord écrits en JavaScript (Bun, discord.js). Un 
   préfixe, fonctions `fn`, tâches planifiées et cron), ce que reçoivent les scripts, journaux et statut.
 - [docs/runner-docker.md](docs/runner-docker.md) : image Docker, variables d'environnement, API, commandes hybrides.
 - [docs/discord-rest-observability.md](docs/discord-rest-observability.md) : compteurs des appels REST vers Discord.
+- [docs/music.md](docs/music.md) : musique Lavalink (Premium) et objet `voice` des scripts.
 
 ## Développement
 

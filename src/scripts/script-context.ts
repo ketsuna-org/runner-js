@@ -20,6 +20,8 @@ export interface ScriptExecutionContext {
   sql?: import('../runtime/database-manager.js').SqlInterface;
   pgsql?: import('../runtime/database-manager.js').PgsqlInterface;
   mongo?: import('../runtime/database-manager.js').MongoInterface;
+  /** Musique du bot (global `voice`), liée au serveur du déclencheur. */
+  voice?: import('../runtime/music/music-manager.js').VoiceApi;
 }
 
 export interface ScriptLogger {
