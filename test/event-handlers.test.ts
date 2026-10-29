@@ -187,3 +187,18 @@ it('isPrefixCommandMessage (caractérisation, non corrigée) : seul un message p
   // Un message qui ne déclenche aucune commande atteint le handler.
   expect(await send('bonjour')).toEqual(['event']);
 });
+
+it('gives a channel event the server of the channel, not the channel itself', async () => {
+  const client = new EventEmitter();
+  const config = parseJsBotConfig({ events: [{ id: 'chan', name: 'channelCreate', script: 'chan' }] });
+  validateJsBotConfig(config);
+  let seen: { guild?: { id?: string } | null } | undefined;
+  const executor = { execute: async (_script: string, context: { guild?: { id?: string } | null }) => { seen = context; } } as unknown as ScriptExecutor;
+  const variables = { getGlobalVariables: async () => ({}) } as VariableDatabase;
+  const registry = new HandlerRegistry(client as unknown as Client, config, 'bot-1', executor, variables, () => {});
+  const guild = { id: 'guild-1', members: {}, channels: {}, roles: {} };
+  const channel = { id: 'channel-1', guild, members: {}, isTextBased: () => true };
+  registry.mount();
+  await Promise.all(client.listeners('channelCreate').map(listener => listener(channel)));
+  expect(seen?.guild?.id).toBe('guild-1');
+});
