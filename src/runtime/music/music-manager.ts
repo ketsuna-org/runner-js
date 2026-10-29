@@ -9,7 +9,7 @@ import { isLoopMode, TrackQueue, type LoopMode, type QueueTrack } from './queue.
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
 
 export const MUSIC_DISABLED_MESSAGE =
-  'Music is not available for this bot: it requires Premium and the Lavalink music setting turned on.';
+  'Music is not available for this bot: turn on the Lavalink music setting in the bot settings (Lavalink tab). Cloud-hosted bots also need Premium.';
 
 /** Sans piste, le bot quitte le salon après ce délai (une session vocale oubliée coûte au serveur Lavalink). */
 const IDLE_LEAVE_MS = 5 * 60_000;

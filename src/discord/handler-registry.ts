@@ -1014,11 +1014,14 @@ function resolveEventExecutionContext(args: unknown[]): {
   const guildMember = isGuildMember(first) ? first : undefined;
   const channel = isTextBasedChannel(first) ? first : undefined;
   const guild = isGuild(first) ? first : undefined;
+  // Salon, rôle, fil, emoji… : l'objet porte son serveur dans `.guild`.
+  const owner = typeof first === 'object' && first !== null && 'guild' in first ? (first as { guild?: unknown }).guild : undefined;
+  const ownerGuild = isGuild(owner) ? owner : undefined;
 
   return {
     message,
     interaction,
-    guild: message?.guild ?? interaction?.guild ?? guildMember?.guild ?? guild ?? null,
+    guild: message?.guild ?? interaction?.guild ?? guildMember?.guild ?? guild ?? ownerGuild ?? null,
     member: message?.member ?? interaction?.member ?? guildMember ?? null,
     channel: message?.channel ?? interaction?.channel ?? channel ?? null,
   };
@@ -1045,5 +1048,14 @@ function isTextBasedChannel(value: unknown): value is Message['channel'] {
 }
 
 function isGuild(value: unknown): value is Guild {
-  return typeof value === 'object' && value !== null && 'members' in value && 'id' in value;
+  // Un salon textuel a aussi `members` et `id` : seul un serveur porte `channels` ET `roles` sans `guild`.
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'members' in value &&
+    'id' in value &&
+    'channels' in value &&
+    'roles' in value &&
+    !('guild' in value)
+  );
 }
