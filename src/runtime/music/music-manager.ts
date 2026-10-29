@@ -3,7 +3,7 @@ import type { Node, Player, Track } from 'shoukaku';
 import type { Client, Guild } from 'discord.js';
 
 import type { LavalinkServer } from '../../config/js-bot-config.js';
-import { selectNodes, type FetchLike, type LavalinkCandidate } from './lavalink-nodes.js';
+import { pickBest, selectNodes, type FetchLike, type LavalinkCandidate } from './lavalink-nodes.js';
 import { isLoopMode, TrackQueue, type LoopMode, type QueueTrack } from './queue.js';
 
 type LogLevel = 'info' | 'warn' | 'error' | 'debug';
@@ -231,9 +231,12 @@ export class MusicManager {
     }
     const connector = new LateDiscordJsConnector(this.client);
     const shoukaku = new Shoukaku(connector, [], {
-      resume: false,
-      reconnectTries: 3,
-      reconnectInterval: 5,
+      // Une coupure brève de la liaison avec le serveur ne doit pas arrêter la lecture : Lavalink garde les
+      // lecteurs de la session pendant le délai de reprise.
+      resume: true,
+      resumeTimeout: 60,
+      reconnectTries: 5,
+      reconnectInterval: 3,
       moveOnDisconnect: true,
       restTimeout: 15_000,
       userAgent: 'bot-creator-runner-js',
@@ -495,12 +498,15 @@ export class MusicManager {
   }
 }
 
-/** Serveur public le moins chargé s'il y en a un de connecté, sinon un serveur personnel. */
+/** Serveur public le moins chargé tant qu'il tient la charge, sinon un serveur personnel (voir `pickBest`). */
 function pickNode(nodes: Map<string, Node>): Node | undefined {
-  const live = [...nodes.values()].filter((node) => node.state === Constants.State.CONNECTED);
-  const publicNodes = live.filter((node) => node.group === 'public');
-  const pool = publicNodes.length > 0 ? publicNodes : live;
-  return pool.sort((a, b) => (a.stats?.players ?? 0) - (b.stats?.players ?? 0))[0];
+  const candidates = [...nodes.values()].map((node) => ({
+    node,
+    group: node.group,
+    connected: node.state === Constants.State.CONNECTED,
+    stats: node.stats,
+  }));
+  return pickBest(candidates)?.node;
 }
 
 /**
