@@ -106,3 +106,50 @@ export async function selectNodes(
     .map((probe) => probe.entry);
   return [...alive, ...personal];
 }
+
+/** Statistiques d'un nœud telles que Lavalink les publie (tout est facultatif tant que le nœud n'en a pas envoyé). */
+export interface NodeLoad {
+  playingPlayers?: number;
+  cpu?: { systemLoad?: number } | null;
+  frameStats?: { deficit?: number; nulled?: number } | null;
+}
+
+/** Au-delà, un serveur saute déjà (images perdues, processeur saturé) : on lui préfère un autre. */
+export const DEGRADED_PENALTY = 400;
+
+/**
+ * Pénalité de charge d'un nœud, la formule de Lavalink : joueurs en lecture, charge système, images
+ * manquantes (`deficit`) et nulles (`nulled`). Plus c'est bas, mieux c'est ; un nœud sans statistiques vaut 0.
+ */
+export function nodePenalty(stats: NodeLoad | null | undefined): number {
+  if (!stats) return 0;
+  let penalty = stats.playingPlayers ?? 0;
+  const load = stats.cpu?.systemLoad ?? 0;
+  penalty += Math.pow(1.05, 100 * load) * 10 - 10;
+  const frames = stats.frameStats;
+  if (frames) {
+    penalty += Math.pow(1.03, (500 * (frames.deficit ?? 0)) / 3000) * 300 - 300;
+    penalty += (Math.pow(1.03, (500 * (frames.nulled ?? 0)) / 3000) * 300 - 300) * 2;
+  }
+  return penalty;
+}
+
+interface Pickable {
+  group?: string;
+  connected: boolean;
+  stats?: NodeLoad | null;
+}
+
+/**
+ * Choix du nœud : le serveur public le moins chargé tant qu'il n'est pas dégradé, sinon le serveur personnel
+ * (celui de l'utilisateur, gardé en repli), sinon le moins mauvais des publics.
+ */
+export function pickBest<T extends Pickable>(nodes: T[]): T | undefined {
+  const live = nodes.filter((node) => node.connected);
+  const byPenalty = (a: T, b: T) => nodePenalty(a.stats) - nodePenalty(b.stats);
+  const publicNodes = live.filter((node) => node.group === 'public').sort(byPenalty);
+  const healthy = publicNodes.filter((node) => nodePenalty(node.stats) < DEGRADED_PENALTY);
+  if (healthy.length > 0) return healthy[0];
+  const personal = live.filter((node) => node.group !== 'public').sort(byPenalty);
+  return personal[0] ?? publicNodes[0];
+}

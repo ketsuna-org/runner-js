@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'bun:test';
 
 import {
   parsePublicList,
+  pickBest,
   probeNode,
   resetPublicListCache,
   selectNodes,
@@ -64,5 +65,28 @@ describe('lavalink-nodes', () => {
     };
     const nodes = await selectNodes([{ host: 'mine.example', port: 2333, password: 'p', secure: false }], failing);
     expect(nodes.map((n) => n.host)).toEqual(['mine.example']);
+  });
+});
+
+describe('pickBest', () => {
+  const calm = { playingPlayers: 2, cpu: { systemLoad: 0.1 }, frameStats: { deficit: 0, nulled: 0 } };
+  const choking = { playingPlayers: 1, cpu: { systemLoad: 0.2 }, frameStats: { deficit: 4000, nulled: 1500 } };
+
+  it('prefers the least loaded public node', () => {
+    const a = { group: 'public', connected: true, stats: { ...calm, playingPlayers: 30 } };
+    const b = { group: 'public', connected: true, stats: calm };
+    expect(pickBest([a, b])).toBe(b);
+  });
+
+  it('falls back to the personal server when every public node drops frames', () => {
+    const pub = { group: 'public', connected: true, stats: choking };
+    const mine = { group: 'custom', connected: true, stats: null };
+    expect(pickBest([pub, mine])).toBe(mine);
+  });
+
+  it('keeps a degraded public node when nothing else is connected', () => {
+    const pub = { group: 'public', connected: true, stats: choking };
+    const off = { group: 'custom', connected: false, stats: null };
+    expect(pickBest([pub, off])).toBe(pub);
   });
 });
