@@ -121,6 +121,11 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     });
   });
 
+  app.post('/bots/:id/logs/clear', (c) => {
+    const botId = c.req.param('id');
+    return c.json({ ok: true, cleared: deps.logStore.clearForBot(botId) });
+  });
+
   app.get('/bots/:id/status', (c) => {
     const botId = c.req.param('id');
     return c.json({
