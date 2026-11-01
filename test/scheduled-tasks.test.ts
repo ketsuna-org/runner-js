@@ -789,6 +789,7 @@ describe('ScheduledTasks : exécutions', () => {
           kind: 'interval',
           schedule: 'every 5 min',
           nextRunAt: '2026-03-10T00:10:00.000Z',
+          startAt: null,
           lastRunAt: '2026-03-10T00:05:00.000Z',
           lastOk: true,
           lastDurationMs: 1,

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { CronSchedule } from './cron-expression.js';
@@ -53,6 +53,18 @@ export interface ScheduledTaskEntry {
   timezone?: string;
   runOnStart?: boolean;
   timeoutMs?: number;
+  /**
+   * Heure de départ voulue par l'utilisateur (ISO 8601, UTC). Intervalle : ancre des tirs
+   * (`startAt + k × N min`, le premier tir est `startAt` s'il est dans le futur). Cron : « pas avant ».
+   * Absente : intervalles ancrés sur l'époque Unix.
+   */
+  startAt?: string;
+}
+
+/** Mémoire durable du dernier tir de chaque tâche : survit aux redémarrages du process. */
+export interface ScheduleStateStore {
+  load(taskId: string): number | null;
+  save(taskId: string, lastRunAt: number): void;
 }
 
 export interface TaskRunOutcome {
@@ -85,7 +97,12 @@ export interface ScheduledTasksOptions {
   maxConcurrent?: number;
   runOnStartDelayMs?: number;
   startupGuard?: StartupGuard;
+  stateStore?: ScheduleStateStore;
 }
+
+export type RunNowResult =
+  | { status: 'ok' | 'failed'; ms: number; error?: string }
+  | { status: 'not_found' | 'busy' | 'not_ready' };
 
 export interface ScheduledTaskSnapshot {
   id: string;
@@ -93,6 +110,7 @@ export interface ScheduledTaskSnapshot {
   schedule: string;
   /** Prochaine échéance (ISO) ; null si la planification n'a plus d'échéance. */
   nextRunAt: string | null;
+  startAt: string | null;
   lastRunAt: string | null;
   lastOk: boolean | null;
   lastDurationMs: number | null;
@@ -165,9 +183,18 @@ function printable(text: unknown): string {
   return truncate(String(text).replace(/[\x00-\x1f\x7f]/g, ' '));
 }
 
+/** `startAt` lu dans la configuration : un instant en ms, ou null s'il est absent ou illisible. */
+export function parseStartAt(value: unknown): number | null {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return null;
+  }
+  const ms = Date.parse(value);
+  return Number.isFinite(ms) ? ms : null;
+}
+
 function describeSchedule(entry: ScheduledTaskEntry): ParsedSchedule {
   const cron = typeof entry.cron === 'string' ? entry.cron.trim() : '';
-  const flags = `${entry.runOnStart === true ? 1 : 0}|${entry.timeoutMs ?? ''}`;
+  const flags = `${entry.runOnStart === true ? 1 : 0}|${entry.timeoutMs ?? ''}|${parseStartAt(entry.startAt) ?? ''}`;
   if (cron) {
     const parsed = CronSchedule.parse(cron, entry.timezone);
     if (!parsed.ok) {
@@ -302,6 +329,31 @@ export class ScheduledTasks {
     }
   }
 
+  /**
+   * « Exécuter maintenant » : lance la tâche tout de suite SANS toucher à son minuteur (le prochain tir planifié
+   * garde son heure). Refusé si elle tourne déjà, si le client n'est pas prêt ou s'il n'y a plus de place.
+   * Rend le résultat de l'exécution.
+   */
+  async runNow(id: string): Promise<RunNowResult> {
+    const task = this.tasks.get(id);
+    if (!task?.active) {
+      return { status: 'not_found' };
+    }
+    if (!this.ready()) {
+      return { status: 'not_ready' };
+    }
+    if (task.running || this.active >= this.maxConcurrent) {
+      return { status: 'busy' };
+    }
+    const before = { runs: task.runs, failures: task.failures };
+    task.streaks = {};
+    await this.execute(task, null);
+    const failed = task.failures > before.failures;
+    return failed
+      ? { status: 'failed', ms: task.lastDurationMs ?? 0, error: task.lastError ?? undefined }
+      : { status: 'ok', ms: task.lastDurationMs ?? 0 };
+  }
+
   /** Annule tous les timers. Les exécutions en cours ne sont pas interrompues (un script ne s'annule pas). */
   stop(): void {
     const now = this.now();
@@ -340,6 +392,7 @@ export class ScheduledTasks {
         kind: task.schedule.kind,
         schedule: task.schedule.label,
         nextRunAt: task.target === null ? null : new Date(task.target).toISOString(),
+        startAt: parseStartAt(task.entry.startAt) === null ? null : new Date(parseStartAt(task.entry.startAt) as number).toISOString(),
         lastRunAt: task.lastRunAt === null ? null : new Date(task.lastRunAt).toISOString(),
         lastOk: task.lastOk,
         lastDurationMs: task.lastDurationMs,
@@ -383,7 +436,7 @@ export class ScheduledTasks {
       runningSince: null,
       startGuardKey: null,
       noUpcomingWarned: false,
-      lastRunAt: null,
+      lastRunAt: this.options.stateStore?.load(entry.id) ?? null,
       lastOk: null,
       lastDurationMs: null,
       lastError: null,
@@ -412,10 +465,19 @@ export class ScheduledTasks {
 
   private nextTarget(task: TaskState, now: number): number | null {
     const { schedule } = task;
+    const startAt = parseStartAt(task.entry.startAt);
     if (schedule.kind === 'interval') {
-      return (Math.floor(now / schedule.periodMs) + 1) * schedule.periodMs;
+      if (startAt === null) {
+        return (Math.floor(now / schedule.periodMs) + 1) * schedule.periodMs;
+      }
+      // Ancre choisie par l'utilisateur : le premier tir est startAt lui-même, puis startAt + k × période.
+      if (now < startAt) {
+        return startAt;
+      }
+      return startAt + (Math.floor((now - startAt) / schedule.periodMs) + 1) * schedule.periodMs;
     }
-    return schedule.cron.next(now);
+    // Cron : jamais avant startAt.
+    return schedule.cron.next(startAt !== null && startAt > now ? startAt - 1 : now);
   }
 
   private arm(task: TaskState): void {
@@ -620,6 +682,7 @@ export class ScheduledTasks {
     const id = task.entry.id;
     task.runs += 1;
     task.lastRunAt = startedAt;
+    this.options.stateStore?.save(id, startedAt);
     task.lastOk = outcome.ok;
     task.lastDurationMs = outcome.ms;
     if (outcome.ok) {
@@ -682,6 +745,42 @@ export class FileStartupGuard implements StartupGuard {
       rmSync(this.fileFor(key), { force: true });
     } catch {
       // Rien à faire : le marqueur expirera.
+    }
+  }
+}
+
+/** Dernier tir de chaque tâche, un fichier JSON par bot : lu au montage, écrit à chaque tir. */
+export class FileScheduleState implements ScheduleStateStore {
+  private cache: Record<string, number> | null = null;
+
+  constructor(private readonly file: string) {}
+
+  private read(): Record<string, number> {
+    if (this.cache) {
+      return this.cache;
+    }
+    try {
+      const parsed = JSON.parse(readFileSync(this.file, 'utf8')) as unknown;
+      this.cache = parsed && typeof parsed === 'object' ? { ...(parsed as Record<string, number>) } : {};
+    } catch {
+      this.cache = {};
+    }
+    return this.cache;
+  }
+
+  load(taskId: string): number | null {
+    const value = this.read()[taskId];
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  save(taskId: string, lastRunAt: number): void {
+    const state = this.read();
+    state[taskId] = lastRunAt;
+    try {
+      mkdirSync(path.dirname(this.file), { recursive: true });
+      writeFileSync(this.file, JSON.stringify(state));
+    } catch {
+      // Disque indisponible : le dernier tir reste en mémoire, sans bloquer la tâche.
     }
   }
 }

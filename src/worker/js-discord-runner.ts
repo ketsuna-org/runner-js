@@ -39,7 +39,9 @@ import { MusicManager } from '../runtime/music/music-manager.js';
 import type { LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
+  FileScheduleState,
   ScheduledTasks,
+  type RunNowResult,
   type ScheduledSnapshot,
   type ScheduledTaskEntry,
   type TaskRunOutcome,
@@ -100,6 +102,9 @@ export class JsDiscordRunner {
       isReady: () => this.client?.isReady() === true && this.registry !== null,
       // Un tir toutes les minutes au plus par tâche : le volume suit les échéances, pas le trafic.
       log: (level, message) => this.onLog(level, message, 'script'),
+      stateStore: options.stateDir
+        ? new FileScheduleState(path.join(options.stateDir, 'scheduled-state', `${safeSegment(botId)}.json`))
+        : undefined,
       startupGuard: options.stateDir
         ? new FileStartupGuard(path.join(options.stateDir, 'scheduled-start', safeSegment(botId)))
         : undefined,
@@ -137,6 +142,11 @@ export class JsDiscordRunner {
   /** Tâches planifiées du bot (prochaine échéance, dernier résultat) pour `/bots/:id/status`. */
   getScheduledSnapshot(): ScheduledSnapshot {
     return this.scheduler.snapshot();
+  }
+
+  /** « Exécuter maintenant » : une tâche planifiée tout de suite, sans toucher à son minuteur. */
+  runScheduledNow(taskId: string): Promise<RunNowResult> {
+    return this.scheduler.runNow(taskId);
   }
 
   private async runScheduledEntry(entry: ScheduledTaskEntry): Promise<TaskRunOutcome> {
