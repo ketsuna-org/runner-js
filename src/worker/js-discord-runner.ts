@@ -121,7 +121,9 @@ export class JsDiscordRunner {
       }
       const result = await executor.execute(
         presenceTextScript(text),
-        { client, config: this.config, variables: {} },
+        // Un statut n'appartient à aucun serveur: `guild` y est le total de tous les serveurs du bot
+        // (`guild.memberCount` = membres cumulés, `guild.count` = nombre de serveurs).
+        { client, config: this.config, variables: {}, guild: presenceGuildTotals(client) as never },
         {
           log: (...args) => this.onLog('debug', args.map(String).join(' '), 'script'),
           info: (...args) => this.onLog('debug', args.map(String).join(' '), 'script'),
@@ -528,3 +530,12 @@ export class JsDiscordRunner {
  * unchanged)", which is not the same thing as a registration failure — and the
  * old version logged nothing at all on success.
  */
+
+/** Totaux de tous les serveurs du bot, exposés aux statuts dynamiques sous le nom `guild`. */
+export function presenceGuildTotals(client: Client): { memberCount: number; count: number } {
+  let memberCount = 0;
+  for (const guild of client.guilds.cache.values()) {
+    memberCount += guild.memberCount ?? 0;
+  }
+  return { memberCount, count: client.guilds.cache.size };
+}
