@@ -60,6 +60,10 @@ function shouldMirrorToStdout(
   );
 }
 
+// Ligne écrite dans le fichier quand un propriétaire efface les logs d'un bot : à la relecture
+// (redémarrage du runner), tout ce qui précède pour ce bot est ignoré.
+export const LOGS_CLEARED_MARKER = '__logs_cleared__';
+
 export class LogStore {
   private readonly lines: LogLine[] = [];
   private readonly maxLines: number;
@@ -110,6 +114,13 @@ export class LogStore {
       for (const line of slice) {
         const parsed = parseStoredLogLine(line);
         if (parsed) {
+          if (parsed.botId && parsed.message === LOGS_CLEARED_MARKER) {
+            const clearedBot = parsed.botId;
+            const kept = this.lines.filter((l) => l.botId !== clearedBot);
+            this.lines.length = 0;
+            this.lines.push(...kept);
+            continue;
+          }
           const logTime = new Date(parsed.ts).getTime();
           if (Number.isFinite(logTime) && now - logTime > LogStore.MAX_LOG_AGE_MS) {
             continue; // Skip logs older than 7 days TTL
@@ -198,6 +209,27 @@ export class LogStore {
           line.botId ? ` [bot:${line.botId}]` : ''
         } ${line.message}`,
     );
+  }
+
+  /**
+   * Vide le journal d'un bot (mémoire de l'API de logs). Le fichier runner.log, partagé par tous
+   * les bots, n'est pas réécrit : un marqueur y est ajouté, que la relecture au démarrage respecte. Rend le nombre de lignes retirées.
+   */
+  clearForBot(botId: string): number {
+    const before = this.lines.length;
+    const kept = this.lines.filter((line) => line.botId !== botId);
+    this.lines.length = 0;
+    this.lines.push(...kept);
+    const marker = `[${new Date().toISOString()}] [INFO] [bot:${botId}] ${LOGS_CLEARED_MARKER}\n`;
+    this.writeQueue = this.writeQueue.then(async () => {
+      try {
+        await appendFile(this.logFile, marker, 'utf8');
+        this.fileBytes += Buffer.byteLength(marker);
+      } catch {
+        // ignore file write errors
+      }
+    });
+    return before - kept.length;
   }
 
   tailForBot(botId: string, limit = 200): string[] {

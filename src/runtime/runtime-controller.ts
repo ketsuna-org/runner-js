@@ -448,6 +448,11 @@ export class RuntimeController {
     return this.processManager.listStates().map((state) => this.toRuntimeState(state));
   }
 
+  /** « Exécuter maintenant » ; null si le bot ne tourne pas. */
+  runScheduledNow(botId: string, taskId: string) {
+    return this.processManager.runScheduledNow(botId, taskId);
+  }
+
   runtimeStateForBot(botId: string): RunnerBotRuntimeState {
     const state = this.toRuntimeState(this.processManager.getState(botId));
     const scheduled = this.processManager.getScheduledSnapshot(botId);

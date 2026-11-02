@@ -12,7 +12,7 @@ import {
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
 import type { LogOrigin, LogStore } from './log-store.js';
-import type { ScheduledSnapshot } from './scheduled-tasks.js';
+import type { RunNowResult, ScheduledSnapshot } from './scheduled-tasks.js';
 import type { VariableDatabase } from './variable-database.js';
 
 export interface ManagedBotState {
@@ -50,6 +50,8 @@ export interface BotRunnerHandle {
   getHeapUsedBytes(): number | null;
   /** Tâches planifiées du bot (prochaine échéance, dernier résultat) ; absent pour un runner qui n'en a pas. */
   getScheduledSnapshot?(): ScheduledSnapshot;
+  /** Exécute une tâche planifiée tout de suite sans toucher à son minuteur. */
+  runScheduledNow?(taskId: string): Promise<RunNowResult>;
   /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
   notifyVariableWrite?(storageKey: string): void;
 }
@@ -180,6 +182,11 @@ export class BotSupervisor {
         autoRestart: true,
       },
     );
+  }
+
+  /** « Exécuter maintenant » : null si le bot ne tourne pas ou ne gère pas de tâches planifiées. */
+  runScheduledNow(botId: string, taskId: string): Promise<RunNowResult> | null {
+    return this.bots.get(botId)?.runner.runScheduledNow?.(taskId) ?? null;
   }
 
   /** Tâches planifiées d'un bot qui tourne (null sinon). */

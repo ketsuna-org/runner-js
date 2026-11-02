@@ -90,6 +90,8 @@ export const scheduledHandlerSchema = handlerBaseSchema.extend({
   /** Fuseau IANA de `cron` ; UTC si absent. Sans effet pour `everyMinutes`. */
   timezone: tolerant('scheduled.timezone', z.string()),
   runOnStart: tolerant('scheduled.runOnStart', z.boolean()),
+  /** Heure de départ (ISO 8601, UTC) : ancre des intervalles, « pas avant » d'un cron. */
+  startAt: tolerant('scheduled.startAt', z.string()),
   timeoutMs: tolerant('scheduled.timeoutMs', z.number().int().positive()),
 });
 

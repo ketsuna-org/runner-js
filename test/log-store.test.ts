@@ -165,4 +165,27 @@ describe('LogStore', () => {
       }
     });
   });
+
+  it('clears one bot logs and keeps them cleared after a restart', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'runner-js-logs-'));
+    const logFile = path.join(dir, 'runner.log');
+    try {
+      const store = new LogStore(logFile);
+      await store.init();
+      store.append('info', 'a1', 'bot-a');
+      store.append('info', 'b1', 'bot-b');
+      expect(store.clearForBot('bot-a')).toBe(1);
+      store.append('info', 'a2', 'bot-a');
+      expect(store.tailForBot('bot-a', 10).map((l) => l.split('] ').pop())).toEqual(['a2']);
+      expect(store.tailForBot('bot-b', 10)).toHaveLength(1);
+      await store.flush();
+
+      const reloaded = new LogStore(logFile);
+      await reloaded.init();
+      expect(reloaded.tailForBot('bot-a', 10).map((l) => l.split('] ').pop())).toEqual(['a2']);
+      expect(reloaded.tailForBot('bot-b', 10)).toHaveLength(1);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });

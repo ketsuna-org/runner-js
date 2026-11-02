@@ -121,12 +121,40 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     });
   });
 
+  app.post('/bots/:id/logs/clear', (c) => {
+    const botId = c.req.param('id');
+    return c.json({ ok: true, cleared: deps.logStore.clearForBot(botId) });
+  });
+
   app.get('/bots/:id/status', (c) => {
     const botId = c.req.param('id');
     return c.json({
       apiVersion: 2,
       bot: buildBotStatePayload(deps.runtime, botId),
     });
+  });
+
+  // « Exécuter maintenant » : lance une tâche planifiée sans remettre son minuteur à zéro.
+  app.post('/bots/:id/scheduled/:taskId/run', async (c) => {
+    const botId = c.req.param('id');
+    const taskId = decodeURIComponent(c.req.param('taskId'));
+    const pending = deps.runtime.runScheduledNow(botId, taskId);
+    if (pending === null) {
+      throw conflict('The bot is not running.');
+    }
+    const result = await pending;
+    if (result.status === 'not_found') {
+      throw notFound(`Scheduled task "${taskId}" is not mounted on this bot.`);
+    }
+    if (result.status === 'busy') {
+      throw conflict('The task is already running or every execution slot is taken.');
+    }
+    if (result.status === 'not_ready') {
+      throw conflict('The Discord client is not ready yet.');
+    }
+    const done = result as Extract<typeof result, { ms: number }>;
+    deps.logStore.append('info', `Scheduled task ${taskId} run manually (${done.status}, ${done.ms}ms)`, botId);
+    return c.json({ ok: done.status === 'ok', ...done });
   });
 
   app.get('/bots', async (c) => {
