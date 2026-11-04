@@ -1,4 +1,5 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
+import type { CommandEventName, CommandEventPayload } from '../discord/handler-registry.js';
 import {
   discordIpBlockRemainingMs,
   isDiscordGatewayDisallowedIntentsClose,
@@ -41,6 +42,8 @@ export interface BotRunnerHandle {
   reload(config: JsBotConfig): Promise<void>;
   upsertCommand?(command: CommandHandler): Promise<void>;
   deleteCommand?(commandId: string): Promise<void>;
+  /** Une commande a été créée, modifiée ou supprimée : lance les handlers `commandCreated`/`Updated`/`Deleted`. */
+  triggerCommandEvent?(eventName: CommandEventName, payload: CommandEventPayload): Promise<number>;
   triggerWebhook(
     pathKey: string,
     payload: unknown,
@@ -450,6 +453,18 @@ export class BotSupervisor {
       return;
     }
     await bot.runner.deleteCommand?.(commandId);
+  }
+
+  /** Signale un événement de commande au bot s'il tourne (sans effet sinon). */
+  async notifyCommandEvent(
+    botId: string,
+    eventName: CommandEventName,
+    payload: CommandEventPayload,
+  ): Promise<void> {
+    if (!this.isRunning(botId)) {
+      return;
+    }
+    await this.bots.get(botId)?.runner.triggerCommandEvent?.(eventName, payload);
   }
 
   async triggerInboundWebhook(

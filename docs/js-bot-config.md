@@ -230,6 +230,15 @@ Garde-fous (un message ordinaire qui s'écrit comme une commande l'exécute) :
 
 Choisissez des noms distinctifs : `help` ou `ok` se déclencheront dans une conversation normale.
 
+### 4.5 bis Événements de commande
+
+Un handler d'événement peut s'appeler `commandCreated`, `commandUpdated` ou `commandDeleted`. Ce ne sont pas des
+événements Discord : la route `/bots/:id/commands/sync` (création, modification) ou `/commands/delete`
+(suppression) les déclenche, quand la commande a réellement changé (une synchronisation identique ne lance rien).
+Le script reçoit la commande dans `webhook.payload` (`webhook.path` porte le nom de l'événement) :
+`{ id, name, description, type, previousName, command }`. `previousName` n'est rempli que pour un renommage.
+`interaction`, `message`, `guild`, `member` et `channel` sont indéfinis.
+
 ### 4.6 Ce que reçoit le script
 
 Les paramètres de portée sont toujours les mêmes : `client` (sans jeton), `config` (assainie), `variables`,

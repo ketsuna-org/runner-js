@@ -29,7 +29,11 @@ import {
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
 import { discordRest, removeStaleSlashCommands } from '../discord/command-registerer.js';
-import { HandlerRegistry } from '../discord/handler-registry.js';
+import {
+  HandlerRegistry,
+  type CommandEventName,
+  type CommandEventPayload,
+} from '../discord/handler-registry.js';
 import { applyPresence, presenceTextScript, stopPresenceRotation } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
@@ -473,6 +477,10 @@ export class JsDiscordRunner {
       return false;
     }
     return this.registry.triggerWebhook(pathKey, payload, headers);
+  }
+
+  async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {
+    return this.registry ? this.registry.triggerCommandEvent(eventName, payload) : 0;
   }
 
   async stop(): Promise<void> {

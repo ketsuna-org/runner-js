@@ -520,6 +520,24 @@ export class HandlerRegistry {
   }
 
   /**
+   * Événements `commandCreated` / `commandUpdated` / `commandDeleted` : ce ne sont pas des événements Discord,
+   * c'est la route de synchronisation d'une commande qui les signale. Chaque handler d'événement de ce nom
+   * (sans filtre d'identifiant de composant) s'exécute ; le script reçoit la commande dans `webhook.payload`
+   * (`webhook.path` porte le nom de l'événement). Rend le nombre de handlers lancés.
+   */
+  async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {
+    const handlers = (this.config.events ?? []).filter(
+      (event) => event.enabled !== false && event.name.trim() === eventName && !event.customIdFilter,
+    );
+    for (const handler of handlers) {
+      await this.runScript(handler.script, {
+        webhook: { path: eventName, payload, headers: {} },
+      });
+    }
+    return handlers.length;
+  }
+
+  /**
    * Arrêt complet : démontage des routes ET des tâches planifiées du registre. Un planificateur fourni par le
    * propriétaire du client n'est pas touché ici (il survit à la reconnexion ; son propriétaire l'arrête).
    */
@@ -968,6 +986,26 @@ export async function upgradeInteractionMember<M>(
   }
 }
 
+export type CommandEventName = 'commandCreated' | 'commandUpdated' | 'commandDeleted';
+
+export const COMMAND_EVENT_NAMES: ReadonlySet<string> = new Set<CommandEventName>([
+  'commandCreated',
+  'commandUpdated',
+  'commandDeleted',
+]);
+
+/** Ce que reçoit un script d'événement de commande (`webhook.payload`). */
+export interface CommandEventPayload {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  /** Ancien nom en cas de renommage, sinon vide. */
+  previousName: string;
+  /** La commande complète telle qu'enregistrée. */
+  command: Record<string, unknown>;
+}
+
 /** Ce qui a déclenché le script, pour les journaux d'erreur. */
 export function describeScriptSource(partial: {
   scheduled?: { id: string };
@@ -978,7 +1016,11 @@ export function describeScriptSource(partial: {
   const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
   if (interaction?.commandName) return `command /${interaction.commandName}`;
   if (interaction?.customId) return `component ${interaction.customId}`;
-  if (partial.webhook) return `inbound webhook ${partial.webhook.path}`;
+  if (partial.webhook) {
+    return COMMAND_EVENT_NAMES.has(partial.webhook.path)
+      ? `command event ${partial.webhook.path}`
+      : `inbound webhook ${partial.webhook.path}`;
+  }
   if (partial.scheduled) return `scheduled task ${partial.scheduled.id}`;
   if (partial.message) return 'message handler';
   return 'event or scheduled handler';
