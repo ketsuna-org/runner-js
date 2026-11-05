@@ -23,6 +23,12 @@ import {
 } from '../config/js-bot-config.js';
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import {
+  applyDefaultVisibility,
+  resolveCommandScript,
+  resolveCommandVisibility,
+  resolveInteractionRoute,
+} from './command-route.js';
+import {
   NO_PREFIX_MAX_PER_WINDOW,
   NO_PREFIX_USER_COOLDOWN_MS,
   NO_PREFIX_WINDOW_MS,
@@ -225,8 +231,12 @@ export class HandlerRegistry {
         return;
       }
 
+      // Une sous-commande peut avoir son propre script et sa propre visibilité de réponse.
+      const route = resolveInteractionRoute(interaction);
+      applyDefaultVisibility(interaction, resolveCommandVisibility(handler.data, route));
+
       try {
-        await this.runScript(handler.script, {
+        await this.runScript(resolveCommandScript(handler.script, handler.data, route), {
           interaction,
           guild: interaction.guild,
           member: interaction.member,
