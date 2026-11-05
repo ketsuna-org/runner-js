@@ -1,3 +1,4 @@
+import { perfManagerCall } from './perf.js';
 import { splitManagedContextId } from './scoped-context-parts.js';
 import type {
   ScopedIndexQueryOptions,
@@ -20,7 +21,28 @@ export class ManagedVariableStore implements VariableDatabase {
     this.#token = options.token.trim();
   }
 
-  private async post(
+  /** Libellé statique d'une route pour la mesure : `/scoped/list` devient `scoped/list`. */
+  private static perfRoute(suffix: string): string {
+    return suffix.startsWith('/') ? suffix.slice(1) : suffix;
+  }
+
+  private post(botId: string, suffix: string, body: Record<string, unknown>): Promise<unknown> {
+    return perfManagerCall(ManagedVariableStore.perfRoute(suffix), () =>
+      this.postRequest(botId, suffix, body),
+    );
+  }
+
+  private get(
+    botId: string,
+    suffix: string,
+    query: Record<string, string | undefined>,
+  ): Promise<unknown> {
+    return perfManagerCall(ManagedVariableStore.perfRoute(suffix), () =>
+      this.getRequest(botId, suffix, query),
+    );
+  }
+
+  private async postRequest(
     botId: string,
     suffix: string,
     body: Record<string, unknown>,
@@ -45,7 +67,7 @@ export class ManagedVariableStore implements VariableDatabase {
     return text.length > 0 ? JSON.parse(text) : null;
   }
 
-  private async get(
+  private async getRequest(
     botId: string,
     suffix: string,
     query: Record<string, string | undefined>,

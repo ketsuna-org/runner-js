@@ -267,6 +267,11 @@ export const jsBotConfigSchema = z.object({
     .positive()
     .max(MAX_SCRIPT_TIMEOUT_MS)
     .default(DEFAULT_SCRIPT_TIMEOUT_MS),
+  /**
+   * Mesure par exécution (lignes `perf`, audience internal) pour ce bot : éteinte par défaut, relue à
+   * chaque synchro donc activable à chaud. `BOT_CREATOR_RUNNER_PERF=1` l'allume pour tout le runner.
+   */
+  perf: z.boolean().optional(),
 });
 
 export type CommandHandler = z.infer<typeof commandHandlerSchema>;

@@ -45,6 +45,7 @@ import {
 } from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
+import { perfPhase, perfSettings, runWithProbe } from '../runtime/perf.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import type { DatabaseHandles } from '../runtime/database-manager.js';
 import type { MusicManager } from '../runtime/music/music-manager.js';
@@ -77,6 +78,22 @@ export interface HandlerRegistryOptions {
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
+
+/** Contexte d'une exécution de script (interaction, message, tâche planifiée, webhook entrant). */
+type ScriptRunPartial = {
+  /** Tâche planifiée qui exécute le script (nommée dans les journaux). */
+  scheduled?: { id: string };
+  interaction?: Interaction;
+  message?: Message;
+  /** Script-only `message` stand-in (hybrid slash); never used for scoping. */
+  compatMessage?: unknown;
+  /** Comment le message a invoqué la commande ; exposé en `message.invocation`. */
+  invocation?: MessageInvocation;
+  guild?: Message['guild'] | Interaction['guild'] | null;
+  member?: Message['member'] | Interaction['member'] | null;
+  channel?: Message['channel'] | Interaction['channel'] | null;
+  webhook?: { path: string; payload: unknown; headers: Record<string, string> };
+};
 
 export class HandlerRegistry {
   private readonly disposers: HandlerDisposer[] = [];
@@ -520,6 +537,24 @@ export class HandlerRegistry {
   }
 
   /**
+   * Événements `commandCreated` / `commandUpdated` / `commandDeleted` : ce ne sont pas des événements Discord,
+   * c'est la route de synchronisation d'une commande qui les signale. Chaque handler d'événement de ce nom
+   * (sans filtre d'identifiant de composant) s'exécute ; le script reçoit la commande dans `webhook.payload`
+   * (`webhook.path` porte le nom de l'événement). Rend le nombre de handlers lancés.
+   */
+  async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {
+    const handlers = (this.config.events ?? []).filter(
+      (event) => event.enabled !== false && event.name.trim() === eventName && !event.customIdFilter,
+    );
+    for (const handler of handlers) {
+      await this.runScript(handler.script, {
+        webhook: { path: eventName, payload, headers: {} },
+      });
+    }
+    return handlers.length;
+  }
+
+  /**
    * Arrêt complet : démontage des routes ET des tâches planifiées du registre. Un planificateur fourni par le
    * propriétaire du client n'est pas touché ici (il survit à la reconnexion ; son propriétaire l'arrête).
    */
@@ -667,22 +702,66 @@ export class HandlerRegistry {
     return this.runScript(entry.script, { scheduled: { id: entry.id } }, { timeoutMs });
   }
 
+  /**
+   * Exécute un script, avec la mesure par exécution quand l'option perf est active (bot ou runner) :
+   * une ligne `perf {json}` (audience internal) par exécution. Les événements très fréquents
+   * (chaque message) ne l'écrivent que s'ils sont lents ou échouent.
+   */
   private async runScript(
     script: string,
-    partial: {
-      /** Tâche planifiée qui exécute le script (nommée dans les journaux). */
-      scheduled?: { id: string };
-      interaction?: Interaction;
-      message?: Message;
-      /** Script-only `message` stand-in (hybrid slash); never used for scoping. */
-      compatMessage?: unknown;
-      /** Comment le message a invoqué la commande ; exposé en `message.invocation`. */
-      invocation?: MessageInvocation;
-      guild?: Message['guild'] | Interaction['guild'] | null;
-      member?: Message['member'] | Interaction['member'] | null;
-      channel?: Message['channel'] | Interaction['channel'] | null;
-      webhook?: { path: string; payload: unknown; headers: Record<string, string> };
-    },
+    partial: ScriptRunPartial,
+    options: { timeoutMs?: number } = {},
+  ): Promise<TaskRunOutcome> {
+    const probe = perfSettings.probeFor(this.config.perf === true);
+    if (!probe) {
+      return this.runScriptUnmeasured(script, partial, options);
+    }
+    let outcome: TaskRunOutcome | undefined;
+    try {
+      outcome = await runWithProbe(probe, () => this.runScriptUnmeasured(script, partial, options));
+      return outcome;
+    } finally {
+      const ok = outcome?.ok === true;
+      const ms = probe.elapsedMs();
+      const { kind, name } = traceKindAndName(partial);
+      if (perfSettings.shouldEmit(ms, ok, kind === 'message' ? 250 : 0)) {
+        this.emitPerf(probe.line(kind, name ?? '', ok, ms), {
+          kind,
+          name: name ?? '',
+          ok,
+          ms,
+          fields: probe.fields(kind, name ?? '', ok, ms),
+        });
+      }
+    }
+  }
+
+  /**
+   * La ligne perf va dans le tampon local (cachée de /logs par défaut, lue avec ?audience=internal) ET, via
+   * l'émetteur du runner, au journal durable du Manager avec l'audience « internal ».
+   */
+  private emitPerf(line: string, perf: HandlerPerf): void {
+    if (this.perfEmitter) {
+      try {
+        this.perfEmitter(line, perf);
+        return;
+      } catch {
+        // Une mesure ne doit jamais faire échouer une exécution: repli sur le journal simple.
+      }
+    }
+    this.emitLog('info', line);
+  }
+
+  private perfEmitter: ((line: string, perf: HandlerPerf) => void) | null = null;
+
+  /** Branche l'envoi des lignes perf (audience internal) au journal durable; sans lui, tampon local seul. */
+  setPerfEmitter(emitter: ((line: string, perf: HandlerPerf) => void) | null): void {
+    this.perfEmitter = emitter;
+  }
+
+  private async runScriptUnmeasured(
+    script: string,
+    partial: ScriptRunPartial,
     options: { timeoutMs?: number } = {},
   ): Promise<TaskRunOutcome> {
     const startedAt = Date.now();
@@ -702,12 +781,14 @@ export class HandlerRegistry {
     // Cache minimal : guilde / salon peuvent manquer (threads évincés, guilde
     // indisponible). Résolus à la demande (cache d'abord, un fetch sinon).
     const origin = partial.interaction ?? partial.message;
-    const resolved = await resolveScriptGuildChannel(this.client, {
-      guild: partial.guild ?? origin?.guild ?? null,
-      channel: partial.channel ?? origin?.channel ?? null,
-      guildId: origin?.guildId,
-      channelId: origin?.channelId,
-    });
+    const resolved = await perfPhase('prep', () =>
+      resolveScriptGuildChannel(this.client, {
+        guild: partial.guild ?? origin?.guild ?? null,
+        channel: partial.channel ?? origin?.channel ?? null,
+        guildId: origin?.guildId,
+        channelId: origin?.channelId,
+      }),
+    );
     const scriptGuild = (resolved.guild ?? null) as Interaction['guild'];
     const scriptChannel = (resolved.channel ?? null) as Interaction['channel'];
     const member = normalizeScriptMember(
@@ -727,11 +808,8 @@ export class HandlerRegistry {
     };
 
     try {
-      const variables = await buildScriptVariables(
-        this.botId,
-        this.config,
-        this.variableStore,
-        scopedCtx,
+      const variables = await perfPhase('hydrate', () =>
+        buildScriptVariables(this.botId, this.config, this.variableStore, scopedCtx, script),
       );
       const db = new ScriptDb(
         this.botId,
@@ -741,7 +819,7 @@ export class HandlerRegistry {
         variables,
       );
 
-      await this.executor.execute(
+      await perfPhase('script', () => this.executor.execute(
         script,
         {
           client: this.client,
@@ -795,10 +873,12 @@ export class HandlerRegistry {
         this.scriptLogger,
         options.timeoutMs ?? this.config.scriptTimeoutMs,
         lifecycle,
-      );
+      ));
+      this.emitTrace(partial, true, Date.now() - startedAt);
       return { ok: true, ms: Date.now() - startedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.emitTrace(partial, false, Date.now() - startedAt, message);
       const failure: TaskRunOutcome = {
         ok: false,
         ms: Date.now() - startedAt,
@@ -829,6 +909,47 @@ export class HandlerRegistry {
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
       await notifyScriptFailure(partial.interaction);
       return failure;
+    }
+  }
+
+  private traceEmitter: ((trace: HandlerTrace) => void) | null = null;
+
+  /** Reçoit une trace par exécution traitée (envoyée au journal durable du Manager, audience support). */
+  setTraceEmitter(emitter: ((trace: HandlerTrace) => void) | null): void {
+    this.traceEmitter = emitter;
+  }
+
+  private emitTrace(
+    partial: {
+      scheduled?: { id: string };
+      interaction?: Interaction;
+      message?: Message;
+      webhook?: { path: string };
+    },
+    ok: boolean,
+    ms: number,
+    error?: string,
+  ): void {
+    if (!this.traceEmitter) {
+      return;
+    }
+    try {
+      const origin = (partial.interaction ?? partial.message) as
+        | { guildId?: string | null; channelId?: string | null; user?: { id?: string }; author?: { id?: string } }
+        | undefined;
+      const { kind, name } = traceKindAndName(partial);
+      this.traceEmitter({
+        kind,
+        name,
+        userId: origin?.user?.id ?? origin?.author?.id,
+        guildId: origin?.guildId ?? undefined,
+        channelId: origin?.channelId ?? undefined,
+        ok,
+        ms,
+        error,
+      });
+    } catch {
+      // une trace ne casse jamais l'exécution
     }
   }
 
@@ -968,7 +1089,68 @@ export async function upgradeInteractionMember<M>(
   }
 }
 
+export type CommandEventName = 'commandCreated' | 'commandUpdated' | 'commandDeleted';
+
+export const COMMAND_EVENT_NAMES: ReadonlySet<string> = new Set<CommandEventName>([
+  'commandCreated',
+  'commandUpdated',
+  'commandDeleted',
+]);
+
+/** Ce que reçoit un script d'événement de commande (`webhook.payload`). */
+export interface CommandEventPayload {
+  id: string;
+  name: string;
+  description: string;
+  type: string;
+  /** Ancien nom en cas de renommage, sinon vide. */
+  previousName: string;
+  /** La commande complète telle qu'enregistrée. */
+  command: Record<string, unknown>;
+}
+
 /** Ce qui a déclenché le script, pour les journaux d'erreur. */
+/** Mesure d'une exécution (option perf): ce que le journal durable retient en audience « internal ». */
+export interface HandlerPerf {
+  kind: string;
+  name: string;
+  ok: boolean;
+  ms: number;
+  fields: Record<string, unknown>;
+}
+
+/** Une exécution traitée (commande, composant, événement...): ce que le journal durable retient. */
+export interface HandlerTrace {
+  kind: string;
+  name?: string;
+  userId?: string;
+  guildId?: string;
+  channelId?: string;
+  ok: boolean;
+  ms: number;
+  error?: string;
+}
+
+export function traceKindAndName(partial: {
+  scheduled?: { id: string };
+  interaction?: Interaction;
+  message?: Message;
+  webhook?: { path: string };
+}): { kind: string; name?: string } {
+  const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
+  if (interaction?.commandName) return { kind: 'command', name: interaction.commandName };
+  if (interaction?.customId) return { kind: 'component', name: interaction.customId };
+  if (partial.webhook) {
+    return {
+      kind: COMMAND_EVENT_NAMES.has(partial.webhook.path) ? 'command_event' : 'webhook',
+      name: partial.webhook.path,
+    };
+  }
+  if (partial.scheduled) return { kind: 'scheduled', name: partial.scheduled.id };
+  if (partial.message) return { kind: 'message' };
+  return { kind: 'event' };
+}
+
 export function describeScriptSource(partial: {
   scheduled?: { id: string };
   interaction?: Interaction;
@@ -978,7 +1160,11 @@ export function describeScriptSource(partial: {
   const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
   if (interaction?.commandName) return `command /${interaction.commandName}`;
   if (interaction?.customId) return `component ${interaction.customId}`;
-  if (partial.webhook) return `inbound webhook ${partial.webhook.path}`;
+  if (partial.webhook) {
+    return COMMAND_EVENT_NAMES.has(partial.webhook.path)
+      ? `command event ${partial.webhook.path}`
+      : `inbound webhook ${partial.webhook.path}`;
+  }
   if (partial.scheduled) return `scheduled task ${partial.scheduled.id}`;
   if (partial.message) return 'message handler';
   return 'event or scheduled handler';

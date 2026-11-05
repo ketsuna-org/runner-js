@@ -8,6 +8,7 @@ import path from 'node:path';
 import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
 import { BotSupervisor, type BotSupervisorOptions, type ManagedBotState } from './bot-supervisor.js';
+import type { CommandEventName, CommandEventPayload } from '../discord/handler-registry.js';
 import type { DiscordRestSnapshot } from '../discord/rest-observability.js';
 import type { LogStore } from './log-store.js';
 import type { ScheduledSnapshot } from './scheduled-tasks.js';
@@ -156,7 +157,11 @@ export class RuntimeController {
     rawCommand: Record<string, unknown>,
     commandId?: string,
   ): Promise<CommandHandler> {
-    await this.requireBotEntry(botId);
+    const entry = await this.requireBotEntry(botId);
+    const previous = (entry.config.commands ?? []).find(
+      (c) =>
+        c.id === ((commandId ?? rawCommand.id ?? '').toString().trim() || (rawCommand.name ?? '').toString().trim()),
+    );
     const parsed = commandHandlerSchema.parse({
       ...rawCommand,
       id: (commandId ?? rawCommand.id ?? '').toString().trim() || (rawCommand.name ?? '').toString().trim(),
@@ -190,15 +195,23 @@ export class RuntimeController {
       await this.processManager.upsertCommand(botId, parsed);
     }
 
+    // Le Manager renvoie la commande à chaque enregistrement : seul un vrai changement est un événement.
+    if (!previous || JSON.stringify(previous) !== JSON.stringify(parsed)) {
+      this.signalCommandEvent(botId, previous ? 'commandUpdated' : 'commandCreated', parsed, previous);
+    }
+
     return parsed;
   }
 
   async deleteCommand(botId: string, commandId: string): Promise<void> {
-    await this.requireBotEntry(botId);
+    const entry = await this.requireBotEntry(botId);
     const normalizedId = commandId.trim();
     if (!normalizedId) {
       throw new Error('Missing command ID.');
     }
+    const removed = (entry.config.commands ?? []).find(
+      (c) => c.id === normalizedId || c.name.toLowerCase() === normalizedId.toLowerCase(),
+    );
 
     await this.botStore.updateConfig(botId, (config) => {
       const nextCommands = (config.commands ?? []).filter(
@@ -213,6 +226,31 @@ export class RuntimeController {
     if (this.isBotRunning(botId)) {
       await this.processManager.deleteCommand(botId, normalizedId);
     }
+
+    if (removed) {
+      this.signalCommandEvent(botId, 'commandDeleted', removed);
+    }
+  }
+
+  /**
+   * Lance les handlers `commandCreated` / `commandUpdated` / `commandDeleted` du bot. Sans attendre : la route
+   * du Manager ne doit pas dépendre du script d'un utilisateur, et une erreur de script est déjà journalisée.
+   */
+  private signalCommandEvent(
+    botId: string,
+    eventName: CommandEventName,
+    command: CommandHandler,
+    previous?: CommandHandler,
+  ): void {
+    const payload: CommandEventPayload = {
+      id: command.id,
+      name: command.name,
+      description: command.description ?? '',
+      type: command.discordType ?? '',
+      previousName: previous && previous.name !== command.name ? previous.name : '',
+      command: { ...command },
+    };
+    void this.processManager.notifyCommandEvent(botId, eventName, payload).catch(() => undefined);
   }
 
   /**

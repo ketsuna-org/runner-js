@@ -109,7 +109,12 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
   app.get('/logs', (c) => {
     const limitQuery = c.req.query('limit');
     const limit = Number.parseInt(limitQuery ?? '200', 10);
-    return c.json({ lines: deps.logStore.tail(Number.isFinite(limit) ? limit : 200) });
+    return c.json({
+      lines: deps.logStore.tail(
+        Number.isFinite(limit) ? limit : 200,
+        c.req.query('audience') === 'internal',
+      ),
+    });
   });
 
   app.get('/bots/:id/logs', (c) => {
@@ -117,7 +122,11 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     const limitQuery = c.req.query('limit');
     const limit = Number.parseInt(limitQuery ?? '200', 10);
     return c.json({
-      lines: deps.logStore.tailForBot(botId, Number.isFinite(limit) ? limit : 200),
+      lines: deps.logStore.tailForBot(
+        botId,
+        Number.isFinite(limit) ? limit : 200,
+        c.req.query('audience') === 'internal',
+      ),
     });
   });
 

@@ -14,6 +14,7 @@ import {
   discord429RetryAfterSeconds,
   discordIpBlockRemainingMs,
 } from './discord-auth-errors.js';
+import { perfDiscordCall } from '../runtime/perf.js';
 import { mapIntents } from './intent-mapper.js';
 import {
   DISCORD_INVALID_REQUEST_WARNING_INTERVAL,
@@ -73,7 +74,7 @@ export function createGuardedMakeRequest(
       throw new DiscordUnavailableError('blocked', remainingMs / 1000);
     }
 
-    const response = await base(url, init);
+    const response = await perfDiscordCall(() => base(url, init));
     // Compté avant de décider : un 429 de blocage d'IP a bien atteint Discord.
     report(response, url, init);
     if (response.status !== 429) {

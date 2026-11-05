@@ -29,14 +29,18 @@ import {
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
 import { discordRest, removeStaleSlashCommands } from '../discord/command-registerer.js';
-import { HandlerRegistry } from '../discord/handler-registry.js';
+import {
+  HandlerRegistry,
+  type CommandEventName,
+  type CommandEventPayload,
+} from '../discord/handler-registry.js';
 import { applyPresence, presenceTextScript, stopPresenceRotation } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
-import type { LogOrigin } from '../runtime/log-store.js';
+import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
   FileScheduleState,
@@ -87,6 +91,7 @@ export class JsDiscordRunner {
       level: 'info' | 'warn' | 'error' | 'debug',
       message: string,
       origin?: LogOrigin,
+      meta?: LogMeta,
     ) => void,
     private readonly onFatalDisconnect?: (reason: string) => void,
     /**
@@ -306,6 +311,40 @@ export class JsDiscordRunner {
         music: this.music,
       },
     );
+    // Une trace par exécution traitée, envoyée au journal durable (audience support); ni le tampon local
+    // ni le fichier ne la reçoivent, pour ne pas noyer les lignes utiles.
+    this.registry.setTraceEmitter((trace) => {
+      const label = trace.name ? `${trace.kind} ${trace.name}` : trace.kind;
+      this.onLog(
+        trace.ok ? 'info' : 'warn',
+        trace.ok ? `${label} ok ${trace.ms}ms` : `${label} failed ${trace.ms}ms: ${trace.error ?? ''}`,
+        'runner',
+        {
+          audience: 'support',
+          category: 'trace',
+          command: trace.name,
+          guildId: trace.guildId,
+          channelId: trace.channelId,
+          userId: trace.userId,
+          durationMs: trace.ms,
+          errorCode: trace.ok ? undefined : (trace.error ?? '').slice(0, 64),
+          fields: { kind: trace.kind, ok: trace.ok },
+          shipOnly: true,
+        },
+      );
+    });
+
+    // Mesure par exécution (option perf): ligne « perf {json} » dans le tampon local (cachée de /logs par
+    // défaut) et envoyée au journal durable en audience internal, jamais montrée à l'utilisateur.
+    this.registry.setPerfEmitter((line, perf) => {
+      this.onLog('info', line, 'runner', {
+        audience: 'internal',
+        category: 'perf',
+        command: perf.name,
+        durationMs: perf.ms,
+        fields: perf.fields,
+      });
+    });
 
     this.mountGatewayLifecycleHandlers();
 
@@ -473,6 +512,10 @@ export class JsDiscordRunner {
       return false;
     }
     return this.registry.triggerWebhook(pathKey, payload, headers);
+  }
+
+  async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {
+    return this.registry ? this.registry.triggerCommandEvent(eventName, payload) : 0;
   }
 
   async stop(): Promise<void> {
