@@ -12,7 +12,7 @@ import {
 } from '../discord/rest-observability.js';
 import { JsDiscordRunner } from '../worker/js-discord-runner.js';
 import type { BotStore } from './bot-store.js';
-import type { LogOrigin, LogStore } from './log-store.js';
+import type { LogMeta, LogOrigin, LogStore } from './log-store.js';
 import type { RunNowResult, ScheduledSnapshot } from './scheduled-tasks.js';
 import type { VariableDatabase } from './variable-database.js';
 
@@ -67,6 +67,7 @@ export interface CreateRunnerParams {
     level: 'info' | 'warn' | 'error' | 'debug',
     message: string,
     origin?: LogOrigin,
+    meta?: LogMeta,
   ) => void;
   onFatalDisconnect: (reason: string) => void;
   /** Compteurs REST du bot : les mêmes pour tous les runners successifs d'un même bot. */
@@ -263,8 +264,8 @@ export class BotSupervisor {
       botId,
       config: entry.config,
       variableStore: this.options.variableStore,
-      onLog: (level, message, origin) =>
-        this.options.logStore.append(level, message, botId, origin),
+      onLog: (level, message, origin, meta) =>
+        this.options.logStore.append(level, message, botId, origin, meta),
       onFatalDisconnect: (reason) => this.handleFatalDisconnect(botId, reason),
       restStats: this.restStatsFor(botId),
       stateDir: this.options.stateDir,

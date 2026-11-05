@@ -1,6 +1,8 @@
 import { appendFile, mkdir, readFile, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 
+import type { LogAudience, LogShipper, ShippedLogRecord } from './log-shipper.js';
+
 export interface LogLine {
   ts: string;
   level: 'info' | 'warn' | 'error' | 'debug';
@@ -32,6 +34,33 @@ function sanitizeMirrorLine(text: string): string {
   return flat.length > MAX_MIRRORED_LINE_CHARS
     ? `${flat.slice(0, MAX_MIRRORED_LINE_CHARS)}... [truncated ${flat.length - MAX_MIRRORED_LINE_CHARS} chars]`
     : flat;
+}
+
+/**
+ * Contexte structuré d'une ligne, pour le journal durable du Manager. Jamais le contenu d'un message Discord.
+ * `audience` : user (visible par défaut), support (traces, derrière un interrupteur) ou internal (mesures,
+ * jamais montrées à l'utilisateur, toujours lisibles par l'IA interne et le MCP admin).
+ */
+export interface LogMeta {
+  audience?: LogAudience;
+  category?: string;
+  command?: string;
+  guildId?: string;
+  channelId?: string;
+  userId?: string;
+  durationMs?: number;
+  errorCode?: string;
+  fields?: Record<string, unknown>;
+  /** Ligne envoyée au Manager seulement: ni le tampon de l'API de logs, ni le fichier (traces, mesures). */
+  shipOnly?: boolean;
+}
+
+/** Audience par défaut: les scripts parlent à l'utilisateur, le runner seulement quand ça va mal. */
+export function defaultAudience(level: LogLine['level'], origin: LogOrigin): LogAudience {
+  if (origin === 'script') {
+    return 'user';
+  }
+  return level === 'warn' || level === 'error' ? 'user' : 'support';
 }
 
 /**
@@ -71,6 +100,7 @@ export class LogStore {
   private fileBytes = 0;
   private readonly keepDebug: boolean;
   private readonly scriptMirror = new Map<string, { windowStart: number; count: number }>();
+  private shipper: LogShipper | null = null;
   // Writes are chained so lines keep their order and a rotation never races an append.
   private writeQueue: Promise<void> = Promise.resolve();
 
@@ -96,6 +126,11 @@ export class LogStore {
     } catch {
       this.fileBytes = 0;
     }
+  }
+
+  /** Branche l'envoi vers le journal durable du Manager (absent en local: rien n'est envoyé). */
+  setShipper(shipper: LogShipper | null): void {
+    this.shipper = shipper;
   }
 
   /** Resolves once every queued write (and rotation) has reached the disk. */
@@ -159,6 +194,7 @@ export class LogStore {
     message: string,
     botId?: string,
     origin: LogOrigin = 'runner',
+    meta?: LogMeta,
   ): void {
     if (level === 'debug' && !this.keepDebug) {
       return;
@@ -169,6 +205,13 @@ export class LogStore {
       botId,
       message,
     };
+
+    if (botId && this.shipper) {
+      this.shipper.enqueue(toShippedRecord(line, origin, meta));
+    }
+    if (meta?.shipOnly) {
+      return;
+    }
 
     this.lines.push(line);
     if (this.lines.length > this.maxLines) {
@@ -238,6 +281,30 @@ export class LogStore {
       (line) => `[${line.ts}] [${line.level.toUpperCase()}] ${line.message}`,
     );
   }
+}
+
+function toShippedRecord(line: LogLine, origin: LogOrigin, meta?: LogMeta): ShippedLogRecord {
+  const level = line.level === 'warn' ? 'warning' : line.level;
+  const audience = meta?.audience ?? defaultAudience(line.level, origin);
+  const record: ShippedLogRecord = {
+    bot_id: line.botId ?? '',
+    at: line.ts,
+    level,
+    audience,
+    category:
+      meta?.category ??
+      (origin === 'script' ? (line.level === 'error' ? 'script_error' : 'log') : 'runner'),
+    source: 'runner-js',
+    message: redactSecrets(line.message),
+  };
+  if (meta?.command) record.command = meta.command;
+  if (meta?.guildId) record.guild_id = meta.guildId;
+  if (meta?.channelId) record.channel_id = meta.channelId;
+  if (meta?.userId) record.user_id = meta.userId;
+  if (meta?.durationMs !== undefined) record.duration_ms = Math.round(meta.durationMs);
+  if (meta?.errorCode) record.error_code = meta.errorCode;
+  if (meta?.fields) record.fields = meta.fields;
+  return record;
 }
 
 const storedLogLine =

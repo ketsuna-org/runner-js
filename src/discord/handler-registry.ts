@@ -815,9 +815,11 @@ export class HandlerRegistry {
         options.timeoutMs ?? this.config.scriptTimeoutMs,
         lifecycle,
       );
+      this.emitTrace(partial, true, Date.now() - startedAt);
       return { ok: true, ms: Date.now() - startedAt };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
+      this.emitTrace(partial, false, Date.now() - startedAt, message);
       const failure: TaskRunOutcome = {
         ok: false,
         ms: Date.now() - startedAt,
@@ -848,6 +850,47 @@ export class HandlerRegistry {
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
       await notifyScriptFailure(partial.interaction);
       return failure;
+    }
+  }
+
+  private traceEmitter: ((trace: HandlerTrace) => void) | null = null;
+
+  /** Reçoit une trace par exécution traitée (envoyée au journal durable du Manager, audience support). */
+  setTraceEmitter(emitter: ((trace: HandlerTrace) => void) | null): void {
+    this.traceEmitter = emitter;
+  }
+
+  private emitTrace(
+    partial: {
+      scheduled?: { id: string };
+      interaction?: Interaction;
+      message?: Message;
+      webhook?: { path: string };
+    },
+    ok: boolean,
+    ms: number,
+    error?: string,
+  ): void {
+    if (!this.traceEmitter) {
+      return;
+    }
+    try {
+      const origin = (partial.interaction ?? partial.message) as
+        | { guildId?: string | null; channelId?: string | null; user?: { id?: string }; author?: { id?: string } }
+        | undefined;
+      const { kind, name } = traceKindAndName(partial);
+      this.traceEmitter({
+        kind,
+        name,
+        userId: origin?.user?.id ?? origin?.author?.id,
+        guildId: origin?.guildId ?? undefined,
+        channelId: origin?.channelId ?? undefined,
+        ok,
+        ms,
+        error,
+      });
+    } catch {
+      // une trace ne casse jamais l'exécution
     }
   }
 
@@ -1008,6 +1051,38 @@ export interface CommandEventPayload {
 }
 
 /** Ce qui a déclenché le script, pour les journaux d'erreur. */
+/** Une exécution traitée (commande, composant, événement...): ce que le journal durable retient. */
+export interface HandlerTrace {
+  kind: string;
+  name?: string;
+  userId?: string;
+  guildId?: string;
+  channelId?: string;
+  ok: boolean;
+  ms: number;
+  error?: string;
+}
+
+export function traceKindAndName(partial: {
+  scheduled?: { id: string };
+  interaction?: Interaction;
+  message?: Message;
+  webhook?: { path: string };
+}): { kind: string; name?: string } {
+  const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
+  if (interaction?.commandName) return { kind: 'command', name: interaction.commandName };
+  if (interaction?.customId) return { kind: 'component', name: interaction.customId };
+  if (partial.webhook) {
+    return {
+      kind: COMMAND_EVENT_NAMES.has(partial.webhook.path) ? 'command_event' : 'webhook',
+      name: partial.webhook.path,
+    };
+  }
+  if (partial.scheduled) return { kind: 'scheduled', name: partial.scheduled.id };
+  if (partial.message) return { kind: 'message' };
+  return { kind: 'event' };
+}
+
 export function describeScriptSource(partial: {
   scheduled?: { id: string };
   interaction?: Interaction;

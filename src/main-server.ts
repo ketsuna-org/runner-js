@@ -1,6 +1,7 @@
 import { loadRunnerEnv, validateRunnerWebConfiguration } from './config/env.js';
 import { createHttpServer } from './http/server.js';
 import { bootstrapFromPool } from './pool/bootstrap.js';
+import { LogShipper } from './runtime/log-shipper.js';
 import { LogStore } from './runtime/log-store.js';
 import { RuntimeController } from './runtime/runtime-controller.js';
 
@@ -14,6 +15,14 @@ export async function startMainServer(): Promise<void> {
 
   const logStore = new LogStore(env.logFile);
   await logStore.init();
+
+  // Journal durable: avec un Manager (runner géré ou pool), les lignes partent aussi par lots vers lui.
+  let logShipper: LogShipper | null = null;
+  if (env.managedRunnerApi.trim() && env.managedRunnerToken.trim()) {
+    logShipper = new LogShipper({ baseUrl: env.managedRunnerApi, token: env.managedRunnerToken });
+    logStore.setShipper(logShipper);
+    logShipper.start();
+  }
 
   // All bots share this process; log unexpected errors but never exit, since
   // exiting would take down every bot on the node.
@@ -38,6 +47,7 @@ export async function startMainServer(): Promise<void> {
   const shutdown = async (signal: string) => {
     logStore.append('info', `Shutting down (${signal})...`);
     await runtime.dispose();
+    await logShipper?.stop();
     server.stop(true);
     process.exit(0);
   };
