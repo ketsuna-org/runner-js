@@ -2,6 +2,7 @@ import type { Guild, GuildMember, Interaction, Message } from 'discord.js';
 
 import type { JsBotConfig } from '../config/js-bot-config.js';
 import { normalizeScopedStorageKey, toScopedReferenceKey } from './variable-keys.js';
+import { analyzeScriptVariableNeeds, needsScopedDefinition } from './script-variable-needs.js';
 import type { VariableDatabase } from './variable-database.js';
 
 export interface ScopedExecutionContext {
@@ -202,7 +203,19 @@ export async function buildScriptVariables(
   config: JsBotConfig,
   store: VariableDatabase,
   ctx: ScopedExecutionContext,
+  /**
+   * The script about to run. When given, only the variables it cites are read
+   * from the store; without it (or when it cannot be analysed) everything is
+   * loaded, as before.
+   */
+  script?: string,
 ): Promise<Record<string, unknown>> {
+  const needs = analyzeScriptVariableNeeds(script);
+  if (!needs.all && !needs.usesVariables) {
+    // The script never reads `variables`: no call to the store at all.
+    return { ...config.globalVariables };
+  }
+
   const runtimeGlobals = await store.getGlobalVariables(botId);
   const variables: Record<string, unknown> = {
     ...config.globalVariables,
@@ -218,6 +231,9 @@ export async function buildScriptVariables(
       const scope = String(definition.scope ?? '').trim();
       const storageKey = normalizeScopedStorageKey(String(definition.key ?? '').trim());
       if (!scope || !storageKey) {
+        return null;
+      }
+      if (!needsScopedDefinition(needs, storageKey)) {
         return null;
       }
 

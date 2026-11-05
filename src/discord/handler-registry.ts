@@ -750,6 +750,7 @@ export class HandlerRegistry {
         this.config,
         this.variableStore,
         scopedCtx,
+        script,
       );
       const db = new ScriptDb(
         this.botId,
