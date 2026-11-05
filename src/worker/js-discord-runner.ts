@@ -334,6 +334,18 @@ export class JsDiscordRunner {
       );
     });
 
+    // Mesure par exécution (option perf): ligne « perf {json} » dans le tampon local (cachée de /logs par
+    // défaut) et envoyée au journal durable en audience internal, jamais montrée à l'utilisateur.
+    this.registry.setPerfEmitter((line, perf) => {
+      this.onLog('info', line, 'runner', {
+        audience: 'internal',
+        category: 'perf',
+        command: perf.name,
+        durationMs: perf.ms,
+        fields: perf.fields,
+      });
+    });
+
     this.mountGatewayLifecycleHandlers();
 
     this.client.once(Events.ClientReady, (client) => {

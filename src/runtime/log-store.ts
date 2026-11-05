@@ -91,6 +91,11 @@ function shouldMirrorToStdout(
 
 // Ligne écrite dans le fichier quand un propriétaire efface les logs d'un bot : à la relecture
 // (redémarrage du runner), tout ce qui précède pour ce bot est ignoré.
+/** Une ligne de mesure (`perf {json}`), d'audience « internal ». */
+export function isInternalLogMessage(message: string): boolean {
+  return message.startsWith('perf {');
+}
+
 export const LOGS_CLEARED_MARKER = '__logs_cleared__';
 
 export class LogStore {
@@ -244,8 +249,8 @@ export class LogStore {
     });
   }
 
-  tail(limit = 200): string[] {
-    const slice = this.lines.slice(-limit);
+  tail(limit = 200, includeInternal = false): string[] {
+    const slice = this.visible(this.lines, includeInternal).slice(-limit);
     return slice.map(
       (line) =>
         `[${line.ts}] [${line.level.toUpperCase()}]${
@@ -275,8 +280,20 @@ export class LogStore {
     return before - kept.length;
   }
 
-  tailForBot(botId: string, limit = 200): string[] {
-    const filtered = this.lines.filter((line) => line.botId === botId);
+  /**
+   * Les lignes `perf` (audience « internal ») sont retirées AVANT la limite, pour qu'un utilisateur
+   * reçoive autant de lignes utiles ; `includeInternal` (`?audience=internal`) est la lecture du
+   * Manager pour son MCP admin et l'IA interne.
+   */
+  private visible(lines: LogLine[], includeInternal: boolean): LogLine[] {
+    return includeInternal ? lines : lines.filter((line) => !isInternalLogMessage(line.message));
+  }
+
+  tailForBot(botId: string, limit = 200, includeInternal = false): string[] {
+    const filtered = this.visible(
+      this.lines.filter((line) => line.botId === botId),
+      includeInternal,
+    );
     return filtered.slice(-limit).map(
       (line) => `[${line.ts}] [${line.level.toUpperCase()}] ${line.message}`,
     );
