@@ -17,7 +17,10 @@ export function resolveInteractionRoute(interaction: Interaction): string | null
     return null;
   }
   const options = (interaction as ChatInputCommandInteraction).options;
-  const group = options.getSubcommandGroup(false);
+  if (typeof options?.getSubcommand !== 'function') {
+    return null;
+  }
+  const group = typeof options.getSubcommandGroup === 'function' ? options.getSubcommandGroup(false) : null;
   const subcommand = options.getSubcommand(false);
   if (!subcommand) {
     return null;
