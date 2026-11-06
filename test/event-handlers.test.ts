@@ -69,6 +69,8 @@ it('answers an unanswered interaction when its script throws', async () => {
   expect(calls.map(([kind]) => kind)).toEqual(['reply', 'editReply', 'followUp']);
   expect((calls[0][1] as { content: string; ephemeral: boolean }).ephemeral).toBe(true);
   expect((calls[1][1] as { content: string }).content).toBe(SCRIPT_FAILURE_NOTICE);
+  await notifyScriptFailure(make({ deferred: true, component: true }) as never, 'x is not a function\n    at foo');
+  expect((calls[3][1] as { content: string }).content).toBe('❌ x is not a function');
   // Composant différé : message d'origine intact, avis en suivi éphémère.
   expect((calls[2][1] as { ephemeral: boolean }).ephemeral).toBe(true);
 });
