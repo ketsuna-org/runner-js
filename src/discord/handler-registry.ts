@@ -23,6 +23,12 @@ import {
 } from '../config/js-bot-config.js';
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import {
+  applyDefaultVisibility,
+  resolveCommandScript,
+  resolveCommandVisibility,
+  resolveInteractionRoute,
+} from './command-route.js';
+import {
   NO_PREFIX_MAX_PER_WINDOW,
   NO_PREFIX_USER_COOLDOWN_MS,
   NO_PREFIX_WINDOW_MS,
@@ -225,8 +231,12 @@ export class HandlerRegistry {
         return;
       }
 
+      // Une sous-commande peut avoir son propre script et sa propre visibilité de réponse.
+      const route = resolveInteractionRoute(interaction);
+      applyDefaultVisibility(interaction, resolveCommandVisibility(handler.data, route));
+
       try {
-        await this.runScript(handler.script, {
+        await this.runScript(resolveCommandScript(handler.script, handler.data, route), {
           interaction,
           guild: interaction.guild,
           member: interaction.member,
@@ -907,7 +917,7 @@ export class HandlerRegistry {
       const source = describeScriptSource(partial);
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
-      await notifyScriptFailure(partial.interaction);
+      await notifyScriptFailure(partial.interaction, message);
       return failure;
     }
   }
@@ -1026,7 +1036,19 @@ function isInteraction(value: unknown): value is Interaction {
 export const SCRIPT_FAILURE_NOTICE =
   '❌ This command failed. The bot owner can read the details in the bot logs.';
 
-export async function notifyScriptFailure(interaction: Interaction | undefined): Promise<void> {
+/** Notice with the real cause (first line, no stack), cut to fit a Discord message. */
+export function scriptFailureNotice(cause?: string): string {
+  const line = (cause ?? '').split('\n')[0].trim();
+  if (!line) return SCRIPT_FAILURE_NOTICE;
+  const text = `❌ ${line}`;
+  return text.length > 1900 ? `${text.slice(0, 1899)}…` : text;
+}
+
+export async function notifyScriptFailure(
+  interaction: Interaction | undefined,
+  cause?: string,
+): Promise<void> {
+  const notice = scriptFailureNotice(cause);
   if (!interaction || typeof interaction.isRepliable !== 'function' || !interaction.isRepliable()) {
     return;
   }
@@ -1041,13 +1063,13 @@ export async function notifyScriptFailure(interaction: Interaction | undefined):
       // Sur un bouton ou un menu, `deferUpdate` rend editReply = modifier le message d'origine : l'erreur d'un
       // second script effacerait le menu déjà affiché. Un suivi éphémère le laisse intact.
       if (typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent()) {
-        await interaction.followUp({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+        await interaction.followUp({ content: notice, ephemeral: true });
         return;
       }
-      await interaction.editReply({ content: SCRIPT_FAILURE_NOTICE, embeds: [], components: [] });
+      await interaction.editReply({ content: notice, embeds: [], components: [] });
       return;
     }
-    await interaction.reply({ content: SCRIPT_FAILURE_NOTICE, ephemeral: true });
+    await interaction.reply({ content: notice, ephemeral: true });
   } catch {
     // Interaction expired or already answered elsewhere: nothing more to do.
   }
