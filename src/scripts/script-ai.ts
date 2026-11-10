@@ -56,6 +56,14 @@ function text(value: unknown): string {
   return value === undefined || value === null ? '' : String(value);
 }
 
+/** Identifiant Discord de l'auteur du message ou de l'interaction déclencheurs. */
+function triggerUserId(context: BcAiContext): string | undefined {
+  const id =
+    (context.message as { author?: { id?: unknown } } | undefined)?.author?.id ??
+    (context.interaction as { user?: { id?: unknown } } | undefined)?.user?.id;
+  return id === undefined || id === null || id === '' ? undefined : String(id);
+}
+
 /** Contexte du message déclencheur, comme `$aiWithCtx` de BDFD. */
 export function describeContext(context: BcAiContext): string {
   const message = context.message as
@@ -143,6 +151,7 @@ export function createBcGlobal(
     return call(async (gw, id) => {
       const reply = await gw.complete({
         botId: id,
+        userId: triggerUserId(context),
         key: randomUUID(),
         fn,
         messages: [
@@ -221,6 +230,7 @@ export function createBcGlobal(
           for (let i = 0; i < AI_AGENT_MAX_ITERATIONS; i++) {
             const reply = await gw.complete({
               botId: id,
+              userId: triggerUserId(context),
               key: `${runKey}:${i}`,
               fn: 'aiAgent',
               messages,
