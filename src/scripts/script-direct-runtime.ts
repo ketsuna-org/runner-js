@@ -6,6 +6,7 @@ import { runnerPackageRoot } from '../config/env.js';
 import { createCappedFetch } from '../runtime/memory-hygiene.js';
 import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
+import { createBcGlobal } from './script-ai.js';
 import { compileAsyncBody, createScriptFunctions } from './script-functions.js';
 import type { CompiledBody } from './script-functions.js';
 import type { ScriptRunLifecycle, ScriptRuntime } from './script-runtime.js';
@@ -90,6 +91,7 @@ export const SCOPE_PARAM_NAMES = [
   'require',
   'setTimeout',
   'clearTimeout',
+  'bc',
   'fn',
 ] as const;
 
@@ -154,13 +156,17 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       moduleRequire,
       setTimeout,
       clearTimeout,
+      // `bc.ai` : fonctions IA du langage (crédits du propriétaire du bot, via le Manager).
+      createBcGlobal(context, () => functionsRef?.fn as never),
     ];
+    let functionsRef: ReturnType<typeof createScriptFunctions> | undefined;
     const functions = createScriptFunctions({
       jsFunctions: context.config?.jsFunctions,
       scopeNames: SCOPE_PARAM_NAMES,
       scopeValues,
       warn: (message) => logger.warn(message),
     });
+    functionsRef = functions;
     const execution = compiled.run(scopeValues, functions.fn, []);
     if (lifecycle?.onSettled) {
       const settled = lifecycle.onSettled;

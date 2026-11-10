@@ -1,3 +1,4 @@
+import { ManagedAiGateway } from './ai/ai-gateway.js';
 import { loadRunnerEnv, validateRunnerWebConfiguration } from './config/env.js';
 import { createHttpServer } from './http/server.js';
 import { bootstrapFromPool } from './pool/bootstrap.js';
@@ -23,6 +24,9 @@ export async function startMainServer(): Promise<void> {
     logStore.setShipper(logShipper);
     logShipper.start();
   }
+
+  // Fonctions IA du langage (`bc.ai`) : seulement avec un Manager (runner géré ou pool).
+  ManagedAiGateway.install(env);
 
   // All bots share this process; log unexpected errors but never exit, since
   // exiting would take down every bot on the node.

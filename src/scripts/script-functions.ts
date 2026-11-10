@@ -25,6 +25,8 @@ const AsyncFunction = Object.getPrototypeOf(async function () {
 
 /** Nom du paramètre de portée qui porte la bibliothèque. */
 export const FN_SCOPE_NAME = 'fn';
+/** Nom du global des services Bot Creator (`bc.ai`). */
+export const BC_SCOPE_NAME = 'bc';
 /** Nombre maximal de fonctions actives par bot (l'excédent est ignoré avec un avertissement). */
 export const MAX_JS_FUNCTIONS = 100;
 /** Taille maximale du corps d'une fonction, en caractères. */
@@ -97,6 +99,24 @@ export function compileAsyncBody(
   } catch (error) {
     if (!(error instanceof SyntaxError)) {
       throw error;
+    }
+    // Un script qui déclare déjà `bc` (const/let/class) garde sa liaison : on le recompile sans ce paramètre,
+    // en gardant `fn`. Les valeurs de portée sont positionnelles, on retire donc la même position.
+    const bcIndex = scopeNames.indexOf(BC_SCOPE_NAME);
+    if (bcIndex >= 0) {
+      const withoutBc = scopeNames.filter((name) => name !== BC_SCOPE_NAME);
+      try {
+        const compiled = new AsyncFunction(...withoutBc, ...params, body);
+        return {
+          shadowsFn: false,
+          run: (scopeValues, fnObject, args) =>
+            compiled(...scopeValues.filter((_, index) => index !== bcIndex), fnObject, ...args),
+        };
+      } catch (secondError) {
+        if (!(secondError instanceof SyntaxError)) {
+          throw secondError;
+        }
+      }
     }
     const withoutFn = scopeNames.filter((name) => name !== FN_SCOPE_NAME);
     if (withoutFn.length === scopeNames.length) {
