@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
 
+import { countChannelMessages } from '../runtime/channel-activity.js';
+
 /**
  * Parité JS des fonctions du moteur BDFD (`$floorDiv`, `$mod`, `$hash`, `$seededRandom`,
  * `$increment`, `$compareAndSetVar`, `$tryLock`/`$unlock`, `$createForumPost`, `$forumTags`,
@@ -145,6 +147,13 @@ export interface BcVars {
   compareAndSet(scope: DbScope, key: string, expected: unknown, next: unknown, id?: string): Promise<boolean>;
   /** Ajoute `item` à la liste `,a,b,` seulement s'il n'y est pas déjà (atomique). */
   listAddUnique(scope: DbScope, key: string, item: string, id?: string): Promise<boolean>;
+  /** Noms des variables globales qui commencent par `prefix`, triés (`$listVars`), 100 par défaut, 1000 au plus. */
+  list(prefix: string, limit?: number): Promise<string[]>;
+}
+
+export interface BcActivity {
+  /** Messages envoyés dans le salon pendant les N dernières minutes (`$channelMessageCount`), sans lire le texte. */
+  messageCount(channelId: string, minutes?: number, humansOnly?: boolean): number;
 }
 
 export interface BcLock {
@@ -189,6 +198,12 @@ export function createBcVars(botId: string, getDb: () => unknown): BcVars {
         await store.set(key, next, id);
         return true;
       }),
+    async list(prefix, limit = 100) {
+      if (!Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('The limit must be between 1 and 1000.');
+      const db = getDb() as { global?: { keys?: () => Promise<string[]> } } | undefined;
+      const keys = (await db?.global?.keys?.()) ?? [];
+      return keys.filter((k) => k.startsWith(prefix)).sort().slice(0, limit);
+    },
     listAddUnique: (scope, key, item, id) =>
       withVariableLock(lockKey(scope, key, id), async () => {
         const store = scoped(scope);
@@ -198,6 +213,13 @@ export function createBcVars(botId: string, getDb: () => unknown): BcVars {
         await store.set(key, current === '' ? token : `${current}${item},`, id);
         return true;
       }),
+  };
+}
+
+export function createBcActivity(botId: string): BcActivity {
+  return {
+    messageCount: (channelId, minutes = 60, humansOnly = false) =>
+      countChannelMessages(botId, String(channelId).trim(), minutes, humansOnly),
   };
 }
 

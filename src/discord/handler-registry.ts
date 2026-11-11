@@ -1,3 +1,4 @@
+import { recordChannelMessage } from '../runtime/channel-activity.js';
 import {
   Events,
   PermissionsBitField,
@@ -256,7 +257,11 @@ export class HandlerRegistry {
     this.disposers.push(() => this.client.off(Events.InteractionCreate, onInteraction));
 
     {
-      const onMessage = (message: Message) => this.handleMessage(message);
+      const onMessage = (message: Message) => {
+        // Compteur d'activité (sans le texte) pour `bc.activity.messageCount`.
+        recordChannelMessage(this.botId, message.channelId, !message.author?.bot && !message.webhookId);
+        return this.handleMessage(message);
+      };
 
       this.client.on(Events.MessageCreate, onMessage);
       this.disposers.push(() => this.client.off(Events.MessageCreate, onMessage));

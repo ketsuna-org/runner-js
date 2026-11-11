@@ -76,3 +76,25 @@ describe('bc.forum', () => {
     await expect(f.createPost('1', 'Town', 'x', { tags: ['nope'] })).rejects.toThrow();
   });
 });
+
+import { clearChannelActivity, countChannelMessages, recordChannelMessage } from '../src/runtime/channel-activity.js';
+
+describe('channel activity and list', () => {
+  test('counts by window and by human author', () => {
+    clearChannelActivity();
+    const now = Date.now();
+    recordChannelMessage('b', 'c', true, now - 90 * 60_000);
+    recordChannelMessage('b', 'c', true, now - 10 * 60_000);
+    recordChannelMessage('b', 'c', false, now - 5 * 60_000);
+    expect(countChannelMessages('b', 'c', 60, false, now)).toBe(2);
+    expect(countChannelMessages('b', 'c', 60, true, now)).toBe(1);
+    expect(countChannelMessages('b', 'c', 300, false, now)).toBe(3);
+    expect(countChannelMessages('b', 'x', 300, false, now)).toBe(0);
+  });
+  test('vars.list filters by prefix', async () => {
+    const db = { global: { keys: async () => ['chunk_1_0', 'chunk_0_0', 'other'] } };
+    const v = createBcVars('bot', () => db);
+    expect(await v.list('chunk_')).toEqual(['chunk_0_0', 'chunk_1_0']);
+    expect(await v.list('chunk_', 1)).toEqual(['chunk_0_0']);
+  });
+});
