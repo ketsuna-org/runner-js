@@ -118,7 +118,7 @@ it('customIdFilter : un workflow interactionCreate ne tourne que pour le composa
   const client = new EventEmitter();
   const config = parseJsBotConfig({ events: [
     { id: 'a', name: 'interactionCreate', script: 'a', customIdFilter: 'wild_fight' },
-    { id: 'b', name: 'interactionCreate', script: 'b', customIdFilter: 'battle_move' },
+    { id: 'b', name: 'interactionCreate', script: 'b', customIdFilter: 'battle_move,forge-*' },
     { id: 'all', name: 'interactionCreate', script: 'all' },
   ] });
   validateJsBotConfig(config);
@@ -143,6 +143,9 @@ it('customIdFilter : un workflow interactionCreate ne tourne que pour le composa
     Promise.all(client.listeners('interactionCreate').map(listener => listener(interaction)));
   await fire(make('i1', 'wild_fight'));
   expect(executed.sort()).toEqual(['a', 'all']);
+  executed.length = 0;
+  await fire(make('i1b', 'forge-cook-7-42'));
+  expect(executed.sort()).toEqual(['all', 'b']);
   executed.length = 0;
   await fire(make('i2', 'other'));
   expect(executed).toEqual(['all']);
