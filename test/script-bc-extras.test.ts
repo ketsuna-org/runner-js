@@ -98,3 +98,15 @@ describe('channel activity and list', () => {
     expect(await v.list('chunk_', 1)).toEqual(['chunk_0_0']);
   });
 });
+
+import { createBcGrid } from '../src/scripts/script-bc-extras.js';
+describe('bc.grid', () => {
+  test('tiles matches $canvasTileGrid', () => {
+    const t = createBcGrid().tiles({ columns: 2, rows: 2, size: 2, gap: 1, colors: ['red', '', 'blue', 'green'] });
+    expect(t).toEqual([
+      { x: 0, y: 0, width: 2, height: 2, color: 'red' },
+      { x: 0, y: 3, width: 2, height: 2, color: 'blue' },
+      { x: 3, y: 3, width: 2, height: 2, color: 'green' },
+    ]);
+  });
+});

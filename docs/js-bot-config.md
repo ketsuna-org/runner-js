@@ -560,6 +560,7 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.vars.listAddUnique(portée, clé, item, id?)` | liste `,a,b,` sans doublon, atomique |
 | `bc.vars.list(préfixe, limite?)` | `$listVars` |
 | `bc.activity.messageCount(salonId, minutes?, humainsSeulement?)` | `$channelMessageCount` (compte les messages sans lire le texte, depuis le démarrage du bot, 24 h au plus) |
+| `bc.grid.tiles({x, y, columns, rows, size, gap, colors})` | `$canvasTileGrid` (renvoie les rectangles à dessiner) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
 | `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files})` | `$createForumPost` |
 | `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags)` | `$forumTags` / `$setThreadTags` |

@@ -151,6 +151,22 @@ export interface BcVars {
   list(prefix: string, limit?: number): Promise<string[]>;
 }
 
+export interface TileRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: string;
+}
+
+export interface BcGrid {
+  /**
+   * Rectangles d'une grille de tuiles carrées (`$canvasTileGrid`) : une couleur par tuile, ligne par ligne,
+   * une couleur vide laisse la tuile non peinte. À dessiner avec la bibliothèque canvas de votre choix.
+   */
+  tiles(options: { x?: number; y?: number; columns: number; rows: number; size: number; gap?: number; colors: string[] }): TileRect[];
+}
+
 export interface BcActivity {
   /** Messages envoyés dans le salon pendant les N dernières minutes (`$channelMessageCount`), sans lire le texte. */
   messageCount(channelId: string, minutes?: number, humansOnly?: boolean): number;
@@ -213,6 +229,29 @@ export function createBcVars(botId: string, getDb: () => unknown): BcVars {
         await store.set(key, current === '' ? token : `${current}${item},`, id);
         return true;
       }),
+  };
+}
+
+export function createBcGrid(): BcGrid {
+  return {
+    tiles({ x = 0, y = 0, columns, rows, size, gap = 0, colors }) {
+      if (![columns, rows, size, gap, x, y].every(Number.isInteger)) throw new Error('The grid values must be integers.');
+      if (columns < 1 || rows < 1 || columns * rows > 1024) throw new Error('A tile grid has 1 to 1024 tiles.');
+      if (size < 1 || gap < 0) throw new Error('The tile size must be positive and the gap not negative.');
+      const out: TileRect[] = [];
+      for (let i = 0; i < columns * rows && i < colors.length; i++) {
+        const color = String(colors[i] ?? '').trim();
+        if (!color) continue;
+        out.push({
+          x: x + (i % columns) * (size + gap),
+          y: y + Math.floor(i / columns) * (size + gap),
+          width: size,
+          height: size,
+          color,
+        });
+      }
+      return out;
+    },
   };
 }
 
