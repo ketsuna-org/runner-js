@@ -1,0 +1,311 @@
+import { createHash } from 'node:crypto';
+
+/**
+ * Parité JS des fonctions du moteur BDFD (`$floorDiv`, `$mod`, `$hash`, `$seededRandom`,
+ * `$increment`, `$compareAndSetVar`, `$tryLock`/`$unlock`, `$createForumPost`, `$forumTags`,
+ * `$setThreadTags`) : global `bc.math`, `bc.vars`, `bc.lock` et `bc.forum`.
+ */
+
+function toBig(value: unknown, what: string): bigint {
+  try {
+    if (typeof value === 'number') {
+      if (!Number.isInteger(value)) throw new Error('not an integer');
+      return BigInt(value);
+    }
+    return BigInt(String(value ?? '').trim());
+  } catch {
+    throw new Error(`${what} must be an integer.`);
+  }
+}
+
+function flooredDivMod(a: bigint, b: bigint): [bigint, bigint] {
+  if (b === 0n) throw new Error('Cannot divide by zero.');
+  let q = a / b;
+  let r = a - q * b;
+  if (r !== 0n && r < 0n !== b < 0n) {
+    q -= 1n;
+    r += b;
+  }
+  return [q, r];
+}
+
+function numberResult(value: bigint): number | string {
+  return value >= BigInt(Number.MIN_SAFE_INTEGER) && value <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(value)
+    : value.toString();
+}
+
+export type HashAlgorithm = 'fnv1a' | 'crc32' | 'sha256';
+
+function digestNumber(algorithm: HashAlgorithm, bytes: Buffer): bigint {
+  if (algorithm === 'fnv1a') {
+    let h = 0x811c9dc5;
+    for (const b of bytes) {
+      h ^= b;
+      h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return BigInt(h >>> 0);
+  }
+  if (algorithm === 'crc32') {
+    let c = 0xffffffff;
+    for (const b of bytes) {
+      c ^= b;
+      for (let k = 0; k < 8; k++) {
+        c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
+      }
+    }
+    return BigInt((c ^ 0xffffffff) >>> 0);
+  }
+  const d = createHash('sha256').update(bytes).digest();
+  let n = 0n;
+  for (let i = 0; i < 6; i++) n = (n << 8n) | BigInt(d[i]);
+  return n;
+}
+
+export interface BcMath {
+  /** Division entière « plancher » (`$floorDiv`) : floorDiv(-3, 8) = -1. */
+  floorDiv(a: number | string | bigint, b: number | string | bigint): number | string;
+  /** Reste toujours positif pour un diviseur positif (`$mod`) : mod(-3, 8) = 5. */
+  mod(a: number | string | bigint, b: number | string | bigint): number | string;
+  /** Empreinte déterministe (`$hash`) : fnv1a (défaut), crc32, ou sha256 (hex sans modulo). */
+  hash(text: string, algorithm?: HashAlgorithm, modulo?: number | string | bigint): number | string;
+  /** Entier reproductible dans [min, max] pour une même graine (`$seededRandom`). */
+  seededRandom(seed: string, min: number | string | bigint, max: number | string | bigint): number | string;
+}
+
+export function createBcMath(): BcMath {
+  return {
+    floorDiv: (a, b) => numberResult(flooredDivMod(toBig(a, 'Each value'), toBig(b, 'Each value'))[0]),
+    mod: (a, b) => numberResult(flooredDivMod(toBig(a, 'Each value'), toBig(b, 'Each value'))[1]),
+    hash(text, algorithm = 'fnv1a', modulo) {
+      const algo = String(algorithm || 'fnv1a').toLowerCase() as HashAlgorithm;
+      if (!['fnv1a', 'crc32', 'sha256'].includes(algo)) {
+        throw new Error('The algorithm must be fnv1a, crc32 or sha256.');
+      }
+      const bytes = Buffer.from(String(text), 'utf8');
+      if (modulo === undefined || modulo === null || modulo === '') {
+        return algo === 'sha256'
+          ? createHash('sha256').update(bytes).digest('hex')
+          : numberResult(digestNumber(algo, bytes));
+      }
+      const m = toBig(modulo, 'The modulo');
+      if (m <= 0n) throw new Error('The modulo must be positive.');
+      return numberResult(digestNumber(algo, bytes) % m);
+    },
+    seededRandom(seed, min, max) {
+      const low = toBig(min, 'Each value');
+      const high = toBig(max, 'Each value');
+      if (high < low) throw new Error('The maximum is below the minimum.');
+      const n = digestNumber('sha256', Buffer.from(String(seed), 'utf8'));
+      return numberResult(low + (n % (high - low + 1n)));
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Variables atomiques et verrous nommés
+// ---------------------------------------------------------------------------
+
+type DbScope = 'user' | 'guild' | 'channel' | 'message' | 'guildMember' | 'global';
+
+interface ScopedDb {
+  get(key: string, id?: string): Promise<unknown>;
+  set(key: string, value: unknown, id?: string): Promise<void>;
+}
+
+const variableLocks = new Map<string, Promise<void>>();
+
+async function withVariableLock<T>(key: string, action: () => Promise<T>): Promise<T> {
+  const previous = variableLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => done);
+  variableLocks.set(key, tail);
+  try {
+    await previous;
+    return await action();
+  } finally {
+    release();
+    if (variableLocks.get(key) === tail) variableLocks.delete(key);
+  }
+}
+
+const namedLocks = new Map<string, number>();
+const DEFAULT_LOCK_TTL_MS = 30_000;
+const MAX_LOCK_TTL_MS = 10 * 60_000;
+
+export interface BcVars {
+  /** Ajoute `amount` (1 par défaut) de façon atomique (`$increment`) ; renvoie la nouvelle valeur. */
+  increment(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  /** Idem en retranchant (`$decrement`). */
+  decrement(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  /** Écrit `next` seulement si la valeur actuelle vaut `expected` (`$compareAndSetVar`). */
+  compareAndSet(scope: DbScope, key: string, expected: unknown, next: unknown, id?: string): Promise<boolean>;
+  /** Ajoute `item` à la liste `,a,b,` seulement s'il n'y est pas déjà (atomique). */
+  listAddUnique(scope: DbScope, key: string, item: string, id?: string): Promise<boolean>;
+}
+
+export interface BcLock {
+  /** Prend le verrou nommé (`$tryLock`) ; faux s'il est déjà pris. Expire seul (30 s par défaut, 10 min au plus). */
+  tryLock(name: string, ttlSeconds?: number): boolean;
+  unlock(name: string): void;
+}
+
+export function createBcVars(botId: string, getDb: () => unknown): BcVars {
+  function scoped(scope: DbScope): { get: ScopedDb['get']; set: ScopedDb['set'] } {
+    const db = getDb() as Record<string, unknown> | undefined;
+    if (!db) throw new Error('The bot has no storage available.');
+    if (scope === 'global') {
+      const g = db.global as { get(k: string): Promise<unknown>; set(k: string, v: unknown): Promise<void> };
+      return { get: (k) => g.get(k), set: (k, v) => g.set(k, v) };
+    }
+    const target = db[scope] as ScopedDb | undefined;
+    if (!target) throw new Error(`Unknown scope: ${scope}.`);
+    return target;
+  }
+  const lockKey = (scope: string, key: string, id?: string): string => `${botId}|${scope}|${key}|${id ?? ''}`;
+  async function add(scope: DbScope, key: string, amount: number, id?: string): Promise<number> {
+    if (!Number.isFinite(amount)) throw new Error('The amount must be a number.');
+    return withVariableLock(lockKey(scope, key, id), async () => {
+      const store = scoped(scope);
+      const raw = await store.get(key, id);
+      const current = raw === undefined || raw === null || raw === '' ? 0 : Number(raw);
+      if (!Number.isFinite(current)) throw new Error(`Variable ${key} is not a number.`);
+      const next = current + amount;
+      await store.set(key, next, id);
+      return next;
+    });
+  }
+  return {
+    increment: (scope, key, amount = 1, id) => add(scope, key, amount, id),
+    decrement: (scope, key, amount = 1, id) => add(scope, key, -amount, id),
+    compareAndSet: (scope, key, expected, next, id) =>
+      withVariableLock(lockKey(scope, key, id), async () => {
+        const store = scoped(scope);
+        const current = await store.get(key, id);
+        if (String(current ?? '') !== String(expected ?? '')) return false;
+        await store.set(key, next, id);
+        return true;
+      }),
+    listAddUnique: (scope, key, item, id) =>
+      withVariableLock(lockKey(scope, key, id), async () => {
+        const store = scoped(scope);
+        const current = String((await store.get(key, id)) ?? '');
+        const token = `,${item},`;
+        if (current.includes(token)) return false;
+        await store.set(key, current === '' ? token : `${current}${item},`, id);
+        return true;
+      }),
+  };
+}
+
+export function createBcLock(botId: string): BcLock {
+  return {
+    tryLock(name, ttlSeconds) {
+      const key = `${botId}|${name}`;
+      const ttl = Math.min(
+        MAX_LOCK_TTL_MS,
+        ttlSeconds && ttlSeconds > 0 ? ttlSeconds * 1000 : DEFAULT_LOCK_TTL_MS,
+      );
+      const now = Date.now();
+      const until = namedLocks.get(key);
+      if (until !== undefined && until > now) return false;
+      namedLocks.set(key, now + ttl);
+      return true;
+    },
+    unlock(name) {
+      namedLocks.delete(`${botId}|${name}`);
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Forum
+// ---------------------------------------------------------------------------
+
+interface ForumTag {
+  id: string;
+  name: string;
+}
+interface ForumLike {
+  availableTags?: ForumTag[];
+  threads?: { create(options: Record<string, unknown>): Promise<{ id: string }> };
+}
+interface ThreadLike {
+  id: string;
+  parent?: ForumLike | null;
+  setAppliedTags?(tags: string[]): Promise<unknown>;
+}
+
+export interface BcForumPostOptions {
+  /** Étiquettes : identifiants ou noms. 5 au plus. */
+  tags?: string[];
+  /** Archivage automatique en minutes : 60, 1440, 4320 ou 10080 (1440 par défaut). */
+  archiveMinutes?: number;
+  /** Fichiers joints au premier message (pièces d'un message discord.js). */
+  files?: unknown[];
+}
+
+export interface BcForum {
+  /** Crée un post dans un forum (`$createForumPost`) ; renvoie l'identifiant du fil. */
+  createPost(forumId: string, title: string, message: string, options?: BcForumPostOptions): Promise<string>;
+  /** Liste les étiquettes (`$forumTags`). */
+  tags(forumId: string): Promise<ForumTag[]>;
+  /** Remplace les étiquettes d'un post (`$setThreadTags`). */
+  setTags(threadId: string, tags: string[]): Promise<void>;
+}
+
+function resolveTags(available: ForumTag[], wanted: string[]): string[] {
+  if (wanted.length > 5) throw new Error('A forum post takes at most 5 tags.');
+  const out: string[] = [];
+  for (const raw of wanted) {
+    const key = String(raw).trim();
+    if (!key) continue;
+    const hit =
+      available.find((t) => String(t.id) === key) ??
+      available.find((t) => t.name.toLowerCase() === key.toLowerCase());
+    if (!hit) throw new Error(`Unknown forum tag: ${key}.`);
+    if (!out.includes(String(hit.id))) out.push(String(hit.id));
+  }
+  return out;
+}
+
+export function createBcForum(getClient: () => unknown): BcForum {
+  type ClientLike = { channels: { fetch(id: string): Promise<unknown> } };
+  const channels = (): ClientLike['channels'] => (getClient() as ClientLike).channels;
+  async function forumOf(id: string): Promise<ForumLike> {
+    const channel = (await channels().fetch(String(id).trim())) as ForumLike | null;
+    if (!channel || !Array.isArray(channel.availableTags) || !channel.threads) {
+      throw new Error('The channel is not a forum or media channel.');
+    }
+    return channel;
+  }
+  return {
+    async createPost(forumId, title, message, options = {}) {
+      if (!title.trim() || title.length > 100) throw new Error('Thread name must contain 1 to 100 characters.');
+      if (message.length > 2000) throw new Error('The first message exceeds 2000 characters.');
+      const archive = options.archiveMinutes ?? 1440;
+      if (![60, 1440, 4320, 10080].includes(archive)) throw new Error('Invalid thread archive duration.');
+      const forum = await forumOf(forumId);
+      const tags = resolveTags(forum.availableTags ?? [], options.tags ?? []);
+      const thread = await forum.threads!.create({
+        name: title,
+        autoArchiveDuration: archive,
+        message: { ...(message.trim() ? { content: message } : {}), ...(options.files ? { files: options.files } : {}) },
+        ...(tags.length ? { appliedTags: tags } : {}),
+      });
+      return String(thread.id);
+    },
+    async tags(forumId) {
+      const forum = await forumOf(forumId);
+      return (forum.availableTags ?? []).map((t) => ({ id: String(t.id), name: t.name }));
+    },
+    async setTags(threadId, tags) {
+      const thread = (await channels().fetch(String(threadId).trim())) as ThreadLike | null;
+      if (!thread?.parent || !thread.setAppliedTags) throw new Error('The channel is not a forum post.');
+      await thread.setAppliedTags(resolveTags(thread.parent.availableTags ?? [], tags));
+    },
+  };
+}

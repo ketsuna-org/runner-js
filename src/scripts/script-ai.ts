@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
+import { createBcForum, createBcLock, createBcMath, createBcVars } from './script-bc-extras.js';
+import type { BcForum, BcLock, BcMath, BcVars } from './script-bc-extras.js';
 import type { AiGateway, AiMessage, AiTool, AiToolCall } from '../ai/ai-gateway.js';
 
 /** Itérations maximales de `bc.ai.agent`, comme `$aiAgent` de BDFD. */
@@ -47,6 +49,7 @@ export interface BcAiContext {
   interaction?: unknown;
   guild?: unknown;
   channel?: unknown;
+  db?: unknown;
 }
 
 const DECIDE_SYSTEM =
@@ -127,7 +130,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -267,5 +270,11 @@ export function createBcGlobal(
         return last;
       }, ''),
   };
-  return { ai };
+  return {
+    ai,
+    math: createBcMath(),
+    vars: createBcVars(botId(), () => context.db),
+    lock: createBcLock(botId()),
+    forum: createBcForum(() => context.client),
+  };
 }
