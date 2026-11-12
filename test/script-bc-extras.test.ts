@@ -110,3 +110,17 @@ describe('bc.grid', () => {
     ]);
   });
 });
+
+import { createBcCanvas } from '../src/scripts/script-bc-extras.js';
+describe('bc.canvas', () => {
+  test('create, drawTiles and attach produce a PNG attachment', () => {
+    const bc = createBcCanvas();
+    const canvas = bc.create(20, 10, '#102030') as { getContext(t: string): unknown; toBuffer(t: string): Buffer };
+    bc.drawTiles(canvas.getContext('2d'), [{ x: 0, y: 0, width: 5, height: 5, color: 'red' }]);
+    const file = bc.attach(canvas, 'map');
+    expect(file.name).toBe('map.png');
+    expect((file.attachment as Buffer).subarray(1, 4).toString()).toBe('PNG');
+    expect(() => bc.create(0, 10)).toThrow();
+    expect(() => bc.create(5000, 10)).toThrow();
+  });
+});

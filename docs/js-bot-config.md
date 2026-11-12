@@ -561,6 +561,9 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.vars.list(préfixe, limite?)` | `$listVars` |
 | `bc.activity.messageCount(salonId, minutes?, humainsSeulement?)` | `$channelMessageCount` (compte les messages sans lire le texte, depuis le démarrage du bot, 24 h au plus) |
 | `bc.grid.tiles({x, y, columns, rows, size, gap, colors})` | `$canvasTileGrid` (renvoie les rectangles à dessiner) |
+| `bc.canvas.create(w, h, fond?)` | `$canvasCreate` (canvas node-canvas, 1 à 4096 px ; dessinez avec `getContext('2d')`) |
+| `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
+| `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
 | `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files})` | `$createForumPost` |
 | `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags)` | `$forumTags` / `$setThreadTags` |

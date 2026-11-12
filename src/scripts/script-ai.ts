@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
-import { createBcActivity, createBcGrid, createBcForum, createBcLock, createBcMath, createBcVars } from './script-bc-extras.js';
-import type { BcActivity, BcGrid, BcForum, BcLock, BcMath, BcVars } from './script-bc-extras.js';
+import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcVars } from './script-bc-extras.js';
+import type { BcActivity, BcCanvas, BcGrid, BcForum, BcLock, BcMath, BcVars } from './script-bc-extras.js';
 import type { AiGateway, AiMessage, AiTool, AiToolCall } from '../ai/ai-gateway.js';
 
 /** Itérations maximales de `bc.ai.agent`, comme `$aiAgent` de BDFD. */
@@ -130,7 +130,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -278,5 +278,6 @@ export function createBcGlobal(
     forum: createBcForum(() => context.client),
     activity: createBcActivity(botId()),
     grid: createBcGrid(),
+    canvas: createBcCanvas(),
   };
 }

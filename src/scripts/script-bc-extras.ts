@@ -1,4 +1,7 @@
 import { createHash } from 'node:crypto';
+import { createRequire } from 'node:module';
+
+import { AttachmentBuilder } from 'discord.js';
 
 import { countChannelMessages } from '../runtime/channel-activity.js';
 
@@ -167,6 +170,15 @@ export interface BcGrid {
   tiles(options: { x?: number; y?: number; columns: number; rows: number; size: number; gap?: number; colors: string[] }): TileRect[];
 }
 
+export interface BcCanvas {
+  /** Crée un canvas (`$canvasCreate`) : largeur et hauteur de 1 à 4096, fond optionnel (nom CSS ou hex). Renvoie un canvas node-canvas ; `getContext('2d')` pour dessiner. */
+  create(width: number, height: number, background?: string): unknown;
+  /** Dessine des rectangles de `bc.grid.tiles` sur un contexte 2D. */
+  drawTiles(ctx: unknown, tiles: TileRect[]): void;
+  /** Pièce jointe PNG (`$attachImage`) d'un canvas ou d'un Buffer : à mettre dans `files: [...]`. */
+  attach(source: unknown, name?: string): AttachmentBuilder;
+}
+
 export interface BcActivity {
   /** Messages envoyés dans le salon pendant les N dernières minutes (`$channelMessageCount`), sans lire le texte. */
   messageCount(channelId: string, minutes?: number, humansOnly?: boolean): number;
@@ -251,6 +263,48 @@ export function createBcGrid(): BcGrid {
         });
       }
       return out;
+    },
+  };
+}
+
+const MAX_CANVAS_SIDE = 4096;
+
+export function createBcCanvas(): BcCanvas {
+  const load = (): { createCanvas(w: number, h: number): any } => {
+    try {
+      return createRequire(import.meta.url)('canvas');
+    } catch {
+      throw new Error('The canvas library is not available in this runner.');
+    }
+  };
+  return {
+    create(width, height, background) {
+      if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_CANVAS_SIDE || height > MAX_CANVAS_SIDE) {
+        throw new Error(`The canvas size must be integers between 1 and ${MAX_CANVAS_SIDE}.`);
+      }
+      const canvas = load().createCanvas(width, height);
+      if (background) {
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = background;
+        ctx.fillRect(0, 0, width, height);
+      }
+      return canvas;
+    },
+    drawTiles(ctx, tiles) {
+      const c = ctx as { fillStyle: string; fillRect(x: number, y: number, w: number, h: number): void };
+      for (const t of tiles) {
+        c.fillStyle = t.color;
+        c.fillRect(t.x, t.y, t.width, t.height);
+      }
+    },
+    attach(source, name = 'canvas.png') {
+      const buffer = Buffer.isBuffer(source)
+        ? source
+        : typeof (source as { toBuffer?: unknown })?.toBuffer === 'function'
+          ? (source as { toBuffer(type: string): Buffer }).toBuffer('image/png')
+          : null;
+      if (!buffer) throw new Error('attach expects a canvas or a Buffer.');
+      return new AttachmentBuilder(buffer, { name: /\.[a-z0-9]+$/i.test(name) ? name : `${name}.png` });
     },
   };
 }
