@@ -37,6 +37,9 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-reco
     libjpeg62-turbo \
     libgif7 \
     librsvg2-2 \
+    fontconfig \
+    fonts-dejavu-core \
+    fonts-noto-color-emoji \
     gosu \
     && rm -rf /var/lib/apt/lists/*
 
