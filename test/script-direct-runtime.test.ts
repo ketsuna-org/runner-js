@@ -171,14 +171,14 @@ describe('ScriptDirectRuntime', () => {
 });
 
 describe('ScriptDirectRuntime : global fn', () => {
-  it('fn est le 20e et dernier paramètre de portée (voice vient juste avant console)', async () => {
+  it('fn est le 21e et dernier paramètre de portée (bc juste avant, voice avant console)', async () => {
     const executor = createDirectExecutor();
     const result = await executor.execute(
       'return [arguments.length, typeof fn];',
       { client: {} as never, config: { token: 'x' } as never, variables: {} },
       createLogger(),
     );
-    expect(result).toEqual([20, 'object']);
+    expect(result).toEqual([21, 'object']);
     executor.dispose();
   });
 

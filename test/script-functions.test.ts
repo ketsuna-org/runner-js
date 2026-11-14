@@ -479,6 +479,7 @@ const EXPECTED_SCOPE_NAMES = [
   'require',
   'setTimeout',
   'clearTimeout',
+  'bc',
   'fn',
 ];
 
@@ -489,7 +490,7 @@ function load(raw: unknown) {
 }
 
 describe('paramètres de portée', () => {
-  it('fn est ajouté EN FIN de la liste, sans autre nouveau paramètre', () => {
+  it('bc (services Bot Creator) puis fn terminent la liste, sans autre nouveau paramètre', () => {
     expect([...SCOPE_PARAM_NAMES]).toEqual(EXPECTED_SCOPE_NAMES);
   });
 });

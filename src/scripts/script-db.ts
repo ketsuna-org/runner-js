@@ -27,6 +27,8 @@ export interface ScriptDbGlobalApi {
   get(key: string): Promise<unknown>;
   set(key: string, value: unknown): Promise<void>;
   delete(key: string): Promise<void>;
+  /** Noms des variables globales (celles écrites par les scripts et celles de la configuration). */
+  keys(): Promise<string[]>;
 }
 
 export interface ScriptDbScopedApi {
@@ -101,6 +103,7 @@ export class ScriptDb {
       get: (key) => this.getGlobal(key),
       set: (key, value) => this.setGlobal(key, value),
       delete: (key) => this.deleteGlobal(key),
+      keys: () => this.globalKeys(),
     };
     this.user = this.createScopedApi('user');
     this.guild = this.createScopedApi('guild');
@@ -588,6 +591,11 @@ export class ScriptDb {
     }
     await this.#store.setGlobalVariable(this.#botId, normalizedKey, value);
     this.#variables[normalizedKey] = value;
+  }
+
+  async globalKeys(): Promise<string[]> {
+    const stored = await this.#store.getGlobalVariables(this.#botId);
+    return [...new Set([...Object.keys(this.#config.globalVariables ?? {}), ...Object.keys(stored)])];
   }
 
   async deleteGlobal(key: string): Promise<void> {

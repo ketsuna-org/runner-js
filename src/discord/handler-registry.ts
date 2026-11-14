@@ -1,3 +1,4 @@
+import { recordChannelMessage } from '../runtime/channel-activity.js';
 import {
   Events,
   PermissionsBitField,
@@ -256,7 +257,11 @@ export class HandlerRegistry {
     this.disposers.push(() => this.client.off(Events.InteractionCreate, onInteraction));
 
     {
-      const onMessage = (message: Message) => this.handleMessage(message);
+      const onMessage = (message: Message) => {
+        // Compteur d'activité (sans le texte) pour `bc.activity.messageCount`.
+        recordChannelMessage(this.botId, message.channelId, !message.author?.bot && !message.webhookId);
+        return this.handleMessage(message);
+      };
 
       this.client.on(Events.MessageCreate, onMessage);
       this.disposers.push(() => this.client.off(Events.MessageCreate, onMessage));
@@ -1012,7 +1017,31 @@ function interactionMatchesCustomId(interaction: Interaction | undefined, custom
   if (!interaction) return false;
   const isComponent = typeof interaction.isMessageComponent === 'function' && interaction.isMessageComponent();
   const isModal = typeof interaction.isModalSubmit === 'function' && interaction.isModalSubmit();
-  return (isComponent || isModal) && (interaction as { customId?: string }).customId === customId;
+  if (!isComponent && !isModal) return false;
+  return customIdMatchesFilter((interaction as { customId?: string }).customId, customId);
+}
+
+/**
+ * Filtre de custom ID : motifs séparés par des virgules, `*` remplace n'importe quelle suite de caractères
+ * (`forge-*` couvre `forge-cook-7-42`). Sans `*`, égalité exacte.
+ */
+export function customIdMatchesFilter(customId: string | undefined, filter: string): boolean {
+  const patterns = filter.split(',').map(p => p.trim()).filter(Boolean);
+  if (patterns.length === 0) return true;
+  if (customId === undefined) return false;
+  return patterns.some(pattern => {
+    if (!pattern.includes('*')) return pattern === customId;
+    const parts = pattern.split('*');
+    if (!customId.startsWith(parts[0]!)) return false;
+    let pos = parts[0]!.length;
+    for (let i = 1; i < parts.length - 1; i++) {
+      const idx = customId.indexOf(parts[i]!, pos);
+      if (idx < 0) return false;
+      pos = idx + parts[i]!.length;
+    }
+    const last = parts[parts.length - 1]!;
+    return customId.length - pos >= last.length && customId.endsWith(last);
+  });
 }
 
 function isMessage(value: unknown): value is Message {
