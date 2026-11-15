@@ -939,6 +939,7 @@ export class HandlerRegistry {
       scheduled?: { id: string };
       interaction?: Interaction;
       message?: Message;
+      invocation?: MessageInvocation;
       webhook?: { path: string };
     },
     ok: boolean,
@@ -962,6 +963,9 @@ export class HandlerRegistry {
         ok,
         ms,
         error,
+        statName: kind === 'command' ? name : kind === 'message' ? partial.invocation?.name : undefined,
+        locale: (partial.interaction as { locale?: string } | undefined)?.locale,
+        guildLocale: (partial.interaction as { guildLocale?: string } | undefined)?.guildLocale,
       });
     } catch {
       // une trace ne casse jamais l'exécution
@@ -1180,6 +1184,10 @@ export interface HandlerTrace {
   ok: boolean;
   ms: number;
   error?: string;
+  /** Nom de commande à compter dans le Dashboard (slash ou préfixe/mention/sans préfixe); absent sinon. */
+  statName?: string;
+  locale?: string;
+  guildLocale?: string;
 }
 
 export function traceKindAndName(partial: {

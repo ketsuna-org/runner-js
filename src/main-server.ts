@@ -2,6 +2,7 @@ import { ManagedAiGateway } from './ai/ai-gateway.js';
 import { loadRunnerEnv, validateRunnerWebConfiguration } from './config/env.js';
 import { createHttpServer } from './http/server.js';
 import { bootstrapFromPool } from './pool/bootstrap.js';
+import { CommandStatsShipper, setCommandStatsShipper } from './runtime/command-stats-shipper.js';
 import { LogShipper } from './runtime/log-shipper.js';
 import { LogStore } from './runtime/log-store.js';
 import { RuntimeController } from './runtime/runtime-controller.js';
@@ -19,10 +20,15 @@ export async function startMainServer(): Promise<void> {
 
   // Journal durable: avec un Manager (runner géré ou pool), les lignes partent aussi par lots vers lui.
   let logShipper: LogShipper | null = null;
+  let statsShipper: CommandStatsShipper | null = null;
   if (env.managedRunnerApi.trim() && env.managedRunnerToken.trim()) {
     logShipper = new LogShipper({ baseUrl: env.managedRunnerApi, token: env.managedRunnerToken });
     logStore.setShipper(logShipper);
     logShipper.start();
+    // Statistiques du Dashboard des commandes: même Manager, même jeton.
+    statsShipper = new CommandStatsShipper({ baseUrl: env.managedRunnerApi, token: env.managedRunnerToken });
+    setCommandStatsShipper(statsShipper);
+    statsShipper.start();
   }
 
   // Fonctions IA du langage (`bc.ai`) : seulement avec un Manager (runner géré ou pool).
@@ -52,6 +58,7 @@ export async function startMainServer(): Promise<void> {
     logStore.append('info', `Shutting down (${signal})...`);
     await runtime.dispose();
     await logShipper?.stop();
+    await statsShipper?.stop();
     server.stop(true);
     process.exit(0);
   };

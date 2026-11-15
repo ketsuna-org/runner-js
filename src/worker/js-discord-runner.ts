@@ -1,3 +1,4 @@
+import { getCommandStatsShipper } from '../runtime/command-stats-shipper.js';
 import path from 'node:path';
 
 import { Client, Events } from 'discord.js';
@@ -314,6 +315,18 @@ export class JsDiscordRunner {
     // Une trace par exécution traitée, envoyée au journal durable (audience support); ni le tampon local
     // ni le fichier ne la reçoivent, pour ne pas noyer les lignes utiles.
     this.registry.setTraceEmitter((trace) => {
+      if (trace.statName) {
+        getCommandStatsShipper()?.record({
+          botId: this.botId,
+          command: trace.statName,
+          guildId: trace.guildId,
+          locale: trace.locale,
+          guildLocale: trace.guildLocale,
+          ok: trace.ok,
+          ms: trace.ms,
+          error: trace.error,
+        });
+      }
       const label = trace.name ? `${trace.kind} ${trace.name}` : trace.kind;
       this.onLog(
         trace.ok ? 'info' : 'warn',
