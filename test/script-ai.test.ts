@@ -55,6 +55,28 @@ describe('bc.ai', () => {
     ]);
   });
 
+  it('passes the command or workflow of the running script to the gateway', async () => {
+    const { gateway, calls } = fakeGateway([{ content: 'ok', toolCalls: [] }]);
+    setAiGateway(gateway);
+    await run(`return await bc.ai.ask('hi')`, { origin: { kind: 'command', name: 'ask' } });
+    expect((calls[0] as { origin?: unknown }).origin).toEqual({ kind: 'command', name: 'ask' });
+  });
+
+  it('sends the origin to the Manager as command or workflow', async () => {
+    let body: Record<string, unknown> = {};
+    const gw = new ManagedAiGateway({
+      baseUrl: 'http://m',
+      token: 't',
+      fetchImpl: (async (_url: unknown, init: { body: string }) => {
+        body = JSON.parse(init.body);
+        return new Response(JSON.stringify({ message: { content: 'x' }, remaining_tokens: 1 }), { status: 200 });
+      }) as never,
+    });
+    await gw.complete({ botId: '1', key: 'k', fn: 'ai', messages: [], origin: { kind: 'workflow', name: 'world_tick' } });
+    expect(body.workflow).toBe('world_tick');
+    expect(body.command).toBeUndefined();
+  });
+
   it('ask sends prompt, system prompt and token limit', async () => {
     const { gateway, calls } = fakeGateway([{ content: ' Seven ', toolCalls: [] }]);
     setAiGateway(gateway);

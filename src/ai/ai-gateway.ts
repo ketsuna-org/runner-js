@@ -48,6 +48,8 @@ export interface AiGateway {
     maxTokens?: number;
     /** Utilisateur Discord à l'origine de l'appel (limite par joueur côté Manager). */
     userId?: string;
+    /** Commande ou workflow dont le script appelle la fonction IA (statistiques de crédits). */
+    origin?: { kind: 'command' | 'workflow'; name: string };
   }): Promise<AiReply>;
   /** Crédits restants, en tokens (1 crédit = 1000 tokens). */
   remainingTokens(botId: string): Promise<number>;
@@ -115,6 +117,7 @@ export class ManagedAiGateway implements AiGateway {
     maxTokens?: number;
     /** Utilisateur Discord à l'origine de l'appel (limite par joueur côté Manager). */
     userId?: string;
+    origin?: { kind: 'command' | 'workflow'; name: string };
   }): Promise<AiReply> {
     const body = JSON.stringify({
       key: request.key,
@@ -123,6 +126,7 @@ export class ManagedAiGateway implements AiGateway {
       ...(request.tools && request.tools.length > 0 ? { tools: request.tools } : {}),
       ...(request.maxTokens ? { max_tokens: request.maxTokens } : {}),
       ...(request.userId ? { user_id: request.userId } : {}),
+      ...(request.origin?.name ? { [request.origin.kind]: request.origin.name } : {}),
     });
     const url = `${this.#baseUrl}/bots/${encodeURIComponent(request.botId)}/ai/complete`;
     // Un seul rejeu, avec la même clé : le Manager ne débite pas deux fois une clé déjà vue.
