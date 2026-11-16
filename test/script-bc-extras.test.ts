@@ -75,6 +75,24 @@ describe('bc.forum', () => {
     expect(created?.appliedTags).toEqual(['5']);
     await expect(f.createPost('1', 'Town', 'x', { tags: ['nope'] })).rejects.toThrow();
   });
+  test('passes the audit log reason, like the reason argument of the BDFD functions', async () => {
+    let created: Record<string, unknown> | undefined;
+    const forum = {
+      availableTags: [{ id: '5', name: 'City' }],
+      threads: { create: async (o: Record<string, unknown>) => ((created = o), { id: '90' }) },
+    };
+    const applied: unknown[][] = [];
+    const thread = { parent: forum, setAppliedTags: async (...a: unknown[]) => void applied.push(a) };
+    const f = createBcForum(() => ({ channels: { fetch: async (id: string) => (id === '7' ? thread : forum) } }));
+    await f.createPost('1', 'Town', 'Founded', { reason: '  New town  ' });
+    expect(created?.reason).toBe('New town');
+    await f.createPost('1', 'Town', 'Founded');
+    expect(created && 'reason' in created).toBe(false);
+    await f.setTags('7', ['city'], 'Retag');
+    await f.setTags('7', ['city']);
+    expect(applied).toEqual([[['5'], 'Retag'], [['5']]]);
+    await expect(f.createPost('1', 'Town', 'x', { reason: 'x'.repeat(513) })).rejects.toThrow(/512/);
+  });
 });
 
 import { clearChannelActivity, countChannelMessages, recordChannelMessage } from '../src/runtime/channel-activity.js';

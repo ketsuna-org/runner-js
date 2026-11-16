@@ -351,7 +351,7 @@ interface ForumLike {
 interface ThreadLike {
   id: string;
   parent?: ForumLike | null;
-  setAppliedTags?(tags: string[]): Promise<unknown>;
+  setAppliedTags?(tags: string[], reason?: string): Promise<unknown>;
 }
 
 export interface BcForumPostOptions {
@@ -361,6 +361,8 @@ export interface BcForumPostOptions {
   archiveMinutes?: number;
   /** Fichiers joints au premier message (pièces d'un message discord.js). */
   files?: unknown[];
+  /** Motif du journal d'audit (`X-Audit-Log-Reason`, 512 caractères au plus), comme l'argument `reason` de `$createForumPost`. */
+  reason?: string;
 }
 
 export interface BcForum {
@@ -368,8 +370,14 @@ export interface BcForum {
   createPost(forumId: string, title: string, message: string, options?: BcForumPostOptions): Promise<string>;
   /** Liste les étiquettes (`$forumTags`). */
   tags(forumId: string): Promise<ForumTag[]>;
-  /** Remplace les étiquettes d'un post (`$setThreadTags`). */
-  setTags(threadId: string, tags: string[]): Promise<void>;
+  /** Remplace les étiquettes d'un post (`$setThreadTags`). `reason` : motif du journal d'audit (512 caractères au plus). */
+  setTags(threadId: string, tags: string[], reason?: string): Promise<void>;
+}
+
+function auditReason(raw: unknown): string | undefined {
+  const reason = typeof raw === 'string' ? raw.trim() : '';
+  if (reason.length > 512) throw new Error('Reason must not exceed 512 characters.');
+  return reason === '' ? undefined : reason;
 }
 
 function resolveTags(available: ForumTag[], wanted: string[]): string[] {
@@ -405,11 +413,13 @@ export function createBcForum(getClient: () => unknown): BcForum {
       if (![60, 1440, 4320, 10080].includes(archive)) throw new Error('Invalid thread archive duration.');
       const forum = await forumOf(forumId);
       const tags = resolveTags(forum.availableTags ?? [], options.tags ?? []);
+      const reason = auditReason(options.reason);
       const thread = await forum.threads!.create({
         name: title,
         autoArchiveDuration: archive,
         message: { ...(message.trim() ? { content: message } : {}), ...(options.files ? { files: options.files } : {}) },
         ...(tags.length ? { appliedTags: tags } : {}),
+        ...(reason ? { reason } : {}),
       });
       return String(thread.id);
     },
@@ -417,10 +427,13 @@ export function createBcForum(getClient: () => unknown): BcForum {
       const forum = await forumOf(forumId);
       return (forum.availableTags ?? []).map((t) => ({ id: String(t.id), name: t.name }));
     },
-    async setTags(threadId, tags) {
+    async setTags(threadId, tags, reason) {
       const thread = (await channels().fetch(String(threadId).trim())) as ThreadLike | null;
       if (!thread?.parent || !thread.setAppliedTags) throw new Error('The channel is not a forum post.');
-      await thread.setAppliedTags(resolveTags(thread.parent.availableTags ?? [], tags));
+      const audit = auditReason(reason);
+      const applied = resolveTags(thread.parent.availableTags ?? [], tags);
+      if (audit) await thread.setAppliedTags(applied, audit);
+      else await thread.setAppliedTags(applied);
     },
   };
 }
