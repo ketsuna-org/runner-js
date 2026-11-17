@@ -50,6 +50,8 @@ export interface BcAiContext {
   guild?: unknown;
   channel?: unknown;
   db?: unknown;
+  /** Commande ou workflow du script en cours (statistiques de crédits IA). */
+  origin?: { kind: 'command' | 'workflow'; name: string };
 }
 
 const DECIDE_SYSTEM =
@@ -155,6 +157,7 @@ export function createBcGlobal(
       const reply = await gw.complete({
         botId: id,
         userId: triggerUserId(context),
+        origin: context.origin,
         key: randomUUID(),
         fn,
         messages: [
@@ -234,6 +237,7 @@ export function createBcGlobal(
             const reply = await gw.complete({
               botId: id,
               userId: triggerUserId(context),
+        origin: context.origin,
               key: `${runKey}:${i}`,
               fn: 'aiAgent',
               messages,

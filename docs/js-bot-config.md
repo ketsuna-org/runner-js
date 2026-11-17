@@ -565,8 +565,10 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
 | `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
-| `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files})` | `$createForumPost` |
-| `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags)` | `$forumTags` / `$setThreadTags` |
+| `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files, reason})` | `$createForumPost` (`reason` : motif du journal d'audit) |
+| `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags, reason?)` | `$forumTags` / `$setThreadTags` |
+
+Motif du journal d'audit : les fonctions BDFD acceptent un dernier argument `reason` (ou `$auditLogReason[texte]` pour tout le script). En JavaScript, discord.js le fait déjà partout : `member.ban({ reason })`, `member.roles.add(role, reason)`, `channel.delete(reason)`, etc.
 
 Portées : `user`, `guild`, `channel`, `message`, `guildMember`, `global`. Pour éditer un message avec une nouvelle image,
 discord.js le fait déjà : `message.edit({ files: [...] })`.

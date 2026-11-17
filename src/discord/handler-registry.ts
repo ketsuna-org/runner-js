@@ -837,6 +837,7 @@ export class HandlerRegistry {
       await perfPhase('script', () => this.executor.execute(
         script,
         {
+          origin: scriptOrigin(partial),
           client: this.client,
           config: this.config,
           variables,
@@ -939,6 +940,7 @@ export class HandlerRegistry {
       scheduled?: { id: string };
       interaction?: Interaction;
       message?: Message;
+      invocation?: MessageInvocation;
       webhook?: { path: string };
     },
     ok: boolean,
@@ -962,6 +964,9 @@ export class HandlerRegistry {
         ok,
         ms,
         error,
+        statName: kind === 'command' ? name : kind === 'message' ? partial.invocation?.name : undefined,
+        locale: (partial.interaction as { locale?: string } | undefined)?.locale,
+        guildLocale: (partial.interaction as { guildLocale?: string } | undefined)?.guildLocale,
       });
     } catch {
       // une trace ne casse jamais l'exécution
@@ -1180,6 +1185,30 @@ export interface HandlerTrace {
   ok: boolean;
   ms: number;
   error?: string;
+  /** Nom de commande à compter dans le Dashboard (slash ou préfixe/mention/sans préfixe); absent sinon. */
+  statName?: string;
+  locale?: string;
+  guildLocale?: string;
+}
+
+/**
+ * Commande ou workflow à l'origine d'un script, pour étiqueter les appels des fonctions IA dans les statistiques de
+ * crédits : commande slash ou à préfixe, tâche planifiée et webhook entrant (les workflows). Sans nom connu
+ * (message, événement, composant), `undefined`.
+ */
+export function scriptOrigin(partial: {
+  scheduled?: { id: string };
+  interaction?: Interaction;
+  message?: Message;
+  invocation?: { name?: string };
+  webhook?: { path: string };
+}): { kind: 'command' | 'workflow'; name: string } | undefined {
+  const commandName = (partial.interaction as { commandName?: string } | undefined)?.commandName;
+  if (commandName) return { kind: 'command', name: commandName };
+  if (partial.invocation?.name) return { kind: 'command', name: partial.invocation.name };
+  if (partial.scheduled?.id) return { kind: 'workflow', name: partial.scheduled.id };
+  if (partial.webhook?.path) return { kind: 'workflow', name: partial.webhook.path };
+  return undefined;
 }
 
 export function traceKindAndName(partial: {
