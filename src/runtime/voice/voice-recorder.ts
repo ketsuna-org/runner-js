@@ -91,7 +91,9 @@ interface TrackWriter {
   path: string;
   name: string;
   done: Promise<void>;
-  destroy: () => void;
+  packets: number;
+  /** Termine proprement : le muxer écrit sa dernière page et la fin de flux (l'audio déjà reçu est conservé). */
+  end: () => void;
 }
 
 interface Session {
@@ -188,7 +190,7 @@ export class VoiceRecorderManager {
     const session = this.sessions.get(guildId);
     if (session) {
       session.consentCache.set(id, { until: Date.now() + CONSENT_CACHE_MS, ok: false, external: false });
-      session.writers.get(id)?.destroy(); // l'écoute s'arrête immédiatement
+      session.writers.get(id)?.end(); // l'écoute s'arrête immédiatement, l'audio d'avant le retrait est conservé
       session.writers.delete(id);
     }
   }
@@ -353,6 +355,17 @@ export class VoiceRecorderManager {
     };
     session.onSpeaking = (userId) => void this.listen(session, userId).catch(() => undefined);
     connection.receiver.speaking.on('start', session.onSpeaking);
+    // Diagnostic (borné) : transitions DAVE/MLS et échecs de déchiffrement, visibles dans les journaux du bot.
+    let diagnostics = 0;
+    connection.on('debug', (message: string) => {
+      if (diagnostics < 40 && /dave|mls|epoch|transition|decrypt|fail|error|ssrc/i.test(message)) {
+        diagnostics++;
+        this.log('info', `[recorder] voice debug: ${message.slice(0, 200)}`);
+      }
+    });
+    connection.receiver.speaking.on('start', (userId: string) =>
+      this.log('info', `[recorder] speaking event for ${userId}`),
+    );
     connection.on('stateChange', (_old, next) => {
       if (next.status === VoiceConnectionStatus.Destroyed || next.status === VoiceConnectionStatus.Disconnected) {
         if (this.sessions.get(guild.id) === session) void this.stop(guild.id, 'connection-lost').catch(() => undefined);
@@ -386,18 +399,34 @@ export class VoiceRecorderManager {
     });
     const ogg = new OggOpusMuxer(2);
     const file = createWriteStream(path);
-    const done = new Promise<void>((resolve) => {
+    const writer: TrackWriter = {
+      userId,
+      external: consent.external,
+      path,
+      name,
+      packets: 0,
+      done: Promise.resolve(),
+      end: () => {
+        // Fin propre du flux (et non destroy) : rien de ce qui est déjà reçu n'est perdu.
+        if (!opus.destroyed && !opus.readableEnded) opus.push(null);
+      },
+    };
+    opus.on('data', () => {
+      writer.packets++;
+    });
+    writer.done = new Promise<void>((resolve) => {
       pipeline(opus, ogg, file, (error) => {
         if (error && (error as NodeJS.ErrnoException).code !== 'ERR_STREAM_PREMATURE_CLOSE') {
           this.log('warn', `[recorder] track ${name}: ${error.message}`);
         }
+        this.log('info', `[recorder] track ${name} closed: ${writer.packets} Opus packet(s)`);
         if (session.writers.get(userId) === writer) session.writers.delete(userId);
         resolve();
       });
     });
-    const writer: TrackWriter = { userId, external: consent.external, path, name, done, destroy: () => opus.destroy() };
     session.writers.set(userId, writer);
     session.allWriters.push(writer);
+    this.log('info', `[recorder] ${userId} is speaking, listening (consent ok)`);
   }
 
   async stop(guildId: string, reason: RecordingResult['reason'] = 'stopped'): Promise<RecordingResult> {
@@ -410,7 +439,7 @@ export class VoiceRecorderManager {
   private async finish(session: Session, reason: RecordingResult['reason']): Promise<RecordingResult> {
     clearTimeout(session.timer);
     session.connection.receiver.speaking.off('start', session.onSpeaking);
-    for (const writer of session.writers.values()) writer.destroy();
+    for (const writer of session.writers.values()) writer.end();
     await Promise.all(session.allWriters.map((w) => w.done));
     try {
       session.connection.destroy();
@@ -421,6 +450,7 @@ export class VoiceRecorderManager {
 
     const tracks: RecordedTrack[] = [];
     for (const writer of session.allWriters) {
+      if (writer.packets <= 0) continue; // aucun paquet audio reçu : pas de piste vide
       const bytes = (await stat(writer.path).catch(() => null))?.size ?? 0;
       if (bytes <= 0) continue;
       const buffer = await readFile(writer.path);
