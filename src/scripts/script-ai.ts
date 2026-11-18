@@ -50,6 +50,7 @@ export interface BcAiContext {
   guild?: unknown;
   channel?: unknown;
   db?: unknown;
+  recorder?: import('../runtime/voice/voice-recorder.js').VoiceRecorderApi;
   /** Commande ou workflow du script en cours (statistiques de crédits IA). */
   origin?: { kind: 'command' | 'workflow'; name: string };
 }
@@ -132,7 +133,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -283,5 +284,7 @@ export function createBcGlobal(
     activity: createBcActivity(botId()),
     grid: createBcGrid(),
     canvas: createBcCanvas(),
+    // Expérimental : `undefined` hors d'un serveur ou si le moteur n'est pas branché.
+    recorder: context.recorder,
   };
 }

@@ -29,6 +29,8 @@ export interface ScriptExecutionContext {
   origin?: ScriptOrigin;
   /** Musique du bot (global `voice`), liée au serveur du déclencheur. */
   voice?: import('../runtime/music/music-manager.js').VoiceApi;
+  /** Enregistrement vocal expérimental (`bc.recorder`), lié au serveur du déclencheur. */
+  recorder?: import('../runtime/voice/voice-recorder.js').VoiceRecorderApi;
 }
 
 export interface ScriptLogger {

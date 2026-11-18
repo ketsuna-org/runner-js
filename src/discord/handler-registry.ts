@@ -56,6 +56,7 @@ import { perfPhase, perfSettings, runWithProbe } from '../runtime/perf.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import type { DatabaseHandles } from '../runtime/database-manager.js';
 import type { MusicManager } from '../runtime/music/music-manager.js';
+import type { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -82,6 +83,7 @@ export interface HandlerRegistryOptions {
   scheduler?: ScheduledTasks;
   /** Musique du bot, fournie par le runner (global `voice` des scripts) ; absente = `voice` indéfini. */
   music?: MusicManager;
+  recorder?: VoiceRecorderManager;
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
@@ -116,6 +118,7 @@ export class HandlerRegistry {
   private readonly scriptLogger: ScriptLogger;
   private databaseHandles?: DatabaseHandles;
   private readonly music?: MusicManager;
+  private readonly recorder?: VoiceRecorderManager;
   private readonly variableStore: VariableDatabase;
   private readonly prefixResolver: PrefixResolver;
   private readonly messageContentAvailable: boolean;
@@ -143,6 +146,7 @@ export class HandlerRegistry {
   ) {
     this.databaseHandles = databaseHandles;
     this.music = options.music;
+    this.recorder = options.recorder;
     this.messageContentAvailable = options.messageContentAvailable === true;
     this.now = options.now ?? Date.now;
     this.prefixResolver = new PrefixResolver({
@@ -853,6 +857,7 @@ export class HandlerRegistry {
               (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
               null,
           }),
+          recorder: this.recorder?.forGuild(scriptGuild as Guild | null),
           // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
           // et `channel` résolus, même hors cache.
           interaction: partial.interaction

@@ -41,6 +41,7 @@ import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
+import { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
 import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
@@ -71,6 +72,7 @@ export class JsDiscordRunner {
   private executor: ScriptExecutor | null = null;
   private databaseManager: DatabaseManager | null = null;
   private music: MusicManager | null = null;
+  private recorder: VoiceRecorderManager | null = null;
   private startedAt: string | null = null;
   private lastError: string | null = null;
   private effectiveIntents: Record<string, boolean> = {};
@@ -295,6 +297,7 @@ export class JsDiscordRunner {
     this.databaseManager = new DatabaseManager(this.config.databaseConfig);
     this.music = new MusicManager(this.client, (level, message) => this.onLog(level, message, 'script'));
     this.music.setConfig(this.config.lavalink);
+    this.recorder = new VoiceRecorderManager(this.client, (level, message) => this.onLog(level, message, 'script'));
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
@@ -310,6 +313,7 @@ export class JsDiscordRunner {
         messageContentAvailable: Boolean(this.effectiveIntents['Message Content']),
         scheduler: this.scheduler,
         music: this.music,
+        recorder: this.recorder,
       },
     );
     // Une trace par exécution traitée, envoyée au journal durable (audience support); ni le tampon local
@@ -546,6 +550,8 @@ export class JsDiscordRunner {
     this.executor = null;
     await this.music?.dispose();
     this.music = null;
+    await this.recorder?.dispose();
+    this.recorder = null;
     await this.databaseManager?.dispose();
     this.databaseManager = null;
 
