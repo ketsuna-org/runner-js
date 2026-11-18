@@ -41,6 +41,7 @@ import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
+import { ConsentStore } from '../runtime/voice/consent.js';
 import { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
 import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
@@ -297,7 +298,11 @@ export class JsDiscordRunner {
     this.databaseManager = new DatabaseManager(this.config.databaseConfig);
     this.music = new MusicManager(this.client, (level, message) => this.onLog(level, message, 'script'));
     this.music.setConfig(this.config.lavalink);
-    this.recorder = new VoiceRecorderManager(this.client, (level, message) => this.onLog(level, message, 'script'));
+    this.recorder = new VoiceRecorderManager(
+      this.client,
+      (level, message) => this.onLog(level, message, 'script'),
+      new ConsentStore(this.variableStore, this.botId),
+    );
     this.registry = new HandlerRegistry(
       this.client,
       this.config,

@@ -11,8 +11,23 @@ import {
   joinVoiceChannel,
   type VoiceConnection,
 } from '@discordjs/voice';
-import type { Client, Guild } from 'discord.js';
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  PermissionFlagsBits,
+  type Client,
+  type Guild,
+  type Interaction,
+} from 'discord.js';
 
+import {
+  CONSENT_TEXT_VERSION,
+    REFERENCE_TEXT,
+  type ConsentStore,
+  normalizeLocale,
+  renderPrompt,
+} from './consent.js';
 import { OggOpusMuxer } from './ogg-opus.js';
 import { clientHasGuildVoiceStatesIntent } from '../../discord/discord-client-options.js';
 
@@ -20,8 +35,9 @@ import { clientHasGuildVoiceStatesIntent } from '../../discord/discord-client-op
  * Enregistrement vocal EXPÉRIMENTAL (staging seulement, voir DESIGN-flux-vocal.md).
  *
  * Règles non négociables, appliquées ici et non dans le script :
- *  - seules les personnes qui ont donné leur consentement sont enregistrées : l'audio des autres n'est
- *    jamais lu (aucun abonnement au flux de la personne) ;
+ *  - seules les personnes qui ont donné leur consentement (bouton du message standard, valable 6 mois,
+ *    mémorisé par serveur) sont enregistrées : l'audio des autres n'est jamais lu. Un script ne peut pas
+ *    consentir à la place de quelqu'un ;
  *  - une annonce est envoyée dans un salon textuel au démarrage et à l'arrêt, impossible à désactiver ;
  *  - durée bornée, nombre de personnes borné, fichiers temporaires effacés dès la lecture ;
  *  - une seule connexion vocale par serveur : refus si le bot est déjà dans un salon (musique incluse).
@@ -36,8 +52,6 @@ export interface RecorderStartOptions {
   channelId: string;
   /** Salon textuel où l'annonce est publiée (obligatoire). */
   announceChannelId: string;
-  /** Personnes déjà consentantes ; d'autres peuvent s'ajouter avec `consent()` pendant la session. */
-  consentUserIds?: string[];
   /** Durée maximale en secondes (300 par défaut, 600 au plus) : l'enregistrement s'arrête seul. */
   maxSeconds?: number;
 }
@@ -46,6 +60,8 @@ export interface RecordedTrack {
   userId: string;
   name: string;
   bytes: number;
+  /** Vrai si la personne a aussi accepté l'envoi à un service externe : à vérifier avant tout envoi HTTP. */
+  externalConsent: boolean;
   /** Pièce prête pour `channel.send({ files: [track.file] })`. */
   file: { attachment: Buffer; name: string };
 }
@@ -63,7 +79,6 @@ export interface RecorderStatus {
   id?: string;
   channelId?: string;
   startedAt?: number;
-  consentUserIds: string[];
   recordingUserIds: string[];
 }
 
@@ -71,6 +86,7 @@ type LogFn = (level: 'info' | 'warn' | 'error' | 'debug', message: string) => vo
 
 interface TrackWriter {
   userId: string;
+  external: boolean;
   path: string;
   name: string;
   done: Promise<void>;
@@ -85,7 +101,8 @@ interface Session {
   startedAt: number;
   dir: string;
   connection: VoiceConnection;
-  consent: Set<string>;
+  /** Cache court des consentements lus dans le magasin (personne -> expiration du cache, externe). */
+  consentCache: Map<string, { until: number; ok: boolean; external: boolean }>;
   writers: Map<string, TrackWriter>;
   allWriters: TrackWriter[];
   timer: ReturnType<typeof setTimeout>;
@@ -108,23 +125,37 @@ function clean(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
 }
 
+const CONSENT_CACHE_MS = 15_000;
+const BUTTON_PREFIX = 'bcvc';
+
 export class VoiceRecorderManager {
   private readonly sessions = new Map<string, Session>();
   private disposed = false;
+  private readonly onInteraction = (interaction: Interaction): void => {
+    if (interaction.isButton() && interaction.customId.startsWith(`${BUTTON_PREFIX}:`)) {
+      void this.handleButton(interaction).catch((error) =>
+        this.log('warn', `[recorder] consent button failed: ${error instanceof Error ? error.message : String(error)}`),
+      );
+    }
+  };
 
   constructor(
     private readonly client: Client,
     private readonly log: LogFn,
+    private readonly store: ConsentStore,
     private readonly deps: RecorderDeps = defaultDeps,
     private readonly disabled: boolean = process.env.VOICE_RECORDER_DISABLED === '1',
-  ) {}
+  ) {
+    if (!this.disabled) client.on('interactionCreate', this.onInteraction);
+  }
 
-  forGuild(guild: Guild | null | undefined): VoiceRecorderApi {
-    return new VoiceRecorderApi(this, guild ?? null);
+  forGuild(guild: Guild | null | undefined, userId?: string | null): VoiceRecorderApi {
+    return new VoiceRecorderApi(this, guild ?? null, userId ?? null);
   }
 
   async dispose(): Promise<void> {
     this.disposed = true;
+    this.client.off('interactionCreate', this.onInteraction);
     for (const guildId of [...this.sessions.keys()]) {
       await this.stop(guildId).catch(() => undefined);
     }
@@ -132,18 +163,105 @@ export class VoiceRecorderManager {
 
   status(guildId: string): RecorderStatus {
     const session = this.sessions.get(guildId);
-    if (!session) return { active: false, consentUserIds: [], recordingUserIds: [] };
+    if (!session) return { active: false, recordingUserIds: [] };
     return {
       active: true,
       id: session.id,
       channelId: session.channelId,
       startedAt: session.startedAt,
-      consentUserIds: [...session.consent],
       recordingUserIds: [...session.writers.keys()],
     };
   }
 
-  async start(guild: Guild, options: RecorderStartOptions): Promise<{ id: string; channelId: string }> {
+  // ---- Consentement (permanent, par serveur, donné uniquement par la personne) ----
+
+  async hasConsent(guildId: string, userId: string): Promise<boolean> {
+    return (await this.store.valid(guildId, userId)) !== null;
+  }
+
+  /** Retire l'accord : la personne elle-même, ou quelqu'un qui peut gérer le serveur (vérifié par l'appelant). */
+  async withdraw(guildId: string, userId: string): Promise<void> {
+    const id = clean(userId);
+    if (!id) throw new Error('userId is required.');
+    await this.store.remove(guildId, id);
+    const session = this.sessions.get(guildId);
+    if (session) {
+      session.consentCache.set(id, { until: Date.now() + CONSENT_CACHE_MS, ok: false, external: false });
+      session.writers.get(id)?.destroy(); // l'écoute s'arrête immédiatement
+      session.writers.delete(id);
+    }
+  }
+
+  /** Poste le message standard (anglais d'abord, puis la traduction complète demandée) avec ses boutons. */
+  async consentPrompt(
+    guild: Guild,
+    options: { channelId: string; locale?: string; texts?: unknown },
+  ): Promise<{ messageId: string }> {
+    if (this.disabled || this.disposed) throw new Error('The voice recorder is disabled.');
+    const channelId = clean(options?.channelId);
+    const channel = guild.channels.cache.get(channelId) ?? (await guild.channels.fetch(channelId).catch(() => null));
+    if (!channel || !channel.isTextBased() || typeof (channel as { send?: unknown }).send !== 'function') {
+      throw new Error('channelId is not a text channel the bot can write in.');
+    }
+    const locale = normalizeLocale(options.locale);
+    if (options.texts !== undefined) {
+      if (!locale) throw new Error('locale is required with texts (for example "fr").');
+      await this.store.saveTranslation(guild.id, locale, options.texts);
+    }
+    const translations = await this.store.translations(guild.id);
+    if (locale && !translations[locale]) {
+      throw new Error(`No complete translation is saved for "${locale}": pass texts with every block.`);
+    }
+    const rendered = renderPrompt(locale, translations);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`${BUTTON_PREFIX}:accept`).setLabel(rendered.labels.accept).setStyle(ButtonStyle.Success),
+      new ButtonBuilder()
+        .setCustomId(`${BUTTON_PREFIX}:external`)
+        .setLabel(rendered.labels.acceptExternal)
+        .setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`${BUTTON_PREFIX}:withdraw`).setLabel(rendered.labels.withdraw).setStyle(ButtonStyle.Danger),
+    );
+    const sent = await (channel as unknown as { send: (m: unknown) => Promise<{ id: string }> }).send({
+      content: rendered.content,
+      components: [row],
+    });
+    this.log('info', `[recorder] consent prompt posted in ${channelId} (hash ${rendered.hash.slice(0, 12)})`);
+    return { messageId: sent.id };
+  }
+
+  private async handleButton(interaction: Interaction & { customId: string; guildId: string | null; user: { id: string }; locale?: string }): Promise<void> {
+    const action = interaction.customId.split(':')[1];
+    const guildId = interaction.guildId;
+    const reply = (interaction as unknown as { reply: (o: unknown) => Promise<unknown> }).reply.bind(interaction);
+    if (!guildId || (action !== 'accept' && action !== 'external' && action !== 'withdraw')) {
+      await reply({ content: 'This button only works in a server.', ephemeral: true });
+      return;
+    }
+    const translations = await this.store.translations(guildId);
+    const locale = normalizeLocale(interaction.locale);
+    const mine = locale ? translations[locale] : undefined;
+    // La preuve garde le texte réellement montré (anglais, plus la langue du message si elle existe).
+    const rendered = renderPrompt(mine ? locale : '', translations);
+    if (action === 'withdraw') {
+      await this.withdraw(guildId, interaction.user.id);
+      await reply({ content: mine?.withdrawn ?? REFERENCE_TEXT.withdrawn, ephemeral: true });
+      return;
+    }
+    await this.store.set(guildId, interaction.user.id, {
+      at: Date.now(),
+      version: CONSENT_TEXT_VERSION,
+      locale: rendered.locale,
+      hash: rendered.hash,
+      external: action === 'external',
+    });
+    const session = this.sessions.get(guildId);
+    session?.consentCache.delete(interaction.user.id);
+    await reply({ content: mine?.accepted ?? REFERENCE_TEXT.accepted, ephemeral: true });
+  }
+
+  // ---- Enregistrement ----
+
+  async start(guild: Guild, options: RecorderStartOptions): Promise<{ id: string; channelId: string; recordedUserIds: string[] }> {
     if (this.disabled || this.disposed) throw new Error('The voice recorder is disabled.');
     if (this.sessions.has(guild.id)) throw new Error('A recording is already running on this server.');
     if (!clientHasGuildVoiceStatesIntent(this.client)) {
@@ -154,13 +272,6 @@ export class VoiceRecorderManager {
     if (!channelId) throw new Error('channelId is required.');
     if (!announceChannelId) {
       throw new Error('announceChannelId is required: the recording must be announced in a text channel.');
-    }
-    const consent = new Set((options.consentUserIds ?? []).map(clean).filter(Boolean));
-    if (consent.size === 0) {
-      throw new Error('consentUserIds is required: nobody is recorded without their consent.');
-    }
-    if (consent.size > MAX_RECORDED_SPEAKERS) {
-      throw new Error(`At most ${MAX_RECORDED_SPEAKERS} people can be recorded at once.`);
     }
     const seconds = Math.min(
       MAX_RECORDING_SECONDS,
@@ -175,6 +286,18 @@ export class VoiceRecorderManager {
     }
     if (guild.members.me?.voice?.channelId) {
       throw new Error('The bot is already in a voice channel of this server (music or another recording).');
+    }
+
+    // Seules les personnes déjà dans le salon avec un consentement valide comptent au départ.
+    const present = [...(channel.members?.values?.() ?? [])].filter((m) => !m.user?.bot).map((m) => m.id);
+    const consenting: string[] = [];
+    for (const userId of present) {
+      if (await this.hasConsent(guild.id, userId)) consenting.push(userId);
+    }
+    if (consenting.length === 0) {
+      throw new Error(
+        'Nobody in this voice channel has an active consent. Post the consent message with bc.recorder.consentPrompt() and ask people to press "I agree".',
+      );
     }
 
     const id = `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -195,12 +318,12 @@ export class VoiceRecorderManager {
     }
 
     // L'annonce précède toute écoute : si elle échoue, rien n'est enregistré.
+    const names = consenting.slice(0, MAX_RECORDED_SPEAKERS).map((u) => `<@${u}>`).join(', ');
     try {
-      await (announce as unknown as { send: (m: string) => Promise<unknown> }).send(
-        `🔴 **Recording started** in <#${channelId}>. Only people who gave their consent are recorded (${[...consent]
-          .map((u) => `<@${u}>`)
-          .join(', ')}). Everyone else's audio is ignored. The recording stops automatically after ${Math.round(seconds / 60 * 10) / 10} min.`,
-      );
+      await (announce as unknown as { send: (m: unknown) => Promise<unknown> }).send({
+        content: `🔴 **Recording started** in <#${channelId}>. Being recorded (they agreed): ${names}. Everyone else is not recorded. Anyone can withdraw their consent at any time with the button of the consent message: recording of their voice stops immediately. The recording stops automatically after ${Math.round((seconds / 60) * 10) / 10} min.`,
+        allowedMentions: { parse: [] },
+      });
     } catch {
       connection.destroy();
       await rm(dir, { recursive: true, force: true });
@@ -215,13 +338,13 @@ export class VoiceRecorderManager {
       startedAt: Date.now(),
       dir,
       connection,
-      consent,
+      consentCache: new Map(),
       writers: new Map(),
       allWriters: [],
       timer: setTimeout(() => void this.stop(guild.id, 'max-duration').catch(() => undefined), seconds * 1000),
       onSpeaking: () => undefined,
     };
-    session.onSpeaking = (userId) => this.listen(session, userId);
+    session.onSpeaking = (userId) => void this.listen(session, userId).catch(() => undefined);
     connection.receiver.speaking.on('start', session.onSpeaking);
     connection.on('stateChange', (_old, next) => {
       if (next.status === VoiceConnectionStatus.Destroyed || next.status === VoiceConnectionStatus.Disconnected) {
@@ -229,31 +352,26 @@ export class VoiceRecorderManager {
       }
     });
     this.sessions.set(guild.id, session);
-    this.log('info', `[recorder] ${id} started in ${channelId} (${consent.size} consenting, max ${seconds}s)`);
-    return { id, channelId };
+    this.log('info', `[recorder] ${id} started in ${channelId} (${consenting.length} consenting present, max ${seconds}s)`);
+    return { id, channelId, recordedUserIds: consenting.slice(0, MAX_RECORDED_SPEAKERS) };
   }
 
-  consent(guildId: string, userId: string, granted: boolean): void {
-    const session = this.sessions.get(guildId);
-    if (!session) throw new Error('No recording is running on this server.');
-    const user = clean(userId);
-    if (!user) throw new Error('userId is required.');
-    if (granted) {
-      if (!session.consent.has(user) && session.consent.size >= MAX_RECORDED_SPEAKERS) {
-        throw new Error(`At most ${MAX_RECORDED_SPEAKERS} people can be recorded at once.`);
-      }
-      session.consent.add(user);
-    } else {
-      session.consent.delete(user);
-      // Retrait du consentement : l'écoute de la personne s'arrête immédiatement.
-      session.writers.get(user)?.destroy();
-      session.writers.delete(user);
-    }
+  /** Consentement valide, avec un cache de 15 s pour ne pas interroger le magasin à chaque rafale de parole. */
+  private async consentOf(session: Session, userId: string): Promise<{ ok: boolean; external: boolean }> {
+    const cached = session.consentCache.get(userId);
+    if (cached && cached.until > Date.now()) return cached;
+    const record = await this.store.valid(session.guildId, userId);
+    const entry = { until: Date.now() + CONSENT_CACHE_MS, ok: record !== null, external: record?.external === true };
+    session.consentCache.set(userId, entry);
+    return entry;
   }
 
-  private listen(session: Session, userId: string): void {
-    if (!session.consent.has(userId)) return; // aucun abonnement : l'audio n'est pas lu
-    if (session.writers.has(userId)) return;
+  private async listen(session: Session, userId: string): Promise<void> {
+    if (session.writers.has(userId) || session.stopping) return;
+    const consent = await this.consentOf(session, userId);
+    if (!consent.ok) return; // aucun abonnement : l'audio n'est pas lu
+    if (session.writers.has(userId) || session.stopping) return;
+    if (session.writers.size >= MAX_RECORDED_SPEAKERS) return;
     const name = `${userId}-${session.allWriters.length + 1}.ogg`;
     const path = join(session.dir, name);
     const opus = session.connection.receiver.subscribe(userId, {
@@ -270,7 +388,7 @@ export class VoiceRecorderManager {
         resolve();
       });
     });
-    const writer: TrackWriter = { userId, path, name, done, destroy: () => opus.destroy() };
+    const writer: TrackWriter = { userId, external: consent.external, path, name, done, destroy: () => opus.destroy() };
     session.writers.set(userId, writer);
     session.allWriters.push(writer);
   }
@@ -299,7 +417,13 @@ export class VoiceRecorderManager {
       const bytes = (await stat(writer.path).catch(() => null))?.size ?? 0;
       if (bytes <= 0) continue;
       const buffer = await readFile(writer.path);
-      tracks.push({ userId: writer.userId, name: writer.name, bytes, file: { attachment: buffer, name: writer.name } });
+      tracks.push({
+        userId: writer.userId,
+        name: writer.name,
+        bytes,
+        externalConsent: writer.external,
+        file: { attachment: buffer, name: writer.name },
+      });
     }
     await rm(session.dir, { recursive: true, force: true }); // rien ne reste sur le disque du pod
 
@@ -311,11 +435,12 @@ export class VoiceRecorderManager {
   }
 }
 
-/** `bc.recorder` des scripts, lié au serveur du déclencheur. */
+/** `bc.recorder` des scripts, lié au serveur et à la personne du déclencheur. */
 export class VoiceRecorderApi {
   constructor(
     private readonly manager: VoiceRecorderManager,
     private readonly guild: Guild | null,
+    private readonly triggerUserId: string | null,
   ) {}
 
   private requireGuild(): Guild {
@@ -323,7 +448,7 @@ export class VoiceRecorderApi {
     return this.guild;
   }
 
-  start(options: RecorderStartOptions): Promise<{ id: string; channelId: string }> {
+  start(options: RecorderStartOptions): Promise<{ id: string; channelId: string; recordedUserIds: string[] }> {
     return this.manager.start(this.requireGuild(), options);
   }
 
@@ -331,9 +456,29 @@ export class VoiceRecorderApi {
     return this.manager.stop(this.requireGuild().id);
   }
 
-  /** Ajoute (ou retire, avec `false`) le consentement d'une personne pendant la session. */
-  consent(userId: string, granted = true): void {
-    this.manager.consent(this.requireGuild().id, userId, granted !== false);
+  /** Poste le message de consentement standard (anglais), avec en plus une traduction complète si `locale` + `texts`. */
+  consentPrompt(channelId: string, options?: { locale?: string; texts?: unknown }): Promise<{ messageId: string }> {
+    return this.manager.consentPrompt(this.requireGuild(), { channelId, ...options });
+  }
+
+  /** Lecture seule : un script ne peut JAMAIS donner le consentement d'une personne. */
+  hasConsent(userId: string): Promise<boolean> {
+    return this.manager.hasConsent(this.requireGuild().id, clean(userId));
+  }
+
+  /** Retire l'accord : la personne elle-même, ou quelqu'un avec la permission « Gérer le serveur ». */
+  async withdraw(userId: string): Promise<void> {
+    const guild = this.requireGuild();
+    const target = clean(userId);
+    const actor = this.triggerUserId;
+    if (!actor) throw new Error('withdraw needs a person who triggered the script.');
+    if (actor !== target) {
+      const member = guild.members.cache.get(actor) ?? (await guild.members.fetch(actor).catch(() => null));
+      if (!member?.permissions?.has(PermissionFlagsBits.ManageGuild)) {
+        throw new Error('Only the person themself or a member who can manage the server can withdraw this consent.');
+      }
+    }
+    await this.manager.withdraw(guild.id, target);
   }
 
   status(): RecorderStatus {

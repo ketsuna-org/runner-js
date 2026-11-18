@@ -857,7 +857,13 @@ export class HandlerRegistry {
               (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
               null,
           }),
-          recorder: this.recorder?.forGuild(scriptGuild as Guild | null),
+          recorder: this.recorder?.forGuild(
+            scriptGuild as Guild | null,
+            partial.interaction?.user?.id ??
+              partial.message?.author?.id ??
+              (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
+              null,
+          ),
           // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
           // et `channel` résolus, même hors cache.
           interaction: partial.interaction
