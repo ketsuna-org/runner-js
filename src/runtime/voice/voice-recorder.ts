@@ -23,7 +23,8 @@ import {
 
 import {
   CONSENT_TEXT_VERSION,
-    REFERENCE_TEXT,
+    REFERENCE_LABELS,
+  REFERENCE_TEXT,
   type ConsentStore,
   normalizeLocale,
   renderPrompt,
@@ -323,6 +324,12 @@ export class VoiceRecorderManager {
       await (announce as unknown as { send: (m: unknown) => Promise<unknown> }).send({
         content: `🔴 **Recording started** in <#${channelId}>. Being recorded (they agreed): ${names}. Everyone else is not recorded. Anyone can withdraw their consent at any time with the button of the consent message: recording of their voice stops immediately. The recording stops automatically after ${Math.round((seconds / 60) * 10) / 10} min.`,
         allowedMentions: { parse: [] },
+        // Retrait en un clic, en pleine session, sans dépendre d'un ancien message.
+        components: [
+          new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder().setCustomId(`${BUTTON_PREFIX}:withdraw`).setLabel(REFERENCE_LABELS.withdraw).setStyle(ButtonStyle.Danger),
+          ),
+        ],
       });
     } catch {
       connection.destroy();

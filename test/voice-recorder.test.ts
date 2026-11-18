@@ -129,6 +129,7 @@ describe('VoiceRecorderManager', () => {
     expect(textOf(f.sent[0]!)).toContain('Recording started');
     expect(textOf(f.sent[0]!)).toContain('<@u1>');
     expect(textOf(f.sent[0]!)).not.toContain('<@u2>');
+    expect(JSON.stringify((f.sent[0] as { components?: unknown }).components)).toContain('bcvc:withdraw');
     f.speaking.emit('start', 'u2'); // pas de consentement : jamais abonné
     f.speaking.emit('start', 'stranger');
     f.speaking.emit('start', 'u1');

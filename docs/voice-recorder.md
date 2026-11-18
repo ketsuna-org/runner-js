@@ -26,7 +26,7 @@ supporte qu'une connexion vocale par bot : refus si le bot est déjà dans un sa
 
 ## Autres règles appliquées par le moteur
 
-- Une annonce est postée dans `announceChannelId` au démarrage (liste des personnes enregistrées) et à l'arrêt.
+- Une annonce est postée dans `announceChannelId` au démarrage (liste des personnes enregistrées, avec un bouton « Withdraw my consent » : retrait en un clic) et à l'arrêt.
   Si elle échoue, rien n'est enregistré.
 - Durée : 300 s par défaut, 600 s au plus ; 5 personnes au plus.
 - Les pistes sont écrites dans un dossier temporaire du pod, lues en mémoire à l'arrêt, puis effacées.
@@ -62,4 +62,15 @@ await interaction.reply({ content: `Recording ${r.recordedUserIds.length} person
 await interaction.deferReply();
 const result = await bc.recorder.stop();
 await interaction.editReply({ content: `${result.tracks.length} track(s), ${Math.round(result.durationMs / 1000)} s`, files: result.tracks.map((t) => t.file) });
+```
+
+## Retrait sans commande ajoutée automatiquement
+
+Le moteur n'ajoute AUCUNE commande à l'application du bot. Un propriétaire qui veut une commande de retrait écrit la sienne :
+
+```js
+// /recording-privacy : voir et retirer son propre accord (la personne seule peut retirer le sien)
+const mine = await bc.recorder.hasConsent(interaction.user.id);
+if (mine) await bc.recorder.withdraw(interaction.user.id);
+await interaction.reply({ content: mine ? 'Your consent is withdrawn.' : 'You had no active consent.', ephemeral: true });
 ```
