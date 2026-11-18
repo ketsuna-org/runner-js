@@ -84,6 +84,8 @@ export interface HandlerRegistryOptions {
   /** Musique du bot, fournie par le runner (global `voice` des scripts) ; absente = `voice` indéfini. */
   music?: MusicManager;
   recorder?: VoiceRecorderManager;
+  /** Pont des sources WebSocket du bot (global `bc.ws`) ; absent = `bc.ws` répond `ws_unavailable`. */
+  webSockets?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
@@ -102,6 +104,8 @@ type ScriptRunPartial = {
   member?: Message['member'] | Interaction['member'] | null;
   channel?: Message['channel'] | Interaction['channel'] | null;
   webhook?: { path: string; payload: unknown; headers: Record<string, string> };
+  /** Événement d'une source WebSocket qui lance le workflow. */
+  wsEvent?: import('../runtime/websocket/ws-manager.js').WsEvent;
 };
 
 export class HandlerRegistry {
@@ -119,6 +123,7 @@ export class HandlerRegistry {
   private databaseHandles?: DatabaseHandles;
   private readonly music?: MusicManager;
   private readonly recorder?: VoiceRecorderManager;
+  private readonly webSockets?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
   private readonly variableStore: VariableDatabase;
   private readonly prefixResolver: PrefixResolver;
   private readonly messageContentAvailable: boolean;
@@ -147,6 +152,7 @@ export class HandlerRegistry {
     this.databaseHandles = databaseHandles;
     this.music = options.music;
     this.recorder = options.recorder;
+    this.webSockets = options.webSockets;
     this.messageContentAvailable = options.messageContentAvailable === true;
     this.now = options.now ?? Date.now;
     this.prefixResolver = new PrefixResolver({
@@ -555,6 +561,18 @@ export class HandlerRegistry {
     return true;
   }
 
+  /** Workflow d'une source WebSocket : le script s'exécute avec l'événement dans `bc.ws.event`. */
+  async runWebSocketEvent(
+    script: string,
+    event: import('../runtime/websocket/ws-manager.js').WsEvent,
+  ): Promise<void> {
+    if (!script.trim()) return;
+    const outcome = await this.runScript(script, { wsEvent: event });
+    if (outcome && outcome.ok === false) {
+      throw new Error(outcome.error ?? 'the workflow failed');
+    }
+  }
+
   /**
    * Événements `commandCreated` / `commandUpdated` / `commandDeleted` : ce ne sont pas des événements Discord,
    * c'est la route de synchronisation d'une commande qui les signale. Chaque handler d'événement de ce nom
@@ -896,6 +914,7 @@ export class HandlerRegistry {
           member,
           channel: scriptChannel as never,
           webhook: partial.webhook,
+          ws: { bridge: this.webSockets, event: partial.wsEvent },
         },
         this.scriptLogger,
         options.timeoutMs ?? this.config.scriptTimeoutMs,
@@ -1213,12 +1232,14 @@ export function scriptOrigin(partial: {
   message?: Message;
   invocation?: { name?: string };
   webhook?: { path: string };
+  wsEvent?: { source: string };
 }): { kind: 'command' | 'workflow'; name: string } | undefined {
   const commandName = (partial.interaction as { commandName?: string } | undefined)?.commandName;
   if (commandName) return { kind: 'command', name: commandName };
   if (partial.invocation?.name) return { kind: 'command', name: partial.invocation.name };
   if (partial.scheduled?.id) return { kind: 'workflow', name: partial.scheduled.id };
   if (partial.webhook?.path) return { kind: 'workflow', name: partial.webhook.path };
+  if (partial.wsEvent) return { kind: 'workflow', name: `ws:${partial.wsEvent.source}` };
   return undefined;
 }
 
@@ -1227,6 +1248,7 @@ export function traceKindAndName(partial: {
   interaction?: Interaction;
   message?: Message;
   webhook?: { path: string };
+  wsEvent?: { source: string };
 }): { kind: string; name?: string } {
   const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
   if (interaction?.commandName) return { kind: 'command', name: interaction.commandName };
@@ -1238,6 +1260,7 @@ export function traceKindAndName(partial: {
     };
   }
   if (partial.scheduled) return { kind: 'scheduled', name: partial.scheduled.id };
+  if (partial.wsEvent) return { kind: 'websocket', name: partial.wsEvent.source };
   if (partial.message) return { kind: 'message' };
   return { kind: 'event' };
 }

@@ -491,6 +491,10 @@ export class RuntimeController {
     return this.processManager.runScheduledNow(botId, taskId);
   }
 
+  webSocketSnapshot(botId: string) {
+    return this.processManager.getWebSocketSnapshot(botId);
+  }
+
   runtimeStateForBot(botId: string): RunnerBotRuntimeState {
     const state = this.toRuntimeState(this.processManager.getState(botId));
     const scheduled = this.processManager.getScheduledSnapshot(botId);

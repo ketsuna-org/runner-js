@@ -55,6 +55,8 @@ export interface BotRunnerHandle {
   getScheduledSnapshot?(): ScheduledSnapshot;
   /** Exécute une tâche planifiée tout de suite sans toucher à son minuteur. */
   runScheduledNow?(taskId: string): Promise<RunNowResult>;
+  /** État des sources WebSocket du bot (compteurs, jamais de message ni de secret). */
+  getWebSocketSnapshot?(): Array<Record<string, unknown>>;
   /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
   notifyVariableWrite?(storageKey: string): void;
 }
@@ -194,6 +196,12 @@ export class BotSupervisor {
   }
 
   /** Tâches planifiées d'un bot qui tourne (null sinon). */
+  /** null si le bot ne tourne pas. */
+  getWebSocketSnapshot(botId: string): Array<Record<string, unknown>> | null {
+    const runner = this.bots.get(botId)?.runner;
+    return runner ? (runner.getWebSocketSnapshot?.() ?? []) : null;
+  }
+
   getScheduledSnapshot(botId: string): ScheduledSnapshot | null {
     return this.bots.get(botId)?.runner.getScheduledSnapshot?.() ?? null;
   }

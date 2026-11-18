@@ -143,6 +143,12 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     });
   });
 
+  // Sources WebSocket sortantes : état et compteurs, sans secret ni contenu de message.
+  app.get('/bots/:id/websockets/live', (c) => {
+    const sources = deps.runtime.webSocketSnapshot(c.req.param('id'));
+    return c.json({ apiVersion: 2, running: sources !== null, sources: sources ?? [] });
+  });
+
   // « Exécuter maintenant » : lance une tâche planifiée sans remettre son minuteur à zéro.
   app.post('/bots/:id/scheduled/:taskId/run', async (c) => {
     const botId = c.req.param('id');

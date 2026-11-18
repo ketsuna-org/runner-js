@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
+import { createBcWs, type BcWs } from './script-ws.js';
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
 import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcVars } from './script-bc-extras.js';
 import type { BcActivity, BcCanvas, BcGrid, BcForum, BcLock, BcMath, BcVars } from './script-bc-extras.js';
@@ -51,6 +52,10 @@ export interface BcAiContext {
   channel?: unknown;
   db?: unknown;
   recorder?: import('../runtime/voice/voice-recorder.js').VoiceRecorderApi;
+  ws?: {
+    bridge?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
+    event?: import('../runtime/websocket/ws-manager.js').WsEvent;
+  };
   /** Commande ou workflow du script en cours (statistiques de crédits IA). */
   origin?: { kind: 'command' | 'workflow'; name: string };
 }
@@ -133,7 +138,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -286,5 +291,6 @@ export function createBcGlobal(
     canvas: createBcCanvas(),
     // Expérimental : `undefined` hors d'un serveur ou si le moteur n'est pas branché.
     recorder: context.recorder,
+    ws: createBcWs(context.ws?.bridge, context.ws?.event),
   };
 }
