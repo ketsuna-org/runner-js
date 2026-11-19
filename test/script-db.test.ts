@@ -240,4 +240,16 @@ describe('ScriptDb', () => {
     await db.user.delete('temp');
     expect(await db.user.get('temp')).toBeUndefined();
   });
+
+  it('keeps one-time claims under a reserved key, hidden from db.global.keys()', async () => {
+    const db = await createDb();
+    const key = JSON.stringify(['bot-1', 'cmd', 'user', '20']);
+    expect(await db.claimOneTime(key)).toBe(true);
+    expect(await db.claimOneTime(key)).toBe(false);
+    expect((await db.global.keys()).some((key) => key.includes('oneTime'))).toBe(false);
+    await db.releaseOneTime(key);
+    expect(await db.claimOneTime(key)).toBe(true);
+    const racers = await Promise.all(Array.from({ length: 10 }, () => db.claimOneTime('race')));
+    expect(racers.filter(Boolean)).toHaveLength(1);
+  });
 });
