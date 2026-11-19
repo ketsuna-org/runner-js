@@ -2,7 +2,7 @@
 
 Étude : `DESIGN-flux-vocal.md` du projet (annexes 2 à 5). Version minimale pour tester la réception du flux
 vocal (DAVE) avec un vrai bot. **Pas de réserve Premium ni de quota dans cette version : ne pas la mettre en
-production avant que le Manager les applique.** Coupe-circuit : `VOICE_RECORDER_DISABLED=1`.
+production avant que le Manager les applique.** **Coupée par défaut** : elle ne s'active que si `VOICE_RECORDER_ENABLED=1` (staging). `VOICE_RECORDER_DISABLED=1` reste un coupe-circuit qui l'emporte.
 
 Le bot doit avoir l'intent **Guild Voice States** et la permission de rejoindre le salon. Un serveur ne
 supporte qu'une connexion vocale par bot : refus si le bot est déjà dans un salon (musique Lavalink incluse).

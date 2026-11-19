@@ -9,7 +9,7 @@ import {
   renderPrompt,
   validateLocaleTexts,
 } from '../src/runtime/voice/consent.js';
-import { VoiceRecorderManager, type RecorderDeps } from '../src/runtime/voice/voice-recorder.js';
+import { VoiceRecorderManager, voiceRecorderDisabled, type RecorderDeps } from '../src/runtime/voice/voice-recorder.js';
 
 const GUILD_VOICE_STATES = 128;
 
@@ -185,5 +185,12 @@ describe('VoiceRecorderManager', () => {
     const f = fixture();
     const off = new VoiceRecorderManager(f.client as never, () => undefined, f.store, undefined, true);
     await expect(off.start(f.guild, base)).rejects.toThrow('disabled');
+  });
+
+  it('est coupée par défaut, activée seulement par VOICE_RECORDER_ENABLED=1, coupe-circuit prioritaire', () => {
+    expect(voiceRecorderDisabled({})).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '0' })).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1' })).toBe(false);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1', VOICE_RECORDER_DISABLED: '1' })).toBe(true);
   });
 });

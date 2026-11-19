@@ -131,6 +131,16 @@ function clean(value: unknown): string {
 const CONSENT_CACHE_MS = 15_000;
 const BUTTON_PREFIX = 'bcvc';
 
+/**
+ * L'enregistrement vocal est EXPÉRIMENTAL (ni réserve Premium ni quota) : il est coupé par défaut et ne
+ * s'active que si l'environnement le demande (`VOICE_RECORDER_ENABLED=1`, staging). `VOICE_RECORDER_DISABLED=1`
+ * reste un coupe-circuit qui l'emporte.
+ */
+export function voiceRecorderDisabled(env: Record<string, string | undefined> = process.env): boolean {
+  if (env.VOICE_RECORDER_DISABLED === '1') return true;
+  return env.VOICE_RECORDER_ENABLED !== '1';
+}
+
 export class VoiceRecorderManager {
   private readonly sessions = new Map<string, Session>();
   private disposed = false;
@@ -147,7 +157,7 @@ export class VoiceRecorderManager {
     private readonly log: LogFn,
     private readonly store: ConsentStore,
     private readonly deps: RecorderDeps = defaultDeps,
-    private readonly disabled: boolean = process.env.VOICE_RECORDER_DISABLED === '1',
+    private readonly disabled: boolean = voiceRecorderDisabled(),
   ) {
     if (!this.disabled) client.on('interactionCreate', this.onInteraction);
   }
