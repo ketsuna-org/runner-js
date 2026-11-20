@@ -346,9 +346,11 @@ export class HandlerRegistry {
 
     // `!cmd sub arg` : les mots de la sous-commande choisissent la route (script propre à la sous-commande)
     // et ne sont plus des arguments, comme pour `/cmd sub`.
-    const sub = resolveMessageRoute(handler.options, invocation.args);
+    // Les options sont à la racine de la commande, ou seulement dans `data.options` selon l'émetteur de la config.
+    const declaredOptions = handler.options?.length ? handler.options : handler.data?.options;
+    const sub = resolveMessageRoute(declaredOptions, invocation.args);
     const routed = sub ? withoutLeadingArgs(invocation, sub.consumed) : invocation;
-    const typedOptions = mapMessageOptions(handler.options, sub?.route ?? null, routed.args, routed.rawArgs);
+    const typedOptions = mapMessageOptions(declaredOptions, sub?.route ?? null, routed.args, routed.rawArgs);
     await this.runScript(sub ? resolveCommandScript(handler.script, handler.data, sub.route) : handler.script, {
       message,
       guild: message.guild,
