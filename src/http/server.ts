@@ -16,6 +16,7 @@ import {
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
 import { safeEqual } from './safe-equal.js';
+import { runWebSocketTest } from '../runtime/websocket/ws-test.js';
 
 export interface HttpServerDeps {
   env: RunnerEnv;
@@ -147,6 +148,20 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
   app.get('/bots/:id/websockets/live', (c) => {
     const sources = deps.runtime.webSocketSnapshot(c.req.param('id'));
     return c.json({ apiVersion: 2, running: sources !== null, sources: sources ?? [] });
+  });
+
+  // « Tester la connexion » : connexion jetable (20 s, 20 messages), rien n'est conservé. Le Manager envoie la
+  // source complète (secrets compris) : la route ne dépend d'aucun bot démarré.
+  app.post('/websockets/test', async (c) => {
+    const body = (await c.req.json().catch(() => null)) as { source?: unknown; context?: unknown } | null;
+    if (!body || typeof body.source !== 'object' || body.source === null) {
+      throw new HttpError(400, 'A "source" object is required.');
+    }
+    const result = await runWebSocketTest(body.source, {
+      ssrfGuard: ['true', '1'].includes((process.env.BOT_CREATOR_POOL_MODE ?? '').toLowerCase()),
+      context: typeof body.context === 'string' ? body.context.slice(0, 200) : '',
+    });
+    return c.json({ apiVersion: 2, ...result });
   });
 
   // « Exécuter maintenant » : lance une tâche planifiée sans remettre son minuteur à zéro.

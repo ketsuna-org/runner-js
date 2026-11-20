@@ -16,3 +16,10 @@ limites que le runner Dart (voir `docs/websocket-sources.md` de bot-creator et `
 - Bun n'expose pas le statut HTTP d'un upgrade refusé : un 401/403 n'est reconnu que s'il figure dans le message d'erreur ;
   les fermetures 1008 et 4001–4003 comptent toujours comme refus d'authentification.
 - État : `GET /bots/:id/websockets/live` (compteurs, jamais de secret ni de message).
+
+## Route de test
+
+`POST /websockets/test` avec `{ "source": { … source complète, secrets compris … }, "context": "…" }` :
+connexion jetable (20 s au plus, 20 messages au plus), séquence de join jouée, fermeture propre (1000).
+Rend `{ ok, error, received, events: [{ atMs, kind: info|out|in|ok|error, text }] }`. Les secrets sont masqués
+dans `events`, rien n'est conservé. Le Manager est le seul appelant (limite de 3 essais par minute et par compte).
