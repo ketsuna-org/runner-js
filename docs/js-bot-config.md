@@ -555,7 +555,7 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.math.floorDiv(a, b)` / `bc.math.mod(a, b)` | `$floorDiv` / `$mod` (plancher, reste toujours positif : `mod(-3, 8) = 5`) |
 | `bc.math.hash(texte, 'fnv1a'\|'crc32'\|'sha256', modulo?)` | `$hash` |
 | `bc.math.seededRandom(graine, min, max)` | `$seededRandom` |
-| `bc.vars.increment(portée, clé, n?, id?)` / `decrement` | `$increment` / `$decrement` (atomique dans le processus) |
+| `bc.vars.increment(portée, clé, n?, id?, { returnValue: false }?)` / `decrement` | `$increment` / `$decrement` (atomique dans le processus) |
 | `bc.vars.compareAndSet(portée, clé, attendu, nouveau, id?)` | `$compareAndSetVar` |
 | `bc.vars.listAddUnique(portée, clé, item, id?)` | liste `,a,b,` sans doublon, atomique |
 | `bc.vars.list(préfixe, limite?)` | `$listVars` |

@@ -142,10 +142,15 @@ const DEFAULT_LOCK_TTL_MS = 30_000;
 const MAX_LOCK_TTL_MS = 10 * 60_000;
 
 export interface BcVars {
-  /** Ajoute `amount` (1 par défaut) de façon atomique (`$increment`) ; renvoie la nouvelle valeur. */
-  increment(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  /**
+   * Ajoute `amount` (1 par défaut) de façon atomique (`$increment`) ; renvoie la nouvelle valeur,
+   * sauf avec `{ returnValue: false }` (la variable est mise à jour, rien n'est renvoyé).
+   */
+  increment(scope: DbScope, key: string, amount?: number, id?: string, options?: { returnValue?: true }): Promise<number>;
+  increment(scope: DbScope, key: string, amount: number | undefined, id: string | undefined, options: { returnValue: false }): Promise<void>;
   /** Idem en retranchant (`$decrement`). */
-  decrement(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  decrement(scope: DbScope, key: string, amount?: number, id?: string, options?: { returnValue?: true }): Promise<number>;
+  decrement(scope: DbScope, key: string, amount: number | undefined, id: string | undefined, options: { returnValue: false }): Promise<void>;
   /** Écrit `next` seulement si la valeur actuelle vaut `expected` (`$compareAndSetVar`). */
   compareAndSet(scope: DbScope, key: string, expected: unknown, next: unknown, id?: string): Promise<boolean>;
   /** Ajoute `item` à la liste `,a,b,` seulement s'il n'y est pas déjà (atomique). */
@@ -296,9 +301,15 @@ export function createBcVars(botId: string, getDb: () => unknown): BcVars {
       return next;
     });
   }
+  const counter =
+    (sign: 1 | -1) =>
+    async (scope: DbScope, key: string, amount: number = 1, id?: string, options?: { returnValue?: boolean }) => {
+      const next = await add(scope, key, sign * amount, id);
+      return options?.returnValue === false ? undefined : next;
+    };
   return {
-    increment: (scope, key, amount = 1, id) => add(scope, key, amount, id),
-    decrement: (scope, key, amount = 1, id) => add(scope, key, -amount, id),
+    increment: counter(1) as BcVars['increment'],
+    decrement: counter(-1) as BcVars['decrement'],
     compareAndSet: (scope, key, expected, next, id) =>
       withVariableLock(lockKey(scope, key, id), async () => {
         const store = scoped(scope);

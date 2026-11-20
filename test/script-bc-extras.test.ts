@@ -42,6 +42,14 @@ describe('bc.vars and bc.lock', () => {
     expect(await db.global.get('hp')).toBe(100);
     expect(vars).toBeDefined();
   });
+  test('returnValue false updates without returning', async () => {
+    const db = fakeDb();
+    const v = createBcVars('bot', () => db);
+    expect(await v.increment('global', 'xp', 5, undefined, { returnValue: false })).toBeUndefined();
+    expect(await v.decrement('global', 'xp', 2, undefined, { returnValue: false })).toBeUndefined();
+    expect(await v.increment('global', 'xp', 1)).toBe(4);
+    expect(await db.global.get('xp')).toBe(4);
+  });
   test('compareAndSet and listAddUnique', async () => {
     const db = fakeDb();
     const v = createBcVars('bot', () => db);
