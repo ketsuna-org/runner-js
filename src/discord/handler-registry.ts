@@ -28,6 +28,7 @@ import {
   resolveCommandScript,
   resolveCommandVisibility,
   resolveInteractionRoute,
+  resolveMessageRoute,
 } from './command-route.js';
 import {
   NO_PREFIX_MAX_PER_WINDOW,
@@ -40,6 +41,7 @@ import {
   prefixVariableStorageKey,
   type InvocationSource,
   type MessageInvocation,
+  withoutLeadingArgs,
 } from './message-invocation.js';
 import { ScheduledTasks, type ScheduledTaskEntry, type TaskRunOutcome } from '../runtime/scheduled-tasks.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
@@ -341,12 +343,15 @@ export class HandlerRegistry {
       return;
     }
 
-    await this.runScript(handler.script, {
+    // `!cmd sub arg` : les mots de la sous-commande choisissent la route (script propre à la sous-commande)
+    // et ne sont plus des arguments, comme pour `/cmd sub`.
+    const sub = resolveMessageRoute(handler.options, invocation.args);
+    await this.runScript(sub ? resolveCommandScript(handler.script, handler.data, sub.route) : handler.script, {
       message,
       guild: message.guild,
       member: message.member,
       channel: message.channel,
-      invocation,
+      invocation: sub ? withoutLeadingArgs(invocation, sub.consumed) : invocation,
     });
   }
 

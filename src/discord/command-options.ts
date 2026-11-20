@@ -201,7 +201,7 @@ function readAutocompleteConfig(option: Record<string, unknown>): Record<string,
   return config.enabled === true ? config : null;
 }
 
-function normalizeOptionType(raw: unknown): number {
+export function normalizeOptionType(raw: unknown): number {
   if (typeof raw === 'number' && Number.isInteger(raw)) {
     return raw;
   }

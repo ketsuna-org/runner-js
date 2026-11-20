@@ -1,6 +1,8 @@
 import { MessageFlags } from 'discord.js';
 import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 
+import { normalizeOptionType } from './command-options.js';
+
 /**
  * Sous-commandes d'une commande slash : chacune peut porter son propre script et sa propre visibilité de réponse.
  * Même modèle de données que le moteur Dart (`subcommandWorkflows`, clé `sous-commande` ou `groupe/sous-commande`),
@@ -26,6 +28,37 @@ export function resolveInteractionRoute(interaction: Interaction): string | null
     return null;
   }
   return group ? `${group}/${subcommand}` : subcommand;
+}
+
+/**
+ * Route d'une sous-commande tapée après un préfixe (`!cmd sub …`, `!cmd groupe sub …`) : mêmes clés que
+ * `resolveInteractionRoute`. `consumed` = nombre de mots d'arguments qui la composent. Miroir de
+ * `resolveLegacySubcommandRoute` (moteur Dart). `null` : le premier mot n'est pas une sous-commande.
+ */
+export function resolveMessageRoute(
+  options: unknown,
+  args: readonly string[],
+): { route: string; consumed: number } | null {
+  if (!Array.isArray(options) || args.length === 0) return null;
+  const first = args[0]!.toLowerCase();
+  for (const option of options) {
+    const record = asRecord(option);
+    if (!record) continue;
+    const type = normalizeOptionType(record.type);
+    const name = String(record.name ?? '').trim();
+    if (!name || name.toLowerCase() !== first) continue;
+    if (type === 1) return { route: name, consumed: 1 };
+    if (type !== 2 || args.length < 2 || !Array.isArray(record.options)) continue;
+    const second = args[1]!.toLowerCase();
+    for (const child of record.options) {
+      const childRecord = asRecord(child);
+      const childName = String(childRecord?.name ?? '').trim();
+      if (childRecord && normalizeOptionType(childRecord.type) === 1 && childName.toLowerCase() === second) {
+        return { route: `${name}/${childName}`, consumed: 2 };
+      }
+    }
+  }
+  return null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

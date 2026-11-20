@@ -67,6 +67,17 @@ function buildInvocation(
   };
 }
 
+/** La même invocation sans ses [count] premiers arguments (les mots de la sous-commande de `!cmd sub arg`). */
+export function withoutLeadingArgs(invocation: MessageInvocation, count: number): MessageInvocation {
+  if (count <= 0) return invocation;
+  let rest = invocation.rawArgs;
+  for (let index = 0; index < count; index += 1) {
+    const match = FIRST_WORD_PATTERN.exec(rest);
+    rest = match ? (match[2] ?? '').trim() : '';
+  }
+  return { ...invocation, args: invocation.args.slice(count), rawArgs: rest };
+}
+
 /**
  * Analyse pure du contenu d'un message. Les gardes (auteur bot, webhook, message système) sont à la charge
  * de l'appelant. Ordre : préfixe (le plus long d'abord, sans repli sur un plus court), puis mention du bot,
