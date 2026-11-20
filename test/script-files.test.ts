@@ -64,6 +64,20 @@ describe('bc.files', () => {
     await expect(files.put('a', 'b')).rejects.toMatchObject({ code: 'files_unavailable' });
   });
 
+  test('attach rend une pièce jointe nommée, limitée à 10 Mo', async () => {
+    const files = createBcFiles(((gw) => () => gw)(memoryGateway()), () => 'bot1');
+    await files.put('exports/rapport.csv', 'a,b');
+    await files.put('exports/notes', 'texte');
+    const a = await files.attach('exports/rapport.csv');
+    expect(a.name).toBe('rapport.csv');
+    expect(Buffer.from(a.attachment as Buffer).toString()).toBe('a,b');
+    expect((await files.attach('exports/notes', 'mémo')).name).toBe('mémo.bin');
+    expect((await files.attach('exports/rapport.csv', 'classement.csv')).name).toBe('classement.csv');
+    await files.put('big.bin', new Uint8Array(11 * 1024 * 1024));
+    await expect(files.attach('big.bin')).rejects.toMatchObject({ code: 'file_too_large' });
+    await expect(files.attach('absent')).rejects.toMatchObject({ code: 'file_not_found' });
+  });
+
   test('le lien est borné à 7 jours', async () => {
     const files = createBcFiles(((gw) => () => gw)(memoryGateway()), () => 'bot1');
     expect(await files.url('a', { minutes: 999999 })).toBe(`https://x/a?ttl=${7 * 24 * 3600}`);

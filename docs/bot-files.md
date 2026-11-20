@@ -9,6 +9,8 @@ fichiers sont **propres à chaque bot** : un chemin n'est visible que du bot qui
 - `await bc.files.list(prefix?, { limit?, after? })` : `[{ path, size, contentType, updatedAt }]`.
 - `await bc.files.delete(path)` : vrai si le fichier existait.
 - `await bc.files.exists(path)`.
+- `await bc.files.attach(path, name?)` : pièce jointe (`$fileAttach`) à mettre dans `files: [...]` d'un message, comme `bc.canvas.attach`.
+  10 Mo au plus (`file_too_large` au-delà) ; `name` par défaut la fin du chemin, `.bin` ajouté s'il n'a pas d'extension.
 - `await bc.files.url(path, { minutes? })` : lien de lecture temporaire (1 h par défaut, 7 jours au plus). Les images, l'audio,
   la vidéo, le texte brut et le PDF s'ouvrent dans le navigateur, le reste se télécharge.
 
