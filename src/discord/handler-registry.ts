@@ -1,3 +1,8 @@
+import {
+  INFRASTRUCTURE_USER_MESSAGE,
+  InfrastructureError,
+  isInfrastructureError,
+} from '../runtime/infrastructure-error.js';
 import { recordChannelMessage } from '../runtime/channel-activity.js';
 import {
   Events,
@@ -963,7 +968,17 @@ export class HandlerRegistry {
       const source = describeScriptSource(partial);
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
-      await notifyScriptFailure(partial.interaction, message);
+      // Une panne de plateforme (Manager, stockage des variables) n'est pas la faute du bot : elle reste dans
+      // les journaux ci-dessus, jamais dans un salon. Une commande slash doit tout de même recevoir une
+      // réponse (sinon Discord affiche « L'application n'a pas répondu ») : avis éphémère neutre, sans détail.
+      const infrastructure = isInfrastructureError(error);
+      if (infrastructure && error instanceof InfrastructureError) {
+        this.emitLog('error', `Infrastructure error detail (${source}): ${error.detail}`);
+      }
+      await notifyScriptFailure(
+        partial.interaction,
+        infrastructure ? INFRASTRUCTURE_NOTICE : message,
+      );
       return failure;
     }
   }
@@ -1107,11 +1122,14 @@ function isInteraction(value: unknown): value is Interaction {
  * owner has nothing visible to debug from. Answer with a short ephemeral notice; the
  * details stay in the bot logs, never in the channel.
  */
+export const INFRASTRUCTURE_NOTICE = `⚠️ ${INFRASTRUCTURE_USER_MESSAGE} Please try again in a moment.`;
+
 export const SCRIPT_FAILURE_NOTICE =
   '❌ This command failed. The bot owner can read the details in the bot logs.';
 
 /** Notice with the real cause (first line, no stack), cut to fit a Discord message. */
 export function scriptFailureNotice(cause?: string): string {
+  if (cause === INFRASTRUCTURE_NOTICE) return cause;
   const line = (cause ?? '').split('\n')[0].trim();
   if (!line) return SCRIPT_FAILURE_NOTICE;
   const text = `❌ ${line}`;
