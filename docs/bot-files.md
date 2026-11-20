@@ -17,3 +17,10 @@ Une opération qui échoue rejette avec une erreur dont `code` vaut `file_not_fo
 rend le dernier code. Mêmes codes que `$fileUpload`, `$fileRead`, `$fileList`, `$fileDelete`, `$fileExists`, `$fileURL` en BDFD.
 
 Un chemin est fait de segments séparés par `/` (255 octets au plus), sans `..`, sans segment vide, sans `/` initial ou final.
+
+## Bot local (desktop)
+
+Sans Manager, si `BOT_CREATOR_LOCAL_FILES_DIR` est posé (l'application desktop le pose pour son runner intégré), les fichiers sont
+écrits dans ce dossier, `<dossier>/<bot>/<chemin>`, avec les mêmes règles (chemin, 25 Mo) que sur le Manager, sans quota. Les noms
+sont encodés (pourcentage) pour rester valides sur Windows ; le moteur Dart écrit au même endroit avec le même encodage.
+`bc.files.url` rejette `file_url_unavailable` : un dossier local n'a pas de lien public.
