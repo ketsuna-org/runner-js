@@ -21,6 +21,8 @@ export interface MessageInvocation {
   args: string[];
   /** Tout ce qui suit le nom, rogné aux extrémités (l'intérieur est conservé tel quel). */
   rawArgs: string;
+  /** Options de la commande remplies par les mots saisis (`message.invocation.options.nom`), si elle en déclare. */
+  options?: Record<string, string>;
 }
 
 export interface ParseInvocationOptions {

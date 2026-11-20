@@ -61,6 +61,59 @@ export function resolveMessageRoute(
   return null;
 }
 
+/**
+ * Options saisies après la commande en préfixe (`!cmd sub alice 3`) : les mots remplissent, dans l'ordre, les
+ * options de la route (ou de la commande), comme la forme slash. Miroir de `buildLegacyOptionVariables` (Dart) :
+ * la dernière option texte prend la fin du message ; les options utilisateur, salon et rôle donnent leur
+ * identifiant ; une option booléenne comprend oui/non, yes/no, 1/0.
+ */
+export function mapMessageOptions(
+  options: unknown,
+  route: string | null,
+  args: readonly string[],
+  rawArgs: string,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  let scope: unknown = options;
+  for (const part of route ? route.split('/') : []) {
+    const next: unknown = Array.isArray(scope)
+      ? asRecord(scope.find((option) => String(asRecord(option)?.name ?? '').trim() === part))?.options
+      : undefined;
+    scope = next;
+  }
+  if (!Array.isArray(scope)) return result;
+  const declared = scope.map(asRecord).filter((option): option is Record<string, unknown> => {
+    if (!option) return false;
+    const type = normalizeOptionType(option.type);
+    return type !== 1 && type !== 2;
+  });
+  let rest = rawArgs;
+  for (let index = 0; index < declared.length && index < args.length; index += 1) {
+    const option = declared[index]!;
+    const name = String(option.name ?? '').trim();
+    if (!name) break;
+    const type = normalizeOptionType(option.type);
+    let value = args[index]!;
+    if (type === 3 && index === declared.length - 1) value = rest.trim();
+    rest = rest.replace(/^\s*\S+/, '');
+    if (type >= 6 && type <= 9) {
+      const id = value.replace(/[<>@!&#]/g, '');
+      result[name] = id;
+      result[`${name}.id`] = id;
+    } else if (type === 5) {
+      const lower = value.toLowerCase();
+      result[name] = ['true', 'yes', 'y', '1', 'on', 'oui'].includes(lower)
+        ? 'true'
+        : ['false', 'no', 'n', '0', 'off', 'non'].includes(lower)
+          ? 'false'
+          : value;
+    } else {
+      result[name] = value;
+    }
+  }
+  return result;
+}
+
 function asRecord(value: unknown): Record<string, unknown> | undefined {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)

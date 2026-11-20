@@ -28,6 +28,7 @@ import {
   resolveCommandScript,
   resolveCommandVisibility,
   resolveInteractionRoute,
+  mapMessageOptions,
   resolveMessageRoute,
 } from './command-route.js';
 import {
@@ -346,12 +347,14 @@ export class HandlerRegistry {
     // `!cmd sub arg` : les mots de la sous-commande choisissent la route (script propre à la sous-commande)
     // et ne sont plus des arguments, comme pour `/cmd sub`.
     const sub = resolveMessageRoute(handler.options, invocation.args);
+    const routed = sub ? withoutLeadingArgs(invocation, sub.consumed) : invocation;
+    const typedOptions = mapMessageOptions(handler.options, sub?.route ?? null, routed.args, routed.rawArgs);
     await this.runScript(sub ? resolveCommandScript(handler.script, handler.data, sub.route) : handler.script, {
       message,
       guild: message.guild,
       member: message.member,
       channel: message.channel,
-      invocation: sub ? withoutLeadingArgs(invocation, sub.consumed) : invocation,
+      invocation: Object.keys(typedOptions).length > 0 ? { ...routed, options: typedOptions } : routed,
     });
   }
 

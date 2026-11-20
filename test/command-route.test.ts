@@ -5,6 +5,7 @@ import {
   resolveCommandScript,
   resolveCommandVisibility,
   resolveInteractionRoute,
+  mapMessageOptions,
   resolveMessageRoute,
 } from '../src/discord/command-route.js';
 import { parseInvocation, withoutLeadingArgs } from '../src/discord/message-invocation.js';
@@ -83,5 +84,30 @@ describe("route d'un message préfixe", () => {
     expect(rest.args).toEqual(['a', 'b']);
     expect(rest.rawArgs).toBe('a  b');
     expect(withoutLeadingArgs(invocation, 9).args).toEqual([]);
+  });
+});
+
+describe('options nommées après un préfixe', () => {
+  const options = [
+    {
+      type: 'subCommand',
+      name: 'ban',
+      options: [
+        { type: 'user', name: 'who' },
+        { type: 'boolean', name: 'silent' },
+        { type: 'string', name: 'reason' },
+      ],
+    },
+    { type: 'string', name: 'top' },
+  ];
+
+  test('les mots remplissent les options de la route', () => {
+    const result = mapMessageOptions(options, 'ban', ['<@!123>', 'oui', 'too', 'much'], '<@!123> oui too  much');
+    expect(result).toEqual({ who: '123', 'who.id': '123', silent: 'true', reason: 'too  much' });
+  });
+
+  test('commande sans sous-commande, route inconnue', () => {
+    expect(mapMessageOptions(options, null, ['hello'], 'hello')).toEqual({ top: 'hello' });
+    expect(mapMessageOptions(options, 'nope', ['a'], 'a')).toEqual({});
   });
 });
