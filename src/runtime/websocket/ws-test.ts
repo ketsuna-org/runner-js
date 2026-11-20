@@ -79,6 +79,7 @@ export async function runWebSocketTest(raw: unknown, options: WsTestOptions = {}
   let waiter: (() => void) | null = null;
   let finish: (() => void) | null = null;
   let closedByPeer = false;
+  let closing = false;
   try {
     const url = new URL(wsResolve(cfg, cfg.url));
     add('info', `${url.protocol}//${url.host}`);
@@ -101,6 +102,7 @@ export async function runWebSocketTest(raw: unknown, options: WsTestOptions = {}
       if (received >= maxMessages) finish?.();
     });
     conn.onClose((info) => {
+      if (closing) return;
       closedByPeer = true;
       add('info', `closed by the service (${info.code ?? 'no code'}${info.reason ? ` ${info.reason}` : ''})`);
       waiter?.();
@@ -139,6 +141,7 @@ export async function runWebSocketTest(raw: unknown, options: WsTestOptions = {}
       clearTimeout(timer);
     }
     if (!closedByPeer) {
+      closing = true;
       await conn.close(1000, 'test');
       add('info', `closed cleanly (1000), ${received} message${received === 1 ? '' : 's'} seen`);
     }
@@ -147,6 +150,7 @@ export async function runWebSocketTest(raw: unknown, options: WsTestOptions = {}
     const code = failureCode(error);
     add('error', code);
     try {
+      closing = true;
       await conn?.close(1000, 'test failed');
     } catch {
       /* déjà fermée */
