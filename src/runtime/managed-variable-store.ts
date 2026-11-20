@@ -20,6 +20,10 @@ export interface ManagedStoreResilience {
   maxCacheEntries: number;
   drainBaseDelayMs: number;
   maxDrainDelayMs: number;
+  /** Rafraîchissement des variables globales préchargées. */
+  warmRefreshIntervalMs: number;
+  /** Taille maximale (octets) de la liste des globales gardée en cache. */
+  maxWarmBytes: number;
 }
 
 const DEFAULT_RESILIENCE: ManagedStoreResilience = {
@@ -32,6 +36,8 @@ const DEFAULT_RESILIENCE: ManagedStoreResilience = {
   maxCacheEntries: 2000,
   drainBaseDelayMs: 2000,
   maxDrainDelayMs: 60000,
+  warmRefreshIntervalMs: 120000,
+  maxWarmBytes: 5 * 1024 * 1024,
 };
 
 interface ManagedVariableStoreOptions {
@@ -96,6 +102,8 @@ export class ManagedVariableStore implements VariableDatabase {
   private drainAttempts = 0;
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
+  private readonly warmBots = new Set<string>();
+  private warmTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: ManagedVariableStoreOptions) {
     const trimmed = options.baseUrl.trim();
@@ -109,6 +117,34 @@ export class ManagedVariableStore implements VariableDatabase {
     this.disposed = true;
     if (this.drainTimer) clearTimeout(this.drainTimer);
     this.drainTimer = null;
+    if (this.warmTimer) clearInterval(this.warmTimer);
+    this.warmTimer = null;
+  }
+
+  /**
+   * Précharge les variables globales du bot dans le cache local puis les rafraîchit régulièrement :
+   * une panne du Manager peut alors toujours les servir, même non lues auparavant. Sans effet si déjà fait.
+   */
+  async warmUp(botId: string): Promise<void> {
+    if (this.disposed) return;
+    const first = !this.warmBots.has(botId);
+    this.warmBots.add(botId);
+    if (!this.warmTimer) {
+      this.warmTimer = setInterval(() => {
+        for (const id of this.warmBots) void this.refreshGlobals(id);
+      }, this.cfg.warmRefreshIntervalMs);
+      (this.warmTimer as { unref?: () => void }).unref?.();
+    }
+    if (first) await this.refreshGlobals(botId);
+  }
+
+  private async refreshGlobals(botId: string): Promise<void> {
+    if (this.breakerOpen || this.disposed) return;
+    try {
+      await this.get(botId, '/global/list', {});
+    } catch {
+      // Manager indisponible : le cache précédent reste en place.
+    }
   }
 
   /** Écritures en attente de rejeu (tests, diagnostic). */
@@ -231,6 +267,7 @@ export class ManagedVariableStore implements VariableDatabase {
       const text = await response.text();
       throw new Error(`[ManagedVariableStore] API error (${suffix}): ${response.status} - ${text}`);
     }
+    this.patchCacheAfterWrite(botId, suffix, body);
     if (response.status === 204) {
       return null;
     }
@@ -281,8 +318,40 @@ export class ManagedVariableStore implements VariableDatabase {
     }
     const text = await response.text();
     if (text.length === 0) return null;
-    this.remember(url, text);
+    if (suffix !== '/global/list' || text.length <= this.cfg.maxWarmBytes) {
+      this.remember(url, text);
+    }
     return JSON.parse(text);
+  }
+
+  private globalListUrl(botId: string): string {
+    return this.url(botId, '/global/list');
+  }
+
+  /** Garde le cache cohérent avec ce que le Manager vient d'accepter. */
+  private patchCacheAfterWrite(botId: string, suffix: string, body: Record<string, unknown>): void {
+    if (suffix !== '/global/set' && suffix !== '/global/remove') return;
+    if (body.key == null) return;
+    const key = String(body.key);
+    this.cache.delete(`${this.url(botId, '/global/get')}?${new URLSearchParams({ key }).toString()}`);
+    const listUrl = this.globalListUrl(botId);
+    const raw = this.cache.get(listUrl);
+    if (raw === undefined) return;
+    const map: Record<string, unknown> = {};
+    const cached = JSON.parse(raw);
+    if (Array.isArray(cached)) {
+      for (const item of cached) {
+        if (item && typeof item === 'object' && 'key' in item) {
+          const record = item as { key: unknown; value: unknown };
+          map[String(record.key)] = record.value;
+        }
+      }
+    } else if (cached && typeof cached === 'object') {
+      Object.assign(map, cached);
+    }
+    if (suffix === '/global/set') map[key] = body.value;
+    else delete map[key];
+    this.cache.set(listUrl, JSON.stringify(map));
   }
 
   private remember(key: string, body: string): void {
@@ -303,8 +372,27 @@ export class ManagedVariableStore implements VariableDatabase {
     url: string,
     detail: string,
   ): unknown {
-    const cachedBody = this.cache.get(url);
-    const cached = cachedBody === undefined ? undefined : JSON.parse(cachedBody);
+    let cachedBody = this.cache.get(url);
+    let fromList = false;
+    // Une globale jamais lue seule se retrouve dans la liste préchargée.
+    if (cachedBody === undefined && suffix === '/global/get') {
+      cachedBody = this.cache.get(this.globalListUrl(botId));
+      fromList = cachedBody !== undefined;
+    }
+    let cached: unknown = cachedBody === undefined ? undefined : JSON.parse(cachedBody);
+    if (fromList) {
+      let found: unknown = null;
+      if (Array.isArray(cached)) {
+        for (const item of cached) {
+          if (item && typeof item === 'object' && String((item as { key?: unknown }).key) === query.key) {
+            found = (item as { value: unknown }).value;
+          }
+        }
+      } else if (cached && typeof cached === 'object') {
+        found = (cached as Record<string, unknown>)[query.key ?? ''] ?? null;
+      }
+      cached = { value: found };
+    }
     const overlay = this.overlayPending(botId, suffix, query, cached, cachedBody !== undefined);
     if (overlay.found) return overlay.value;
     throw new InfrastructureError(`Manager unavailable, no cached value (${suffix}): ${detail}`);
@@ -409,6 +497,7 @@ export class ManagedVariableStore implements VariableDatabase {
           );
           this.recordSuccess();
           this.queue.shift();
+          this.patchCacheAfterWrite(write.botId, write.suffix, write.body);
           if (response.status >= 400) {
             this.log(
               `[ManagedVariableStore] Dropped queued write ${write.suffix}: ${response.status} - ${await response.text()}`,

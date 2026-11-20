@@ -252,6 +252,7 @@ export class BotSupervisor {
     }
 
     this.cancelPendingRestart(botId);
+    void this.options.variableStore.warmUp?.(botId).catch(() => {});
 
     const name = botName || entry.name;
     this.states.set(botId, {

@@ -41,6 +41,9 @@ describe('ManagedVariableStore pendant une panne du Manager', () => {
       if (url.includes('/global/get')) {
         return new Response(JSON.stringify({ value: globals[new URL(url).searchParams.get('key')!] }));
       }
+      if (url.includes('/global/list')) {
+        return new Response(JSON.stringify(Object.entries(globals).map(([key, value]) => ({ key, value }))));
+      }
       return new Response('[]');
     }) as typeof fetch;
   }
@@ -124,6 +127,22 @@ describe('ManagedVariableStore pendant une panne du Manager', () => {
     await store.setGlobalVariable('b', 'coins', 9);
     expect(store.pendingWrites).toBe(1);
     expect(await store.getGlobalVariable('b', 'coins')).toBe(9);
+    store.dispose();
+  });
+
+  it('globale jamais lue seule : servie par le préchargement', async () => {
+    install();
+    globals.welcome = 'salut';
+    const store = make();
+    await store.warmUp('b');
+    status = 502;
+    expect(await store.getGlobalVariable('b', 'welcome')).toBe('salut');
+    expect(await store.getGlobalVariable('b', 'coins')).toBe(5);
+    status = 200;
+    await store.setGlobalVariable('b', 'coins', 8);
+    status = 502;
+    expect(await store.getGlobalVariable('b', 'coins')).toBe(8);
+    delete globals.welcome;
     store.dispose();
   });
 
