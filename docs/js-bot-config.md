@@ -546,7 +546,7 @@ Les avertissements de configuration (`[js-bot-config] …`) vont sur la console 
 - **Avant un retour en arrière**, vérifier que chaque entrée `scheduled` porte `everyMinutes` ; après le retour, les
   intervalles redeviennent relatifs au montage de la configuration (voir §6) et un rechargement les remet à zéro.
 
-## Annexe : `bc.math`, `bc.vars`, `bc.lock`, `bc.forum` (parité avec le moteur BDFD)
+## Annexe : `bc.math`, `bc.vars`, `bc.lock`, `bc.oneTime`, `bc.forum` (parité avec le moteur BDFD)
 
 Même comportement que les fonctions BDFD du même nom.
 
@@ -555,7 +555,7 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.math.floorDiv(a, b)` / `bc.math.mod(a, b)` | `$floorDiv` / `$mod` (plancher, reste toujours positif : `mod(-3, 8) = 5`) |
 | `bc.math.hash(texte, 'fnv1a'\|'crc32'\|'sha256', modulo?)` | `$hash` |
 | `bc.math.seededRandom(graine, min, max)` | `$seededRandom` |
-| `bc.vars.increment(portée, clé, n?, id?)` / `decrement` | `$increment` / `$decrement` (atomique dans le processus) |
+| `bc.vars.increment(portée, clé, n?, id?, { returnValue: false }?)` / `decrement` | `$increment` / `$decrement` (atomique dans le processus) |
 | `bc.vars.compareAndSet(portée, clé, attendu, nouveau, id?)` | `$compareAndSetVar` |
 | `bc.vars.listAddUnique(portée, clé, item, id?)` | liste `,a,b,` sans doublon, atomique |
 | `bc.vars.list(préfixe, limite?)` | `$listVars` |
@@ -565,6 +565,8 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
 | `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
+| `await bc.oneTime.run(type, fn)` | `$onlyOneTime[script;type;erreur]` : exécute `fn` une seule fois par `'user'` (tous serveurs), `'server'` ou `'global'`, pour la commande en cours. Renvoie `{ ran: true, value }`, ou `{ ran: false }` si c'est déjà pris (à vous d'envoyer le message). La réclamation est prise avant `fn` ; si `fn` lève une erreur, elle est rendue. |
+| `await bc.oneTime.reset(type?, { userId?, command? })` | `$resetOneTime[type;userId;commande]` : réarme. Sans `type` : les types réclamés plus tôt dans l'exécution (`user` sinon). `command` = nom de la commande visée. |
 | `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files, reason})` | `$createForumPost` (`reason` : motif du journal d'audit) |
 | `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags, reason?)` | `$forumTags` / `$setThreadTags` |
 

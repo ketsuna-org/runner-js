@@ -1,6 +1,8 @@
 import { MessageFlags } from 'discord.js';
 import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 
+import { normalizeOptionType } from './command-options.js';
+
 /**
  * Sous-commandes d'une commande slash : chacune peut porter son propre script et sa propre visibilité de réponse.
  * Même modèle de données que le moteur Dart (`subcommandWorkflows`, clé `sous-commande` ou `groupe/sous-commande`),
@@ -26,6 +28,90 @@ export function resolveInteractionRoute(interaction: Interaction): string | null
     return null;
   }
   return group ? `${group}/${subcommand}` : subcommand;
+}
+
+/**
+ * Route d'une sous-commande tapée après un préfixe (`!cmd sub …`, `!cmd groupe sub …`) : mêmes clés que
+ * `resolveInteractionRoute`. `consumed` = nombre de mots d'arguments qui la composent. Miroir de
+ * `resolveLegacySubcommandRoute` (moteur Dart). `null` : le premier mot n'est pas une sous-commande.
+ */
+export function resolveMessageRoute(
+  options: unknown,
+  args: readonly string[],
+): { route: string; consumed: number } | null {
+  if (!Array.isArray(options) || args.length === 0) return null;
+  const first = args[0]!.toLowerCase();
+  for (const option of options) {
+    const record = asRecord(option);
+    if (!record) continue;
+    const type = normalizeOptionType(record.type);
+    const name = String(record.name ?? '').trim();
+    if (!name || name.toLowerCase() !== first) continue;
+    if (type === 1) return { route: name, consumed: 1 };
+    if (type !== 2 || args.length < 2 || !Array.isArray(record.options)) continue;
+    const second = args[1]!.toLowerCase();
+    for (const child of record.options) {
+      const childRecord = asRecord(child);
+      const childName = String(childRecord?.name ?? '').trim();
+      if (childRecord && normalizeOptionType(childRecord.type) === 1 && childName.toLowerCase() === second) {
+        return { route: `${name}/${childName}`, consumed: 2 };
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Options saisies après la commande en préfixe (`!cmd sub alice 3`) : les mots remplissent, dans l'ordre, les
+ * options de la route (ou de la commande), comme la forme slash. Miroir de `buildLegacyOptionVariables` (Dart) :
+ * la dernière option texte prend la fin du message ; les options utilisateur, salon et rôle donnent leur
+ * identifiant ; une option booléenne comprend oui/non, yes/no, 1/0.
+ */
+export function mapMessageOptions(
+  options: unknown,
+  route: string | null,
+  args: readonly string[],
+  rawArgs: string,
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  let scope: unknown = options;
+  for (const part of route ? route.split('/') : []) {
+    const next: unknown = Array.isArray(scope)
+      ? asRecord(scope.find((option) => String(asRecord(option)?.name ?? '').trim() === part))?.options
+      : undefined;
+    scope = next;
+  }
+  if (!Array.isArray(scope)) return result;
+  const declared = scope.map(asRecord).filter((option): option is Record<string, unknown> => {
+    if (!option) return false;
+    const type = normalizeOptionType(option.type);
+    return type !== 1 && type !== 2;
+  });
+  let rest = rawArgs;
+  for (let index = 0; index < declared.length && index < args.length; index += 1) {
+    const option = declared[index]!;
+    const name = String(option.name ?? '').trim();
+    if (!name) break;
+    const type = normalizeOptionType(option.type);
+    let value = args[index]!;
+    if (type === 3 && index === declared.length - 1) value = rest.trim();
+    rest = rest.replace(/^\s*\S+/, '');
+    if (type >= 6 && type <= 9) {
+      const id = value.replace(/[<>@!&#]/g, '');
+      result[name] = id;
+      result[`${name}.id`] = id;
+    } else if (type === 5) {
+      const lower = value.toLowerCase();
+      result[name] = ['true', 'yes', 'y', '1', 'on', 'oui'].includes(lower)
+        ? 'true'
+        : ['false', 'no', 'n', '0', 'off', 'non'].includes(lower)
+          ? 'false'
+          : value;
+    } else {
+      result[name] = value;
+    }
+  }
+  return result;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {

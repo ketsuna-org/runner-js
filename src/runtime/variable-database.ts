@@ -53,4 +53,6 @@ export interface VariableDatabase {
   ): Promise<ScopedIndexQueryResult>;
 
   dispose?(): void | Promise<void>;
+  /** Précharge les variables globales du bot (cache de secours si le Manager tombe). */
+  warmUp?(botId: string): Promise<void>;
 }

@@ -1,3 +1,4 @@
+import { InfrastructureError, isInfrastructureError } from '../runtime/infrastructure-error.js';
 import { recordChannelMessage } from '../runtime/channel-activity.js';
 import {
   Events,
@@ -28,6 +29,8 @@ import {
   resolveCommandScript,
   resolveCommandVisibility,
   resolveInteractionRoute,
+  mapMessageOptions,
+  resolveMessageRoute,
 } from './command-route.js';
 import {
   NO_PREFIX_MAX_PER_WINDOW,
@@ -40,6 +43,7 @@ import {
   prefixVariableStorageKey,
   type InvocationSource,
   type MessageInvocation,
+  withoutLeadingArgs,
 } from './message-invocation.js';
 import { ScheduledTasks, type ScheduledTaskEntry, type TaskRunOutcome } from '../runtime/scheduled-tasks.js';
 import type { ScriptExecutor } from '../scripts/script-executor.js';
@@ -56,6 +60,7 @@ import { perfPhase, perfSettings, runWithProbe } from '../runtime/perf.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import type { DatabaseHandles } from '../runtime/database-manager.js';
 import type { MusicManager } from '../runtime/music/music-manager.js';
+import type { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
 import {
   collectAutocompleteBindings,
   filterStaticAutocompleteChoices,
@@ -82,6 +87,9 @@ export interface HandlerRegistryOptions {
   scheduler?: ScheduledTasks;
   /** Musique du bot, fournie par le runner (global `voice` des scripts) ; absente = `voice` indéfini. */
   music?: MusicManager;
+  recorder?: VoiceRecorderManager;
+  /** Pont des sources WebSocket du bot (global `bc.ws`) ; absent = `bc.ws` répond `ws_unavailable`. */
+  webSockets?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
 }
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
@@ -100,6 +108,8 @@ type ScriptRunPartial = {
   member?: Message['member'] | Interaction['member'] | null;
   channel?: Message['channel'] | Interaction['channel'] | null;
   webhook?: { path: string; payload: unknown; headers: Record<string, string> };
+  /** Événement d'une source WebSocket qui lance le workflow. */
+  wsEvent?: import('../runtime/websocket/ws-manager.js').WsEvent;
 };
 
 export class HandlerRegistry {
@@ -116,6 +126,8 @@ export class HandlerRegistry {
   private readonly scriptLogger: ScriptLogger;
   private databaseHandles?: DatabaseHandles;
   private readonly music?: MusicManager;
+  private readonly recorder?: VoiceRecorderManager;
+  private readonly webSockets?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
   private readonly variableStore: VariableDatabase;
   private readonly prefixResolver: PrefixResolver;
   private readonly messageContentAvailable: boolean;
@@ -143,6 +155,8 @@ export class HandlerRegistry {
   ) {
     this.databaseHandles = databaseHandles;
     this.music = options.music;
+    this.recorder = options.recorder;
+    this.webSockets = options.webSockets;
     this.messageContentAvailable = options.messageContentAvailable === true;
     this.now = options.now ?? Date.now;
     this.prefixResolver = new PrefixResolver({
@@ -331,12 +345,19 @@ export class HandlerRegistry {
       return;
     }
 
-    await this.runScript(handler.script, {
+    // `!cmd sub arg` : les mots de la sous-commande choisissent la route (script propre à la sous-commande)
+    // et ne sont plus des arguments, comme pour `/cmd sub`.
+    // Les options sont à la racine de la commande, ou seulement dans `data.options` selon l'émetteur de la config.
+    const declaredOptions = handler.options?.length ? handler.options : handler.data?.options;
+    const sub = resolveMessageRoute(declaredOptions, invocation.args);
+    const routed = sub ? withoutLeadingArgs(invocation, sub.consumed) : invocation;
+    const typedOptions = mapMessageOptions(declaredOptions, sub?.route ?? null, routed.args, routed.rawArgs);
+    await this.runScript(sub ? resolveCommandScript(handler.script, handler.data, sub.route) : handler.script, {
       message,
       guild: message.guild,
       member: message.member,
       channel: message.channel,
-      invocation,
+      invocation: Object.keys(typedOptions).length > 0 ? { ...routed, options: typedOptions } : routed,
     });
   }
 
@@ -549,6 +570,18 @@ export class HandlerRegistry {
       webhook: { path: pathKey, payload, headers },
     });
     return true;
+  }
+
+  /** Workflow d'une source WebSocket : le script s'exécute avec l'événement dans `bc.ws.event`. */
+  async runWebSocketEvent(
+    script: string,
+    event: import('../runtime/websocket/ws-manager.js').WsEvent,
+  ): Promise<void> {
+    if (!script.trim()) return;
+    const outcome = await this.runScript(script, { wsEvent: event });
+    if (outcome && outcome.ok === false) {
+      throw new Error(outcome.error ?? 'the workflow failed');
+    }
   }
 
   /**
@@ -853,6 +886,13 @@ export class HandlerRegistry {
               (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
               null,
           }),
+          recorder: this.recorder?.forGuild(
+            scriptGuild as Guild | null,
+            partial.interaction?.user?.id ??
+              partial.message?.author?.id ??
+              (partial.compatMessage as { author?: { id?: string } } | undefined)?.author?.id ??
+              null,
+          ),
           // Vues « script » : `member` normalisé (PermissionsBitField), `guild`
           // et `channel` résolus, même hors cache.
           interaction: partial.interaction
@@ -885,6 +925,7 @@ export class HandlerRegistry {
           member,
           channel: scriptChannel as never,
           webhook: partial.webhook,
+          ws: { bridge: this.webSockets, event: partial.wsEvent },
         },
         this.scriptLogger,
         options.timeoutMs ?? this.config.scriptTimeoutMs,
@@ -923,6 +964,23 @@ export class HandlerRegistry {
       const source = describeScriptSource(partial);
       const stack = error instanceof Error && error.stack ? `\n${error.stack}` : '';
       this.emitLog('error', `Handler script failed (${source}): ${message}${stack}`);
+      // Une panne de plateforme (Manager, stockage des variables) n'est pas la faute du bot : elle reste dans
+      // les journaux ci-dessus, rien n'est envoyé à Discord (ni salon, ni réponse éphémère). Seul un
+      // « réflexion en cours… » déjà créé est retiré, sans bruit.
+      if (isInfrastructureError(error)) {
+        if (error instanceof InfrastructureError) {
+          this.emitLog('error', `Infrastructure error detail (${source}): ${error.detail}`);
+        }
+        const interaction = partial.interaction;
+        if (interaction?.isRepliable?.() && interaction.deferred && !interaction.replied) {
+          try {
+            if (!interaction.isMessageComponent?.()) await interaction.deleteReply();
+          } catch {
+            // Rien de plus à faire.
+          }
+        }
+        return failure;
+      }
       await notifyScriptFailure(partial.interaction, message);
       return failure;
     }
@@ -1202,12 +1260,14 @@ export function scriptOrigin(partial: {
   message?: Message;
   invocation?: { name?: string };
   webhook?: { path: string };
+  wsEvent?: { source: string };
 }): { kind: 'command' | 'workflow'; name: string } | undefined {
   const commandName = (partial.interaction as { commandName?: string } | undefined)?.commandName;
   if (commandName) return { kind: 'command', name: commandName };
   if (partial.invocation?.name) return { kind: 'command', name: partial.invocation.name };
   if (partial.scheduled?.id) return { kind: 'workflow', name: partial.scheduled.id };
   if (partial.webhook?.path) return { kind: 'workflow', name: partial.webhook.path };
+  if (partial.wsEvent) return { kind: 'workflow', name: `ws:${partial.wsEvent.source}` };
   return undefined;
 }
 
@@ -1216,6 +1276,7 @@ export function traceKindAndName(partial: {
   interaction?: Interaction;
   message?: Message;
   webhook?: { path: string };
+  wsEvent?: { source: string };
 }): { kind: string; name?: string } {
   const interaction = partial.interaction as { commandName?: string; customId?: string } | undefined;
   if (interaction?.commandName) return { kind: 'command', name: interaction.commandName };
@@ -1227,6 +1288,7 @@ export function traceKindAndName(partial: {
     };
   }
   if (partial.scheduled) return { kind: 'scheduled', name: partial.scheduled.id };
+  if (partial.wsEvent) return { kind: 'websocket', name: partial.wsEvent.source };
   if (partial.message) return { kind: 'message' };
   return { kind: 'event' };
 }

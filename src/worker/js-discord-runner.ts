@@ -41,6 +41,10 @@ import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
+import { ConsentStore } from '../runtime/voice/consent.js';
+import { WebSocketSourceManager } from '../runtime/websocket/ws-manager.js';
+import { parseWebSocketSources } from '../runtime/websocket/ws-source.js';
+import { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
 import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
@@ -71,6 +75,12 @@ export class JsDiscordRunner {
   private executor: ScriptExecutor | null = null;
   private databaseManager: DatabaseManager | null = null;
   private music: MusicManager | null = null;
+  private recorder: VoiceRecorderManager | null = null;
+  /**
+   * Sources WebSocket sortantes : comme le planificateur, elles survivent à la reconnexion Discord et ne
+   * s'arrêtent qu'avec le bot.
+   */
+  private readonly webSockets: WebSocketSourceManager;
   private startedAt: string | null = null;
   private lastError: string | null = null;
   private effectiveIntents: Record<string, boolean> = {};
@@ -102,6 +112,17 @@ export class JsDiscordRunner {
     private readonly restStats: DiscordRestStats = new DiscordRestStats(),
     options: JsDiscordRunnerOptions = {},
   ) {
+    this.webSockets = new WebSocketSourceManager({
+      botId,
+      // Nœud hébergé (mode pool) : adresses privées refusées. Un bot sur sa propre machine peut viser son réseau.
+      ssrfGuard: ['true', '1'].includes((process.env.BOT_CREATOR_POOL_MODE ?? '').toLowerCase()),
+      onEvent: async (source, event) => {
+        const registry = this.registry;
+        if (!registry) throw new Error('the bot is not running');
+        await registry.runWebSocketEvent(source.script, event);
+      },
+      log: (message) => this.onLog('info', message, 'script'),
+    });
     this.scheduler = new ScheduledTasks({
       run: (entry) => this.runScheduledEntry(entry),
       // Prêt = client connecté ET registre monté (pas pendant une reconnexion).
@@ -150,6 +171,11 @@ export class JsDiscordRunner {
   /** Tâches planifiées du bot (prochaine échéance, dernier résultat) pour `/bots/:id/status`. */
   getScheduledSnapshot(): ScheduledSnapshot {
     return this.scheduler.snapshot();
+  }
+
+  /** État des sources WebSocket pour `GET /bots/:id/websockets/live` (jamais de secret ni de message). */
+  getWebSocketSnapshot(): Array<Record<string, unknown>> {
+    return this.webSockets.snapshot();
   }
 
   /** « Exécuter maintenant » : une tâche planifiée tout de suite, sans toucher à son minuteur. */
@@ -295,6 +321,11 @@ export class JsDiscordRunner {
     this.databaseManager = new DatabaseManager(this.config.databaseConfig);
     this.music = new MusicManager(this.client, (level, message) => this.onLog(level, message, 'script'));
     this.music.setConfig(this.config.lavalink);
+    this.recorder = new VoiceRecorderManager(
+      this.client,
+      (level, message) => this.onLog(level, message, 'script'),
+      new ConsentStore(this.variableStore, this.botId),
+    );
     this.registry = new HandlerRegistry(
       this.client,
       this.config,
@@ -310,6 +341,8 @@ export class JsDiscordRunner {
         messageContentAvailable: Boolean(this.effectiveIntents['Message Content']),
         scheduler: this.scheduler,
         music: this.music,
+        recorder: this.recorder,
+        webSockets: this.webSockets,
       },
     );
     // Une trace par exécution traitée, envoyée au journal durable (audience support); ni le tampon local
@@ -402,6 +435,8 @@ export class JsDiscordRunner {
     this.startedAt = new Date().toISOString();
     this.lastError = null;
     this.guildCount = this.client.guilds.cache.size;
+    this.webSockets.updateSources(parseWebSocketSources(this.config.webSocketSources));
+    if (!this.webSockets.isStarted) this.webSockets.startPermanent();
   }
 
   async reload(config: JsBotConfig): Promise<void> {
@@ -441,6 +476,7 @@ export class JsDiscordRunner {
         // start() a déjà détruit le client et le registre (teardown) : les tâches gardées pour la reconnexion
         // ne doivent pas rester armées sans eux. Le superviseur passe le bot en erreur sans appeler stop().
         this.scheduler.stop();
+        await this.webSockets.stop();
         throw error;
       } finally {
         this.reconnecting = false;
@@ -459,6 +495,7 @@ export class JsDiscordRunner {
     }
 
     this.registry.updateConfig(config, this.databaseManager?.handles);
+    this.webSockets.updateSources(parseWebSocketSources(config.webSocketSources));
     applyPresence(this.client, config, this.presenceEvaluator());
     await this.propagateRemovals(previousCommands, config.commands ?? [], config.token);
   }
@@ -541,11 +578,14 @@ export class JsDiscordRunner {
     this.registry = null;
     if (!keepScheduler) {
       this.scheduler.stop();
+      await this.webSockets.stop();
     }
     this.executor?.dispose();
     this.executor = null;
     await this.music?.dispose();
     this.music = null;
+    await this.recorder?.dispose();
+    this.recorder = null;
     await this.databaseManager?.dispose();
     this.databaseManager = null;
 

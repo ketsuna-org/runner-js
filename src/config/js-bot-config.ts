@@ -259,6 +259,12 @@ export const jsBotConfigSchema = z.object({
     .array(inboundWebhookHandlerSchema)
     .nullish()
     .transform((value) => value ?? []),
+  /**
+   * Sources WebSocket sortantes du bot (`webSocketSources`, voir DESIGN-websocket.md), avec le script de leur
+   * workflow projeté par le Manager. Relues avec tolérance par `parseWebSocketSources`. Contiennent des
+   * secrets : jamais sur disque, jamais visibles d'un script.
+   */
+  webSocketSources: z.array(z.record(z.unknown())).optional(),
   globalVariables: z.record(z.unknown()).default({}),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
   scriptTimeoutMs: z

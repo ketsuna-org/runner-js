@@ -1,3 +1,4 @@
+import { ONE_TIME_PREFIX } from '../scripts/script-db.js';
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   commandHandlerSchema,
@@ -308,7 +309,8 @@ export class RuntimeController {
   async getMergedGlobalVariables(botId: string): Promise<Record<string, unknown>> {
     const entry = await this.requireBotEntry(botId);
     const runtime = await this.variableStore.getGlobalVariables(botId);
-    return { ...entry.config.globalVariables, ...runtime };
+    const visible = Object.fromEntries(Object.entries(runtime).filter(([key]) => !key.startsWith(ONE_TIME_PREFIX)));
+    return { ...entry.config.globalVariables, ...visible };
   }
 
   async upsertGlobalVariable(botId: string, key: string, value: unknown): Promise<void> {
@@ -489,6 +491,10 @@ export class RuntimeController {
   /** « Exécuter maintenant » ; null si le bot ne tourne pas. */
   runScheduledNow(botId: string, taskId: string) {
     return this.processManager.runScheduledNow(botId, taskId);
+  }
+
+  webSocketSnapshot(botId: string) {
+    return this.processManager.getWebSocketSnapshot(botId);
   }
 
   runtimeStateForBot(botId: string): RunnerBotRuntimeState {

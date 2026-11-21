@@ -1,4 +1,7 @@
 import { ManagedAiGateway } from './ai/ai-gateway.js';
+import { ManagedDocumentsGateway } from './documents/documents-gateway.js';
+import { ManagedFilesGateway } from './files/files-gateway.js';
+import { LocalFilesGateway } from './files/local-files-gateway.js';
 import { loadRunnerEnv, validateRunnerWebConfiguration } from './config/env.js';
 import { createHttpServer } from './http/server.js';
 import { bootstrapFromPool } from './pool/bootstrap.js';
@@ -33,6 +36,10 @@ export async function startMainServer(): Promise<void> {
 
   // Fonctions IA du langage (`bc.ai`) : seulement avec un Manager (runner géré ou pool).
   ManagedAiGateway.install(env);
+  // Fichiers des bots (`bc.files`) : stockage du compte, via le Manager.
+  // Sans Manager, un bot local (desktop) écrit dans un dossier du PC si BOT_CREATOR_LOCAL_FILES_DIR est posé.
+  ManagedFilesGateway.install(env) || LocalFilesGateway.install(env);
+  ManagedDocumentsGateway.install(env);
 
   // All bots share this process; log unexpected errors but never exit, since
   // exiting would take down every bot on the node.

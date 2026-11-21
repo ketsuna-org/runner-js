@@ -21,6 +21,11 @@ export interface ScriptExecutionContext {
     payload: unknown;
     headers: Record<string, string>;
   };
+  /** Sources WebSocket du bot (global `bc.ws`) : pont du bot et événement qui a lancé le script, s'il y en a un. */
+  ws?: {
+    bridge?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
+    event?: import('../runtime/websocket/ws-manager.js').WsEvent;
+  };
   db?: import('./script-db.js').ScriptDb;
   sql?: import('../runtime/database-manager.js').SqlInterface;
   pgsql?: import('../runtime/database-manager.js').PgsqlInterface;
@@ -29,6 +34,8 @@ export interface ScriptExecutionContext {
   origin?: ScriptOrigin;
   /** Musique du bot (global `voice`), liée au serveur du déclencheur. */
   voice?: import('../runtime/music/music-manager.js').VoiceApi;
+  /** Enregistrement vocal expérimental (`bc.recorder`), lié au serveur du déclencheur. */
+  recorder?: import('../runtime/voice/voice-recorder.js').VoiceRecorderApi;
 }
 
 export interface ScriptLogger {

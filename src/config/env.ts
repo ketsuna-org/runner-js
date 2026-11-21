@@ -15,6 +15,8 @@ export interface RunnerEnv {
   runnerNodeId: string;
   managedRunnerApi: string;
   managedRunnerToken: string;
+  /** Dossier des fichiers d'un bot local (desktop), sans Manager. Vide = fichiers indisponibles. */
+  localFilesDir: string;
   version: string;
 }
 
@@ -92,6 +94,7 @@ export function loadRunnerEnv(): RunnerEnv {
     runnerNodeId: envOrDefault('BOT_CREATOR_RUNNER_NODE_ID', ''),
     managedRunnerApi: envOrDefault('BOT_CREATOR_MANAGED_RUNNER_API', ''),
     managedRunnerToken: envOrDefault('BOT_CREATOR_MANAGED_RUNNER_TOKEN', ''),
+    localFilesDir: envOrDefault('BOT_CREATOR_LOCAL_FILES_DIR', ''),
     version: resolveVersion(),
   };
 }

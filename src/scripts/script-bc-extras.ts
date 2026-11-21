@@ -142,10 +142,15 @@ const DEFAULT_LOCK_TTL_MS = 30_000;
 const MAX_LOCK_TTL_MS = 10 * 60_000;
 
 export interface BcVars {
-  /** Ajoute `amount` (1 par défaut) de façon atomique (`$increment`) ; renvoie la nouvelle valeur. */
-  increment(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  /**
+   * Ajoute `amount` (1 par défaut) de façon atomique (`$increment`) ; renvoie la nouvelle valeur,
+   * sauf avec `{ returnValue: false }` (la variable est mise à jour, rien n'est renvoyé).
+   */
+  increment(scope: DbScope, key: string, amount?: number, id?: string, options?: { returnValue?: true }): Promise<number>;
+  increment(scope: DbScope, key: string, amount: number | undefined, id: string | undefined, options: { returnValue: false }): Promise<void>;
   /** Idem en retranchant (`$decrement`). */
-  decrement(scope: DbScope, key: string, amount?: number, id?: string): Promise<number>;
+  decrement(scope: DbScope, key: string, amount?: number, id?: string, options?: { returnValue?: true }): Promise<number>;
+  decrement(scope: DbScope, key: string, amount: number | undefined, id: string | undefined, options: { returnValue: false }): Promise<void>;
   /** Écrit `next` seulement si la valeur actuelle vaut `expected` (`$compareAndSetVar`). */
   compareAndSet(scope: DbScope, key: string, expected: unknown, next: unknown, id?: string): Promise<boolean>;
   /** Ajoute `item` à la liste `,a,b,` seulement s'il n'y est pas déjà (atomique). */
@@ -190,6 +195,87 @@ export interface BcLock {
   unlock(name: string): void;
 }
 
+export type OneTimeType = 'user' | 'server' | 'global';
+
+export interface BcOneTimeResult<T> {
+  /** Faux quand la réclamation était déjà prise : le script n'a pas été exécuté. */
+  ran: boolean;
+  value?: T;
+}
+
+export interface BcOneTime {
+  /**
+   * `$onlyOneTime` : exécute `fn` une seule fois par utilisateur (`user`, tous serveurs), par serveur (`server`)
+   * ou pour tout le monde (`global`), pour cette commande. La réclamation est prise AVANT `fn` ; si `fn` lève
+   * une erreur, elle est rendue puis l'erreur est relancée.
+   */
+  run<T>(type: OneTimeType, fn: () => T | Promise<T>): Promise<BcOneTimeResult<T>>;
+  /**
+   * `$resetOneTime` : réarme. Sans `type`, les types réclamés plus tôt dans cette exécution (`user` s'il n'y en a pas).
+   * `userId` vise un autre utilisateur, `command` une autre commande (nom).
+   */
+  reset(type?: OneTimeType, options?: { userId?: string; command?: string }): Promise<void>;
+}
+
+/** Ce que `createBcOneTime` doit savoir de l'exécution en cours et du stockage réservé. */
+export interface OneTimeHost {
+  botId: string;
+  /** Nom de la commande ou du workflow en cours. */
+  command: () => string;
+  userId: () => string;
+  guildId: () => string;
+  claim(contextId: string): Promise<boolean>;
+  release(contextId: string): Promise<void>;
+}
+
+export function createBcOneTime(host: OneTimeHost): BcOneTime {
+  const claimed: OneTimeType[] = [];
+  const check = (type: unknown): OneTimeType => {
+    const value = String(type ?? '').trim().toLowerCase();
+    if (value !== 'user' && value !== 'server' && value !== 'global') {
+      throw new Error('One-time type must be user, server or global.');
+    }
+    return value;
+  };
+  const id = (raw: string): string => {
+    const value = raw.trim();
+    if (!/^[0-9]+$/.test(value) || BigInt(value) <= 0n) throw new Error('Invalid Discord ID.');
+    return BigInt(value).toString();
+  };
+  // Même clé que le moteur BDFD : [bot, commande, type, utilisateur|serveur].
+  const keyOf = (type: OneTimeType, command: string, userId?: string): string => {
+    if (!host.botId || !command) throw new Error('One-time requires a bot and a command or workflow name.');
+    return JSON.stringify([
+      host.botId,
+      command,
+      type,
+      ...(type === 'user' ? [id(userId ?? host.userId())] : type === 'server' ? [id(host.guildId())] : []),
+    ]);
+  };
+  return {
+    async run(type, fn) {
+      const kind = check(type);
+      const key = keyOf(kind, host.command());
+      if (!(await host.claim(key))) return { ran: false };
+      claimed.push(kind);
+      try {
+        return { ran: true, value: await fn() };
+      } catch (error) {
+        await host.release(key);
+        const at = claimed.lastIndexOf(kind);
+        if (at >= 0) claimed.splice(at, 1);
+        throw error;
+      }
+    },
+    async reset(type, options = {}) {
+      const types = type === undefined || type === null ? (claimed.length ? [...new Set(claimed)] : ['user' as const]) : [check(type)];
+      const own = host.command();
+      const command = options.command && options.command.trim() && options.command.trim() !== own ? options.command.trim() : own;
+      for (const kind of types) await host.release(keyOf(kind, command, options.userId));
+    },
+  };
+}
+
 export function createBcVars(botId: string, getDb: () => unknown): BcVars {
   function scoped(scope: DbScope): { get: ScopedDb['get']; set: ScopedDb['set'] } {
     const db = getDb() as Record<string, unknown> | undefined;
@@ -215,9 +301,15 @@ export function createBcVars(botId: string, getDb: () => unknown): BcVars {
       return next;
     });
   }
+  const counter =
+    (sign: 1 | -1) =>
+    async (scope: DbScope, key: string, amount: number = 1, id?: string, options?: { returnValue?: boolean }) => {
+      const next = await add(scope, key, sign * amount, id);
+      return options?.returnValue === false ? undefined : next;
+    };
   return {
-    increment: (scope, key, amount = 1, id) => add(scope, key, amount, id),
-    decrement: (scope, key, amount = 1, id) => add(scope, key, -amount, id),
+    increment: counter(1) as BcVars['increment'],
+    decrement: counter(-1) as BcVars['decrement'],
     compareAndSet: (scope, key, expected, next, id) =>
       withVariableLock(lockKey(scope, key, id), async () => {
         const store = scoped(scope);

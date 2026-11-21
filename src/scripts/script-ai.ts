@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
 
+import { createBcWs, type BcWs } from './script-ws.js';
+import { getDocumentsGateway } from '../documents/documents-gateway.js';
+import { getFilesGateway } from '../files/files-gateway.js';
+import { createBcDb, type BcDb } from './script-documents.js';
+import { createBcFiles, type BcFiles } from './script-files.js';
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
-import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcVars } from './script-bc-extras.js';
-import type { BcActivity, BcCanvas, BcGrid, BcForum, BcLock, BcMath, BcVars } from './script-bc-extras.js';
+import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from './script-bc-extras.js';
+import type { BcActivity, BcCanvas, BcGrid, BcForum, BcLock, BcMath, BcOneTime, BcVars } from './script-bc-extras.js';
 import type { AiGateway, AiMessage, AiTool, AiToolCall } from '../ai/ai-gateway.js';
 
 /** Itérations maximales de `bc.ai.agent`, comme `$aiAgent` de BDFD. */
@@ -50,6 +55,11 @@ export interface BcAiContext {
   guild?: unknown;
   channel?: unknown;
   db?: unknown;
+  recorder?: import('../runtime/voice/voice-recorder.js').VoiceRecorderApi;
+  ws?: {
+    bridge?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
+    event?: import('../runtime/websocket/ws-manager.js').WsEvent;
+  };
   /** Commande ou workflow du script en cours (statistiques de crédits IA). */
   origin?: { kind: 'command' | 'workflow'; name: string };
 }
@@ -67,6 +77,22 @@ function triggerUserId(context: BcAiContext): string | undefined {
     (context.message as { author?: { id?: unknown } } | undefined)?.author?.id ??
     (context.interaction as { user?: { id?: unknown } } | undefined)?.user?.id;
   return id === undefined || id === null || id === '' ? undefined : String(id);
+}
+
+/** Identifiant du serveur du message ou de l'interaction déclencheurs. */
+function guildIdOf(context: BcAiContext): string | undefined {
+  const id =
+    (context.guild as { id?: unknown } | undefined)?.id ??
+    (context.message as { guildId?: unknown } | undefined)?.guildId ??
+    (context.interaction as { guildId?: unknown } | undefined)?.guildId;
+  return id === undefined || id === null || id === '' ? undefined : String(id);
+}
+
+/** Stockage réservé de `bc.oneTime` : fourni par `ScriptDb`. */
+function oneTimeStore(db: unknown): { claimOneTime(id: string): Promise<boolean>; releaseOneTime(id: string): Promise<void> } {
+  const store = db as { claimOneTime?: (id: string) => Promise<boolean>; releaseOneTime?: (id: string) => Promise<void> } | undefined;
+  if (!store?.claimOneTime || !store.releaseOneTime) throw new Error('The bot has no storage available.');
+  return store as never;
 }
 
 /** Contexte du message déclencheur, comme `$aiWithCtx` de BDFD. */
@@ -132,7 +158,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -279,9 +305,29 @@ export function createBcGlobal(
     math: createBcMath(),
     vars: createBcVars(botId(), () => context.db),
     lock: createBcLock(botId()),
+    oneTime: createBcOneTime({
+      get botId() {
+        return botId();
+      },
+      command: () => text(context.origin?.name),
+      userId: () => text(triggerUserId(context)),
+      guildId: () => text(guildIdOf(context)),
+      claim: (contextId) => oneTimeStore(context.db).claimOneTime(contextId),
+      release: (contextId) => oneTimeStore(context.db).releaseOneTime(contextId),
+    }),
     forum: createBcForum(() => context.client),
     activity: createBcActivity(botId()),
     grid: createBcGrid(),
     canvas: createBcCanvas(),
+    // Expérimental : `undefined` hors d'un serveur ou si le moteur n'est pas branché.
+    recorder: context.recorder,
+    ws: createBcWs(context.ws?.bridge, context.ws?.event),
+    files: createBcFiles(getFilesGateway, botId),
+    db: createBcDb({
+      gateway: getDocumentsGateway,
+      botId,
+      guildId: () => guildIdOf(context),
+      userId: () => triggerUserId(context),
+    }),
   };
 }

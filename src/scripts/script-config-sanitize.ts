@@ -15,13 +15,15 @@ export function sanitizeConfigForScript(config: JsBotConfig): Record<string, unk
     return cached;
   }
 
-  const { token: _token, inboundWebhooks, databaseConfig, lavalink, ...safeConfig } = config;
+  const { token: _token, inboundWebhooks, databaseConfig, lavalink, webSocketSources, ...safeConfig } = config;
   const sanitized: Record<string, unknown> = {
     ...safeConfig,
     databaseConfig: databaseConfig ? { type: databaseConfig.type || 'none' } : { type: 'none' },
     // Les mots de passe des serveurs Lavalink personnels ne sortent jamais vers un script.
     lavalink: { enabled: lavalink?.enabled === true },
     inboundWebhooks: (inboundWebhooks ?? []).map(({ secret: _secret, ...webhook }) => webhook),
+    // Ni secrets, ni en-têtes, ni script des sources WebSocket : un script n'en voit que le nom.
+    webSocketSources: (webSocketSources ?? []).map((source) => ({ name: source.name, mode: source.mode, enabled: source.enabled })),
   };
   const result = copyHostValue(sanitized, { redactSensitive: true }) as Record<string, unknown>;
   sanitizedConfigCache.set(config, result);

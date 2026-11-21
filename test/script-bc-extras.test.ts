@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createBcForum, createBcLock, createBcMath, createBcVars } from '../src/scripts/script-bc-extras.js';
+import { createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from '../src/scripts/script-bc-extras.js';
 
 describe('bc.math', () => {
   const m = createBcMath();
@@ -41,6 +41,14 @@ describe('bc.vars and bc.lock', () => {
     await Promise.all(Array.from({ length: 50 }, () => v.increment('global', 'hp', 2)));
     expect(await db.global.get('hp')).toBe(100);
     expect(vars).toBeDefined();
+  });
+  test('returnValue false updates without returning', async () => {
+    const db = fakeDb();
+    const v = createBcVars('bot', () => db);
+    expect(await v.increment('global', 'xp', 5, undefined, { returnValue: false })).toBeUndefined();
+    expect(await v.decrement('global', 'xp', 2, undefined, { returnValue: false })).toBeUndefined();
+    expect(await v.increment('global', 'xp', 1)).toBe(4);
+    expect(await db.global.get('xp')).toBe(4);
   });
   test('compareAndSet and listAddUnique', async () => {
     const db = fakeDb();
@@ -140,5 +148,57 @@ describe('bc.canvas', () => {
     expect((file.attachment as Buffer).subarray(1, 4).toString()).toBe('PNG');
     expect(() => bc.create(0, 10)).toThrow();
     expect(() => bc.create(5000, 10)).toThrow();
+  });
+});
+
+describe('bc.oneTime', () => {
+  function host(overrides: Partial<{ command: string; userId: string; guildId: string }> = {}, taken = new Set<string>()) {
+    const state = { command: 'cmd', userId: '20', guildId: '10', ...overrides };
+    return {
+      taken,
+      api: createBcOneTime({
+        botId: 'bot',
+        command: () => state.command,
+        userId: () => state.userId,
+        guildId: () => state.guildId,
+        claim: async (key) => (taken.has(key) ? false : (taken.add(key), true)),
+        release: async (key) => void taken.delete(key),
+      }),
+    };
+  }
+  test('user: once per user, across servers and per command', async () => {
+    const taken = new Set<string>();
+    expect(await host({}, taken).api.run('user', () => 'gift')).toEqual({ ran: true, value: 'gift' });
+    expect((await host({}, taken).api.run('user', () => 'gift')).ran).toBe(false);
+    expect((await host({ guildId: '11' }, taken).api.run('user', () => 1)).ran).toBe(false);
+    expect((await host({ userId: '21' }, taken).api.run('user', () => 1)).ran).toBe(true);
+    expect((await host({ command: 'other' }, taken).api.run('user', () => 1)).ran).toBe(true);
+  });
+  test('server and global scopes', async () => {
+    const taken = new Set<string>();
+    expect((await host({}, taken).api.run('server', () => 1)).ran).toBe(true);
+    expect((await host({ userId: '21' }, taken).api.run('server', () => 1)).ran).toBe(false);
+    expect((await host({ guildId: '11' }, taken).api.run('server', () => 1)).ran).toBe(true);
+    expect((await host({}, taken).api.run('global', () => 1)).ran).toBe(true);
+    expect((await host({ userId: '21', guildId: '11' }, taken).api.run('global', () => 1)).ran).toBe(false);
+  });
+  test('a failing script gives the claim back', async () => {
+    const { api } = host();
+    await expect(api.run('user', () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    expect((await api.run('user', () => 'ok')).ran).toBe(true);
+  });
+  test('reset re-arms the types claimed in this run, or a given user and command', async () => {
+    const taken = new Set<string>();
+    const { api } = host({}, taken);
+    await api.run('global', () => 1);
+    await api.reset();
+    expect((await host({}, taken).api.run('global', () => 1)).ran).toBe(true);
+    await host({ userId: '21' }, taken).api.run('user', () => 1);
+    await host({ command: 'other' }, taken).api.run('user', () => 1);
+    await api.reset('user', { userId: '21' });
+    expect((await host({ userId: '21' }, taken).api.run('user', () => 1)).ran).toBe(true);
+    await api.reset('user', { userId: '20', command: 'other' });
+    expect((await host({ command: 'other' }, taken).api.run('user', () => 1)).ran).toBe(true);
+    await expect(api.reset('everyone' as never)).rejects.toThrow('user, server or global');
   });
 });

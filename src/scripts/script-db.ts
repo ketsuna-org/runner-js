@@ -61,6 +61,27 @@ export interface ScriptDbGuildMemberApi {
   reset(key: string): Promise<void>;
 }
 
+/** Préfixe réservé des réclamations de `bc.oneTime` : jamais listé par `db.global.keys()`. */
+export const ONE_TIME_PREFIX = '__oneTime:';
+const oneTimeLocks = new Map<string, Promise<void>>();
+
+async function withOneTimeLock<T>(key: string, action: () => Promise<T>): Promise<T> {
+  const previous = oneTimeLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const done = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const tail = previous.then(() => done);
+  oneTimeLocks.set(key, tail);
+  try {
+    await previous;
+    return await action();
+  } finally {
+    release();
+    if (oneTimeLocks.get(key) === tail) oneTimeLocks.delete(key);
+  }
+}
+
 /**
  * Persistent bot storage for JavaScript scripts.
  *
@@ -110,6 +131,28 @@ export class ScriptDb {
     this.channel = this.createScopedApi('channel');
     this.message = this.createScopedApi('message');
     this.guildMember = this.createGuildMemberApi();
+  }
+
+  /**
+   * Réservé à `bc.oneTime` (`$onlyOneTime`) : une réclamation est une variable globale au préfixe réservé,
+   * cachée de `db.global.keys()`. Prend la réclamation si elle est libre ; faux si elle est déjà prise.
+   */
+  async claimOneTime(contextId: string): Promise<boolean> {
+    return withOneTimeLock(`${this.#botId}|${contextId}`, async () => {
+      const key = `${ONE_TIME_PREFIX}${contextId}`;
+      const taken = this.#store.getGlobalVariable
+        ? await this.#store.getGlobalVariable(this.#botId, key)
+        : (await this.#store.getGlobalVariables(this.#botId))[key];
+      if (taken !== undefined && taken !== null) return false;
+      await this.#store.setGlobalVariable(this.#botId, key, Date.now());
+      return true;
+    });
+  }
+
+  async releaseOneTime(contextId: string): Promise<void> {
+    await withOneTimeLock(`${this.#botId}|${contextId}`, () =>
+      this.#store.removeGlobalVariable(this.#botId, `${ONE_TIME_PREFIX}${contextId}`),
+    );
   }
 
   private createGuildMemberApi(): ScriptDbGuildMemberApi {
@@ -595,7 +638,7 @@ export class ScriptDb {
 
   async globalKeys(): Promise<string[]> {
     const stored = await this.#store.getGlobalVariables(this.#botId);
-    return [...new Set([...Object.keys(this.#config.globalVariables ?? {}), ...Object.keys(stored)])];
+    return [...new Set([...Object.keys(this.#config.globalVariables ?? {}), ...Object.keys(stored)].filter((key) => !key.startsWith(ONE_TIME_PREFIX)))];
   }
 
   async deleteGlobal(key: string): Promise<void> {

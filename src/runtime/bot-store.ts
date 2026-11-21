@@ -44,7 +44,7 @@ export class BotStore {
   }
 
   private sanitizeForStorage(config: JsBotConfig): JsBotConfig {
-    const { token: _token, databaseConfig, inboundWebhooks, ...safeConfig } = config;
+    const { token: _token, databaseConfig, inboundWebhooks, webSocketSources, ...safeConfig } = config;
     return {
       ...safeConfig,
       token: '',
@@ -53,6 +53,8 @@ export class BotStore {
         ...wh,
         secret: '',
       })),
+      // Les secrets des sources WebSocket (jetons, clés) ne vont pas sur disque : ils restent en mémoire.
+      ...(webSocketSources ? { webSocketSources: webSocketSources.map((source) => ({ ...source, secrets: {} })) } : {}),
     };
   }
 
@@ -151,6 +153,14 @@ export class BotStore {
               ? { ...webhook, secret: source.secret }
               : webhook;
           }),
+          ...(config.webSocketSources
+            ? {
+                webSocketSources: config.webSocketSources.map((source) => {
+                  const live = mem.webSocketSources?.find((candidate) => candidate.id === source.id || candidate.name === source.name);
+                  return live?.secrets && typeof live.secrets === 'object' ? { ...source, secrets: live.secrets } : source;
+                }),
+              }
+            : {}),
         };
       }
       const entry: RunnerBotEntry = {
