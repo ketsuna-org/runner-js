@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 
 import { createBcWs, type BcWs } from './script-ws.js';
+import { getDocumentsGateway } from '../documents/documents-gateway.js';
 import { getFilesGateway } from '../files/files-gateway.js';
+import { createBcDb, type BcDb } from './script-documents.js';
 import { createBcFiles, type BcFiles } from './script-files.js';
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
 import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from './script-bc-extras.js';
@@ -156,7 +158,7 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles } {
+): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -321,5 +323,11 @@ export function createBcGlobal(
     recorder: context.recorder,
     ws: createBcWs(context.ws?.bridge, context.ws?.event),
     files: createBcFiles(getFilesGateway, botId),
+    db: createBcDb({
+      gateway: getDocumentsGateway,
+      botId,
+      guildId: () => guildIdOf(context),
+      userId: () => triggerUserId(context),
+    }),
   };
 }
