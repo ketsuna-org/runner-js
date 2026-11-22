@@ -24,6 +24,14 @@ export interface ManagedStoreResilience {
   warmRefreshIntervalMs: number;
   /** Taille maximale (octets) de la liste des globales gardée en cache. */
   maxWarmBytes: number;
+  /**
+   * Écritures répétées d'une même clé : la première part tout de suite (l'erreur éventuelle remonte au
+   * script), les suivantes dans cette fenêtre sont fusionnées en une seule, la dernière valeur gagnant.
+   * 0 = désactivé.
+   */
+  writeCoalesceMs: number;
+  /** Durée pendant laquelle une lecture unitaire (`get`) est servie sans rappeler le Manager. 0 = désactivé. */
+  readCacheMs: number;
 }
 
 const DEFAULT_RESILIENCE: ManagedStoreResilience = {
@@ -38,6 +46,8 @@ const DEFAULT_RESILIENCE: ManagedStoreResilience = {
   maxDrainDelayMs: 60000,
   warmRefreshIntervalMs: 120000,
   maxWarmBytes: 5 * 1024 * 1024,
+  writeCoalesceMs: 1000,
+  readCacheMs: 3000,
 };
 
 interface ManagedVariableStoreOptions {
@@ -103,6 +113,14 @@ export class ManagedVariableStore implements VariableDatabase {
   private drainTimer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
   private readonly warmBots = new Set<string>();
+  /** url -> instant où la réponse a été reçue : sert les lectures unitaires récentes sans appel. */
+  private readonly freshAt = new Map<string, number>();
+  /** Dernier envoi d'une écriture par clé, et écriture en attente d'être fusionnée. */
+  private readonly lastSent = new Map<string, number>();
+  private readonly coalesced = new Map<
+    string,
+    { botId: string; suffix: string; body: Record<string, unknown>; timer: ReturnType<typeof setTimeout> }
+  >();
   private warmTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(options: ManagedVariableStoreOptions) {
@@ -119,6 +137,7 @@ export class ManagedVariableStore implements VariableDatabase {
     this.drainTimer = null;
     if (this.warmTimer) clearInterval(this.warmTimer);
     this.warmTimer = null;
+    void this.flushCoalesced().catch(() => undefined);
   }
 
   /**
@@ -230,7 +249,97 @@ export class ManagedVariableStore implements VariableDatabase {
     return `${this.baseUrl}/bots/${encodeURIComponent(botId)}/variables${suffix}`;
   }
 
+  private static readonly COALESCIBLE = new Set(['/global/set', '/scoped/set']);
+
+  private coalesceKey(botId: string, suffix: string, body: Record<string, unknown>): string {
+    return [botId, suffix, body.scope, body.scope_id, body.scope_aux_id, body.key].map((v) => String(v ?? '')).join('\u001f');
+  }
+
   private async post(botId: string, suffix: string, body: Record<string, unknown>): Promise<unknown> {
+    const windowMs = this.cfg.writeCoalesceMs;
+    if (windowMs <= 0 || this.disposed) return this.postNow(botId, suffix, body);
+    if (!ManagedVariableStore.COALESCIBLE.has(suffix)) {
+      // Toute autre écriture passe après celles du bot qui attendent : l'ordre est conservé.
+      await this.flushCoalesced(botId);
+      return this.postNow(botId, suffix, body);
+    }
+    const key = this.coalesceKey(botId, suffix, body);
+    const pending = this.coalesced.get(key);
+    const last = this.lastSent.get(key) ?? 0;
+    const elapsed = Date.now() - last;
+    if (pending) {
+      pending.body = body;
+      return null;
+    }
+    if (elapsed >= windowMs || this.breakerOpen || this.queue.length > 0) {
+      this.lastSent.set(key, Date.now());
+      return this.postNow(botId, suffix, body);
+    }
+    const timer = setTimeout(() => void this.flushOne(key), windowMs - elapsed);
+    (timer as { unref?: () => void }).unref?.();
+    this.coalesced.set(key, { botId, suffix, body, timer });
+    return null;
+  }
+
+  private async flushOne(key: string): Promise<void> {
+    const entry = this.coalesced.get(key);
+    if (!entry) return;
+    this.coalesced.delete(key);
+    clearTimeout(entry.timer);
+    this.lastSent.set(key, Date.now());
+    try {
+      await this.postNow(entry.botId, entry.suffix, entry.body);
+    } catch (error) {
+      this.log(
+        `[ManagedVariableStore] Coalesced write failed (${entry.suffix}): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (this.lastSent.size > 5000) this.lastSent.clear();
+  }
+
+  /** Envoie tout de suite les écritures fusionnées (d'un bot, ou de tous). */
+  private async flushCoalesced(botId?: string): Promise<void> {
+    const keys = [...this.coalesced.entries()].filter(([, e]) => botId === undefined || e.botId === botId).map(([k]) => k);
+    for (const key of keys) await this.flushOne(key);
+  }
+
+  private markFresh(suffix: string, url: string): void {
+    if (this.cfg.readCacheMs <= 0) return;
+    if (suffix !== '/global/get' && suffix !== '/scoped/get') return;
+    this.freshAt.delete(url);
+    this.freshAt.set(url, Date.now());
+    while (this.freshAt.size > this.cfg.maxCacheEntries) {
+      const oldest = this.freshAt.keys().next().value;
+      if (oldest === undefined) break;
+      this.freshAt.delete(oldest);
+    }
+  }
+
+  /** Une écriture de ce runner rend caduque la lecture récente qu'elle touche (ou toutes celles du bot). */
+  private invalidateFresh(botId: string, suffix: string, body: Record<string, unknown>): void {
+    if (this.freshAt.size === 0) return;
+    if (suffix === '/global/set' || suffix === '/global/remove') {
+      const params = new URLSearchParams({ key: String(body.key ?? '') });
+      this.freshAt.delete(`${this.url(botId, '/global/get')}?${params.toString()}`);
+      return;
+    }
+    if ((suffix === '/scoped/set' || suffix === '/scoped/remove') && body.key != null) {
+      const params = new URLSearchParams();
+      for (const name of ['scope', 'scope_id', 'scope_aux_id', 'key']) {
+        const value = body[name];
+        if (value != null && String(value).length > 0) params.set(name, String(value));
+      }
+      this.freshAt.delete(`${this.url(botId, '/scoped/get')}?${params.toString()}`);
+      return;
+    }
+    const prefix = this.url(botId, '');
+    for (const url of [...this.freshAt.keys()]) {
+      if (url.startsWith(prefix)) this.freshAt.delete(url);
+    }
+  }
+
+  private async postNow(botId: string, suffix: string, body: Record<string, unknown>): Promise<unknown> {
+    this.invalidateFresh(botId, suffix, body);
     const queueable = QUEUEABLE_WRITES.has(suffix);
     // Garder l'ordre des écritures : on rejoue d'abord ce qui attend.
     if (this.queue.length > 0 && !this.breakerOpen) {
@@ -289,6 +398,26 @@ export class ManagedVariableStore implements VariableDatabase {
     const queryString = params.toString();
     const url = `${this.url(botId, suffix)}${queryString ? `?${queryString}` : ''}`;
 
+    // Une écriture fusionnée en attente se lit directement ; pour une liste, on l'envoie d'abord.
+    if (this.coalesced.size > 0) {
+      if (suffix === '/global/get' || suffix === '/scoped/get') {
+        const pending = this.coalesced.get(
+          this.coalesceKey(botId, suffix === '/global/get' ? '/global/set' : '/scoped/set', { ...query }),
+        );
+        if (pending) return { value: pending.body.value };
+      } else {
+        await this.flushCoalesced(botId);
+      }
+    }
+    // Lecture unitaire récente : pas de nouvel appel (les écritures de ce runner invalident l'entrée).
+    if (this.cfg.readCacheMs > 0 && (suffix === '/global/get' || suffix === '/scoped/get')) {
+      const at = this.freshAt.get(url);
+      const body = this.cache.get(url);
+      if (at !== undefined && body !== undefined && Date.now() - at < this.cfg.readCacheMs) {
+        return JSON.parse(body);
+      }
+    }
+
     if (this.queue.length > 0 && !this.breakerOpen) {
       await this.drain();
     }
@@ -310,6 +439,7 @@ export class ManagedVariableStore implements VariableDatabase {
     }
     if (response.status === 404) {
       this.remember(url, 'null');
+      this.markFresh(suffix, url);
       return null;
     }
     if (response.status >= 400) {
@@ -320,6 +450,7 @@ export class ManagedVariableStore implements VariableDatabase {
     if (text.length === 0) return null;
     if (suffix !== '/global/list' || text.length <= this.cfg.maxWarmBytes) {
       this.remember(url, text);
+      this.markFresh(suffix, url);
     }
     return JSON.parse(text);
   }
