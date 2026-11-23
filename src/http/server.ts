@@ -1,6 +1,7 @@
 import os from 'node:os';
 
 import { Hono } from 'hono';
+import { getConnInfo } from 'hono/bun';
 import { ZodError } from 'zod';
 
 import type { RunnerEnv } from '../config/env.js';
@@ -780,7 +781,18 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       }
     }
 
-    await deps.runtime.triggerInboundWebhook(botId, pathKey, parsedBody, headers);
+    // Comme le runner Dart : l'IP est celle de la connexion (le proxy devant le runner, le cas échéant)
+    // et l'identifiant de requête vient de `x-request-id`.
+    let sourceIp = 'unknown';
+    try {
+      sourceIp = getConnInfo(c).remote.address ?? 'unknown';
+    } catch {
+      // Hors Bun.serve (tests, autre hôte) : pas d'adresse de connexion connue.
+    }
+    await deps.runtime.triggerInboundWebhook(botId, pathKey, parsedBody, headers, {
+      sourceIp,
+      requestId: c.req.header('x-request-id') ?? '',
+    });
 
     return c.json({
       ok: true,

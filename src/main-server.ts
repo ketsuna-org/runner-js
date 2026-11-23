@@ -72,7 +72,8 @@ export async function startMainServer(): Promise<void> {
   const app = createHttpServer({ env, runtime, logStore });
 
   const server = Bun.serve({
-    fetch: app.fetch,
+    // `server` sert à `getConnInfo` (IP source des webhooks entrants).
+    fetch: (request, srv) => app.fetch(request, { server: srv }),
     port: env.webPort,
     hostname: env.webHost,
   });

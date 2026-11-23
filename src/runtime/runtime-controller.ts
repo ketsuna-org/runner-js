@@ -9,7 +9,11 @@ import path from 'node:path';
 import type { RunnerEnv } from '../config/env.js';
 import { BotStore } from './bot-store.js';
 import { BotSupervisor, type BotSupervisorOptions, type ManagedBotState } from './bot-supervisor.js';
-import type { CommandEventName, CommandEventPayload } from '../discord/handler-registry.js';
+import type {
+  CommandEventName,
+  CommandEventPayload,
+  WebhookRequestMeta,
+} from '../discord/handler-registry.js';
 import type { DiscordRestSnapshot } from '../discord/rest-observability.js';
 import type { LogStore } from './log-store.js';
 import type { ScheduledSnapshot } from './scheduled-tasks.js';
@@ -286,8 +290,9 @@ export class RuntimeController {
     pathKey: string,
     payload: unknown,
     headers: Record<string, string>,
+    meta?: WebhookRequestMeta,
   ): Promise<void> {
-    await this.processManager.triggerInboundWebhook(botId, pathKey, payload, headers);
+    await this.processManager.triggerInboundWebhook(botId, pathKey, payload, headers, meta);
   }
 
   async drainAllBots(): Promise<number> {

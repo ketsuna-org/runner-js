@@ -34,6 +34,7 @@ import {
   HandlerRegistry,
   type CommandEventName,
   type CommandEventPayload,
+  type WebhookRequestMeta,
 } from '../discord/handler-registry.js';
 import { applyPresence, presenceTextScript, stopPresenceRotation } from '../discord/presence.js';
 import { ScriptExecutor } from '../scripts/script-executor.js';
@@ -557,11 +558,12 @@ export class JsDiscordRunner {
     pathKey: string,
     payload: unknown,
     headers: Record<string, string>,
+    meta?: WebhookRequestMeta,
   ): Promise<boolean> {
     if (!this.registry) {
       return false;
     }
-    return this.registry.triggerWebhook(pathKey, payload, headers);
+    return this.registry.triggerWebhook(pathKey, payload, headers, meta);
   }
 
   async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {

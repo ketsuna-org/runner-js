@@ -356,7 +356,7 @@ describe('BotSupervisor', () => {
 
     await supervisor.startBot('bot-1', 'Bot One');
     await supervisor.triggerInboundWebhook('bot-1', 'known', { a: 1 }, { h: 'v' });
-    expect(runners[0].triggerWebhook).toHaveBeenCalledWith('known', { a: 1 }, { h: 'v' });
+    expect(runners[0].triggerWebhook).toHaveBeenCalledWith('known', { a: 1 }, { h: 'v' }, undefined);
 
     await expect(
       supervisor.triggerInboundWebhook('bot-1', 'missing', {}, {}),
