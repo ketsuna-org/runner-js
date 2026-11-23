@@ -715,9 +715,10 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
   app.post('/bots/:id/variables/scoped-values/remove', handleScopedValueRemove);
   app.post('/bots/:id/variables/scoped/remove', handleScopedValueRemove);
 
-  app.post('/bots/:id/inbound/:pathKey', async (c) => {
+  // `{.+}` : un chemin de webhook peut porter des « / » (`topgg/vote`), le Manager les relaie tels quels.
+  app.post('/bots/:id/inbound/:pathKey{.+}', async (c) => {
     const botId = c.req.param('id');
-    const pathKey = c.req.param('pathKey');
+    const pathKey = c.req.param('pathKey').replace(/\/+$/, '');
     const entry = await deps.runtime.botStore.load(botId);
     if (!entry) {
       throw notFound(`Bot "${botId}" not found.`);
