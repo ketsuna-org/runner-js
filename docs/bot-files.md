@@ -20,9 +20,22 @@ rend le dernier code. Mêmes codes que `$fileUpload`, `$fileRead`, `$fileList`, 
 
 Un chemin est fait de segments séparés par `/` (255 octets au plus), sans `..`, sans segment vide, sans `/` initial ou final.
 
-## Bot local (desktop)
+## Bot local (desktop) et runner self-host
 
 Sans Manager, si `BOT_CREATOR_LOCAL_FILES_DIR` est posé (l'application desktop le pose pour son runner intégré), les fichiers sont
 écrits dans ce dossier, `<dossier>/<bot>/<chemin>`, avec les mêmes règles (chemin, 25 Mo) que sur le Manager, sans quota. Les noms
 sont encodés (pourcentage) pour rester valides sur Windows ; le moteur Dart écrit au même endroit avec le même encodage.
 `bc.files.url` rejette `file_url_unavailable` : un dossier local n'a pas de lien public.
+
+Un runner self-host (sans Manager) active les fichiers par défaut, dans `<BOT_CREATOR_DATA_DIR>/.local-data/files` (le runner Dart
+fait de même) ; `BOT_CREATOR_LOCAL_FILES_DIR` change le dossier.
+
+## Base de données (`bc.db`) sans Manager
+
+- **Runner self-host** : SQLite, un fichier par bot dans `<BOT_CREATOR_DATA_DIR>/.local-data/db/<bot>.sqlite` (`BOT_CREATOR_LOCAL_DB_DIR`
+  change le dossier). Le moteur (`src/documents/local-documents.ts`) est un port de celui du runner Dart et de l'app : mêmes opérations,
+  mêmes erreurs typées, même schéma de fichier. Les cas de conformance `test/fixtures/document-conformance.json` sont une copie de
+  `packages/shared/test/fixtures/document_conformance.json` de bot-creator : à changer des deux côtés.
+- **Runner embarqué dans l'app desktop** : l'app pose `BOT_CREATOR_LOCAL_DOCUMENTS_URL` et `BOT_CREATOR_LOCAL_DOCUMENTS_TOKEN` (serveur de
+  boucle locale de l'app, mêmes routes `/bots/{id}/data/*` que le Manager). Un seul processus écrit dans la base du bot, donc l'écran
+  Database de l'app est toujours à jour.
