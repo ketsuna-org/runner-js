@@ -118,6 +118,19 @@ describe('fn depuis chaque point d entrée', () => {
     expect(client.calls).toEqual(['webhook:deploy:7']);
   });
 
+  it('webhook entrant : IP source et identifiant de requête', async () => {
+    const { client, registry } = harness({
+      inboundWebhooks: [
+        { id: 'w', path: 'meta', script: "await fn.mark('meta:' + webhook.sourceIp + ':' + webhook.requestId);" },
+      ],
+    });
+    expect(
+      await registry.triggerWebhook('meta', {}, {}, { sourceIp: '203.0.113.9', requestId: 'req-1' }),
+    ).toBe(true);
+    expect(await registry.triggerWebhook('meta', {}, {})).toBe(true);
+    expect(client.calls).toEqual(['meta:203.0.113.9:req-1', 'meta::']);
+  });
+
   it('tâche planifiée', async () => {
     vi.useFakeTimers();
     const { client } = harness({

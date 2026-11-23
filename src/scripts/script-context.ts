@@ -20,6 +20,10 @@ export interface ScriptExecutionContext {
     path: string;
     payload: unknown;
     headers: Record<string, string>;
+    /** Adresse IP de l'appelant (`inbound.source.ip` en BDFD) ; vide hors webhook HTTP entrant. */
+    sourceIp?: string;
+    /** Identifiant de la requête (`inbound.request.id` en BDFD, l'en-tête `x-request-id`) ; vide s'il n'y en a pas. */
+    requestId?: string;
   };
   /** Sources WebSocket du bot (global `bc.ws`) : pont du bot et événement qui a lancé le script, s'il y en a un. */
   ws?: {

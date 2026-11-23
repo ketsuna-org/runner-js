@@ -17,6 +17,11 @@ export interface RunnerEnv {
   managedRunnerToken: string;
   /** Dossier des fichiers d'un bot local (desktop), sans Manager. Vide = fichiers indisponibles. */
   localFilesDir: string;
+  /** Dossier des bases SQLite (`bc.db`) sans Manager. Vide = `<dataDir>/.local-data/db`. */
+  localDbDir: string;
+  /** Base d'un runner embarqué dans l'app desktop : serveur de boucle locale de l'app (un seul processus écrit dans SQLite). */
+  localDocumentsUrl: string;
+  localDocumentsToken: string;
   version: string;
 }
 
@@ -95,6 +100,9 @@ export function loadRunnerEnv(): RunnerEnv {
     managedRunnerApi: envOrDefault('BOT_CREATOR_MANAGED_RUNNER_API', ''),
     managedRunnerToken: envOrDefault('BOT_CREATOR_MANAGED_RUNNER_TOKEN', ''),
     localFilesDir: envOrDefault('BOT_CREATOR_LOCAL_FILES_DIR', ''),
+    localDbDir: envOrDefault('BOT_CREATOR_LOCAL_DB_DIR', ''),
+    localDocumentsUrl: envOrDefault('BOT_CREATOR_LOCAL_DOCUMENTS_URL', ''),
+    localDocumentsToken: envOrDefault('BOT_CREATOR_LOCAL_DOCUMENTS_TOKEN', ''),
     version: resolveVersion(),
   };
 }

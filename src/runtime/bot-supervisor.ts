@@ -1,5 +1,9 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
-import type { CommandEventName, CommandEventPayload } from '../discord/handler-registry.js';
+import type {
+  CommandEventName,
+  CommandEventPayload,
+  WebhookRequestMeta,
+} from '../discord/handler-registry.js';
 import {
   discordIpBlockRemainingMs,
   isDiscordGatewayDisallowedIntentsClose,
@@ -48,6 +52,7 @@ export interface BotRunnerHandle {
     pathKey: string,
     payload: unknown,
     headers: Record<string, string>,
+    meta?: WebhookRequestMeta,
   ): Promise<boolean>;
   getGuildCount(): number;
   getHeapUsedBytes(): number | null;
@@ -482,6 +487,7 @@ export class BotSupervisor {
     pathKey: string,
     payload: unknown,
     headers: Record<string, string>,
+    meta?: WebhookRequestMeta,
   ): Promise<void> {
     if (!this.isRunning(botId)) {
       throw new Error(`Bot "${botId}" is not running.`);
@@ -492,7 +498,7 @@ export class BotSupervisor {
       throw new Error(`Bot "${botId}" is not running.`);
     }
 
-    const handled = await bot.runner.triggerWebhook(pathKey, payload, headers);
+    const handled = await bot.runner.triggerWebhook(pathKey, payload, headers, meta);
     if (!handled) {
       throw new Error(`Inbound webhook not found: ${pathKey}`);
     }

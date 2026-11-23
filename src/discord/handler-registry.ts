@@ -94,6 +94,12 @@ export interface HandlerRegistryOptions {
 
 const NO_PREFIX_MAX_TRACKED_COOLDOWNS = 2_000;
 
+/** Ce que le serveur HTTP sait de la requête d'un webhook entrant (`webhook.sourceIp`, `webhook.requestId`). */
+export interface WebhookRequestMeta {
+  sourceIp?: string;
+  requestId?: string;
+}
+
 /** Contexte d'une exécution de script (interaction, message, tâche planifiée, webhook entrant). */
 type ScriptRunPartial = {
   /** Tâche planifiée qui exécute le script (nommée dans les journaux). */
@@ -107,7 +113,13 @@ type ScriptRunPartial = {
   guild?: Message['guild'] | Interaction['guild'] | null;
   member?: Message['member'] | Interaction['member'] | null;
   channel?: Message['channel'] | Interaction['channel'] | null;
-  webhook?: { path: string; payload: unknown; headers: Record<string, string> };
+  webhook?: {
+    path: string;
+    payload: unknown;
+    headers: Record<string, string>;
+    sourceIp?: string;
+    requestId?: string;
+  };
   /** Événement d'une source WebSocket qui lance le workflow. */
   wsEvent?: import('../runtime/websocket/ws-manager.js').WsEvent;
 };
@@ -560,6 +572,7 @@ export class HandlerRegistry {
     pathKey: string,
     payload: unknown,
     headers: Record<string, string>,
+    meta: WebhookRequestMeta = {},
   ): Promise<boolean> {
     const handler = this.getWebhookHandler(pathKey);
     if (!handler) {
@@ -567,7 +580,13 @@ export class HandlerRegistry {
     }
 
     await this.runScript(handler.script, {
-      webhook: { path: pathKey, payload, headers },
+      webhook: {
+        path: pathKey,
+        payload,
+        headers,
+        sourceIp: meta.sourceIp ?? '',
+        requestId: meta.requestId ?? '',
+      },
     });
     return true;
   }

@@ -1,0 +1,1034 @@
+{
+ "comment": "Conformance cases of the documents contract ($db*, bc.db). Replayed by the Dart services (packages/shared/test) and by runner-js (test/documents-conformance.test.ts, a copy of this file). Expectations are SUBSET matches. Steps: apply|get|find|aggregate|advance; `error` is the typed code; `save_next`/`after_from` chain pagination cursors. Ties sort by id in the sort direction.",
+ "cases": [
+  {
+   "name": "create, set, merge (RFC 7386) and rev",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "create",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "a": 1,
+        "b": {
+         "c": 2,
+         "d": 3
+        }
+       }
+      }
+     ],
+     "expect": [
+      {
+       "doc": {
+        "rev": 1
+       }
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "create",
+       "collection": "p",
+       "id": "u",
+       "value": {}
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "merge",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "a": null,
+        "b": {
+         "c": 9,
+         "d": null
+        },
+        "e": true
+       }
+      }
+     ],
+     "expect": [
+      {
+       "doc": {
+        "rev": 2,
+        "data": {
+         "b": {
+          "c": 9
+         },
+         "e": true
+        }
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "incr guards",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "incr",
+       "collection": "p",
+       "id": "u",
+       "path": "xp",
+       "delta": 5
+      }
+     ],
+     "expect": [
+      {
+       "doc": {
+        "data": {
+         "xp": 5
+        }
+       }
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "incr",
+       "collection": "p",
+       "id": "u",
+       "path": "xp",
+       "delta": -10,
+       "min": 0
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "big",
+       "value": {
+        "n": 9007199254740990
+       }
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "incr",
+       "collection": "p",
+       "id": "big",
+       "path": "n",
+       "delta": 2
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "incr",
+       "collection": "p",
+       "id": "u",
+       "path": "xp.sub",
+       "delta": 1
+      }
+     ],
+     "error": "invalid"
+    }
+   ]
+  },
+  {
+   "name": "lists",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "push",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 0,
+       "max_len": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "push",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 1,
+       "max_len": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "push",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 2,
+       "max_len": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "push",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 3,
+       "max_len": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "push",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 4,
+       "max_len": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "addToSet",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 3
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "pull",
+       "collection": "p",
+       "id": "u",
+       "path": "items",
+       "value": 2
+      }
+     ]
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "p",
+     "id": "u",
+     "expect": {
+      "data": {
+       "items": [
+        3,
+        4
+       ]
+      }
+     }
+    }
+   ]
+  },
+  {
+   "name": "cas, delete, ttl",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "a": 1
+       }
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "u",
+       "value": {},
+       "rev": 7
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "t",
+       "value": {},
+       "ttl_seconds": 10
+      }
+     ]
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "p",
+     "id": "t",
+     "expect": {
+      "id": "t"
+     }
+    },
+    {
+     "call": "advance",
+     "seconds": 11
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "p",
+     "id": "t",
+     "expect": null
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "delete",
+       "collection": "p",
+       "id": "u"
+      }
+     ],
+     "expect": [
+      {
+       "deleted": true
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "delete",
+       "collection": "p",
+       "id": "u"
+      }
+     ],
+     "expect": [
+      {
+       "deleted": false
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "transfer is atomic; a batch is all or nothing",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "w",
+       "id": "a",
+       "value": {
+        "cash": 100
+       }
+      },
+      {
+       "op": "set",
+       "collection": "w",
+       "id": "b",
+       "value": {
+        "cash": 0
+       }
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "transfer",
+       "collection": "w",
+       "id": "a",
+       "to_id": "b",
+       "path": "cash",
+       "delta": 60
+      }
+     ]
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "transfer",
+       "collection": "w",
+       "id": "a",
+       "to_id": "b",
+       "path": "cash",
+       "delta": 60
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "w",
+     "id": "a",
+     "expect": {
+      "data": {
+       "cash": 40
+      }
+     }
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "w",
+     "id": "b",
+     "expect": {
+      "data": {
+       "cash": 60
+      }
+     }
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "w",
+       "id": "c",
+       "value": {}
+      },
+      {
+       "op": "create",
+       "collection": "w",
+       "id": "a",
+       "value": {}
+      }
+     ],
+     "error": "conflict"
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "w",
+     "id": "c",
+     "expect": null
+    }
+   ]
+  },
+  {
+   "name": "isolation between spaces, and invalid input",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "a": 1
+       }
+      }
+     ]
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "guild",
+      "id": "2"
+     },
+     "collection": "p",
+     "id": "u",
+     "expect": null
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "user",
+      "id": "1"
+     },
+     "collection": "p",
+     "id": "u",
+     "expect": null
+    },
+    {
+     "call": "get",
+     "space": {
+      "kind": "x",
+      "id": "1"
+     },
+     "collection": "p",
+     "id": "u",
+     "error": "invalid"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "Bad Name",
+       "id": "u",
+       "value": {}
+      }
+     ],
+     "error": "invalid"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "$x": 1
+       }
+      }
+     ],
+     "error": "invalid"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "p",
+       "id": "u",
+       "value": {
+        "__proto__": 1
+       }
+      }
+     ],
+     "error": "invalid"
+    },
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [],
+     "error": "invalid"
+    }
+   ]
+  },
+  {
+   "name": "queries: keyset pagination, filters, aggregates",
+   "steps": [
+    {
+     "call": "apply",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "ops": [
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u01",
+       "value": {
+        "xp": 10,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u02",
+       "value": {
+        "xp": 20,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u03",
+       "value": {
+        "xp": 30,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u04",
+       "value": {
+        "xp": 40,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u05",
+       "value": {
+        "xp": 0,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u06",
+       "value": {
+        "xp": 10,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u07",
+       "value": {
+        "xp": 20,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u08",
+       "value": {
+        "xp": 30,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u09",
+       "value": {
+        "xp": 40,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u10",
+       "value": {
+        "xp": 0,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u11",
+       "value": {
+        "xp": 10,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u12",
+       "value": {
+        "xp": 20,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u13",
+       "value": {
+        "xp": 30,
+        "team": "b"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u14",
+       "value": {
+        "xp": 40,
+        "team": "a"
+       }
+      },
+      {
+       "op": "set",
+       "collection": "lb",
+       "id": "u15",
+       "value": {
+        "xp": 0,
+        "team": "b"
+       }
+      }
+     ]
+    },
+    {
+     "call": "find",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "query": {
+      "sort": [
+       [
+        "xp",
+        "desc"
+       ]
+      ],
+      "limit": 4
+     },
+     "save_next": "p1",
+     "expect": {
+      "docs": [
+       {
+        "id": "u14"
+       },
+       {
+        "id": "u09"
+       },
+       {
+        "id": "u04"
+       },
+       {
+        "id": "u13"
+       }
+      ]
+     }
+    },
+    {
+     "call": "find",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "query": {
+      "sort": [
+       [
+        "xp",
+        "desc"
+       ]
+      ],
+      "limit": 4
+     },
+     "after_from": "p1",
+     "expect": {
+      "docs": [
+       {
+        "id": "u08"
+       },
+       {
+        "id": "u03"
+       },
+       {
+        "id": "u12"
+       },
+       {
+        "id": "u07"
+       }
+      ]
+     }
+    },
+    {
+     "call": "find",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "query": {
+      "where": {
+       "xp": {
+        "$gte": 20
+       },
+       "team": "a"
+      },
+      "sort": [
+       [
+        "xp",
+        "desc"
+       ]
+      ]
+     },
+     "expect": {
+      "docs": [
+       {
+        "id": "u14"
+       },
+       {
+        "id": "u04"
+       },
+       {
+        "id": "u08"
+       },
+       {
+        "id": "u12"
+       },
+       {
+        "id": "u02"
+       }
+      ]
+     }
+    },
+    {
+     "call": "aggregate",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "request": {
+      "op": "count",
+      "where": {
+       "xp": {
+        "$gte": 20
+       },
+       "team": "a"
+      }
+     },
+     "expect": {
+      "count": 5
+     }
+    },
+    {
+     "call": "aggregate",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "request": {
+      "op": "sum",
+      "field": "xp"
+     },
+     "expect": {
+      "sum": 300
+     }
+    },
+    {
+     "call": "aggregate",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "request": {
+      "op": "top",
+      "field": "xp",
+      "n": 3
+     },
+     "expect": {
+      "docs": [
+       {
+        "data": {
+         "xp": 40,
+         "team": "a"
+        }
+       },
+       {},
+       {}
+      ]
+     }
+    },
+    {
+     "call": "aggregate",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "request": {
+      "op": "rank",
+      "field": "xp",
+      "id": "u04"
+     },
+     "expect": {
+      "rank": 1
+     }
+    },
+    {
+     "call": "aggregate",
+     "space": {
+      "kind": "guild",
+      "id": "1"
+     },
+     "collection": "lb",
+     "request": {
+      "op": "rank",
+      "field": "xp",
+      "id": "u05"
+     },
+     "expect": {
+      "rank": 13
+     }
+    }
+   ]
+  }
+ ]
+}
