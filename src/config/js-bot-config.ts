@@ -266,6 +266,8 @@ export const jsBotConfigSchema = z.object({
    */
   webSocketSources: z.array(z.record(z.unknown())).optional(),
   globalVariables: z.record(z.unknown()).default({}),
+  /** Traductions du bot (`{locales, keys}`) : lues par `bc.t`. */
+  translations: z.record(z.unknown()).optional(),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
   scriptTimeoutMs: z
     .number()

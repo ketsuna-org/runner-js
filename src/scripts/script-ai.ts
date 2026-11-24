@@ -1,3 +1,4 @@
+import { createBcTranslations, type BcTranslate } from '../translations/bc-translations.js';
 import { randomUUID } from 'node:crypto';
 
 import { createBcWs, type BcWs } from './script-ws.js';
@@ -49,6 +50,8 @@ export interface BcAi {
 }
 
 export interface BcAiContext {
+  /** Configuration du bot (section `translations` pour `bc.t`). */
+  config?: { translations?: unknown };
   client?: { user?: { id?: unknown } | null; application?: { id?: unknown } | null };
   message?: unknown;
   interaction?: unknown;
@@ -158,7 +161,8 @@ export function createBcGlobal(
   context: BcAiContext,
   getFn: () => Record<string, (...args: unknown[]) => Promise<unknown>> | undefined,
   gateway: () => AiGateway | null = getAiGateway,
-): { ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
+  warn: (message: string) => void = () => undefined,
+): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -300,8 +304,16 @@ export function createBcGlobal(
         return last;
       }, ''),
   };
+  const translations = createBcTranslations(context, warn);
   return {
     ai,
+    t: translations.t,
+    get locale(): string {
+      return translations.locale;
+    },
+    get guildLocale(): string {
+      return translations.guildLocale;
+    },
     math: createBcMath(),
     vars: createBcVars(botId(), () => context.db),
     lock: createBcLock(botId()),

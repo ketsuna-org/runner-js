@@ -1,0 +1,1321 @@
+{
+ "discordLocales": [
+  "id",
+  "da",
+  "de",
+  "en-GB",
+  "en-US",
+  "es-ES",
+  "es-419",
+  "fr",
+  "hr",
+  "it",
+  "lt",
+  "hu",
+  "nl",
+  "no",
+  "pl",
+  "pt-BR",
+  "ro",
+  "fi",
+  "sv-SE",
+  "vi",
+  "tr",
+  "cs",
+  "el",
+  "bg",
+  "ru",
+  "uk",
+  "hi",
+  "th",
+  "zh-CN",
+  "ja",
+  "zh-TW",
+  "ko"
+ ],
+ "plural": [
+  {
+   "locale": "id",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "id",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "id",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "vi",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "vi",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "vi",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "th",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "th",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "th",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "ja",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "ja",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "ja",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "ko",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "ko",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "ko",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "zh-CN",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "zh-CN",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "zh-CN",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "zh-TW",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "zh-TW",
+   "n": "1",
+   "category": "other"
+  },
+  {
+   "locale": "zh-TW",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "de",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "de",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "de",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "de",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "de",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "en-US",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "en-US",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "en-US",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "en-US",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "en-US",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "en-GB",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "en-GB",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "en-GB",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "en-GB",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "en-GB",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "nl",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "nl",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "nl",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "nl",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "nl",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "sv-SE",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "sv-SE",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "sv-SE",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "sv-SE",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "sv-SE",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "fi",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "fi",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "fi",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "fi",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "fi",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "da",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "da",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "da",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "da",
+   "n": "0.5",
+   "category": "one"
+  },
+  {
+   "locale": "da",
+   "n": "1.5",
+   "category": "one"
+  },
+  {
+   "locale": "no",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "no",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "no",
+   "n": "1.0",
+   "category": "one"
+  },
+  {
+   "locale": "no",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "no",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "hu",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "hu",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "hu",
+   "n": "1.0",
+   "category": "one"
+  },
+  {
+   "locale": "hu",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "hu",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "tr",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "tr",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "tr",
+   "n": "1.0",
+   "category": "one"
+  },
+  {
+   "locale": "tr",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "tr",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "el",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "el",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "el",
+   "n": "1.0",
+   "category": "one"
+  },
+  {
+   "locale": "el",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "el",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "bg",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "bg",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "bg",
+   "n": "1.0",
+   "category": "one"
+  },
+  {
+   "locale": "bg",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "bg",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "hi",
+   "n": "0",
+   "category": "one"
+  },
+  {
+   "locale": "hi",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "hi",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "hi",
+   "n": "0.5",
+   "category": "one"
+  },
+  {
+   "locale": "fr",
+   "n": "0",
+   "category": "one"
+  },
+  {
+   "locale": "fr",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "fr",
+   "n": "1.5",
+   "category": "one"
+  },
+  {
+   "locale": "fr",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "fr",
+   "n": "1000000",
+   "category": "many"
+  },
+  {
+   "locale": "fr",
+   "n": "2000000",
+   "category": "many"
+  },
+  {
+   "locale": "fr",
+   "n": "1000001",
+   "category": "other"
+  },
+  {
+   "locale": "pt-BR",
+   "n": "0",
+   "category": "one"
+  },
+  {
+   "locale": "pt-BR",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "pt-BR",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "pt-BR",
+   "n": "1000000",
+   "category": "many"
+  },
+  {
+   "locale": "es-ES",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "es-ES",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "es-ES",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "es-ES",
+   "n": "1000000",
+   "category": "many"
+  },
+  {
+   "locale": "es-ES",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "es-419",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "es-419",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "es-419",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "es-419",
+   "n": "1000000",
+   "category": "many"
+  },
+  {
+   "locale": "es-419",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "it",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "it",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "it",
+   "n": "2",
+   "category": "other"
+  },
+  {
+   "locale": "it",
+   "n": "1000000",
+   "category": "many"
+  },
+  {
+   "locale": "it",
+   "n": "1.0",
+   "category": "other"
+  },
+  {
+   "locale": "hr",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "hr",
+   "n": "21",
+   "category": "one"
+  },
+  {
+   "locale": "hr",
+   "n": "11",
+   "category": "other"
+  },
+  {
+   "locale": "hr",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "hr",
+   "n": "4",
+   "category": "few"
+  },
+  {
+   "locale": "hr",
+   "n": "12",
+   "category": "other"
+  },
+  {
+   "locale": "hr",
+   "n": "22",
+   "category": "few"
+  },
+  {
+   "locale": "hr",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "hr",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "hr",
+   "n": "1.1",
+   "category": "one"
+  },
+  {
+   "locale": "hr",
+   "n": "0.2",
+   "category": "few"
+  },
+  {
+   "locale": "ro",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "ro",
+   "n": "0",
+   "category": "few"
+  },
+  {
+   "locale": "ro",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "ro",
+   "n": "19",
+   "category": "few"
+  },
+  {
+   "locale": "ro",
+   "n": "20",
+   "category": "other"
+  },
+  {
+   "locale": "ro",
+   "n": "101",
+   "category": "few"
+  },
+  {
+   "locale": "ro",
+   "n": "100",
+   "category": "other"
+  },
+  {
+   "locale": "ro",
+   "n": "1.5",
+   "category": "few"
+  },
+  {
+   "locale": "ru",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "ru",
+   "n": "21",
+   "category": "one"
+  },
+  {
+   "locale": "ru",
+   "n": "11",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "ru",
+   "n": "22",
+   "category": "few"
+  },
+  {
+   "locale": "ru",
+   "n": "12",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "5",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "0",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "100",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "111",
+   "category": "many"
+  },
+  {
+   "locale": "ru",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "uk",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "uk",
+   "n": "21",
+   "category": "one"
+  },
+  {
+   "locale": "uk",
+   "n": "11",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "uk",
+   "n": "22",
+   "category": "few"
+  },
+  {
+   "locale": "uk",
+   "n": "12",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "5",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "0",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "100",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "111",
+   "category": "many"
+  },
+  {
+   "locale": "uk",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "pl",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "pl",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "pl",
+   "n": "4",
+   "category": "few"
+  },
+  {
+   "locale": "pl",
+   "n": "5",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "12",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "14",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "22",
+   "category": "few"
+  },
+  {
+   "locale": "pl",
+   "n": "21",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "0",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "25",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "112",
+   "category": "many"
+  },
+  {
+   "locale": "pl",
+   "n": "1.5",
+   "category": "other"
+  },
+  {
+   "locale": "cs",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "cs",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "cs",
+   "n": "4",
+   "category": "few"
+  },
+  {
+   "locale": "cs",
+   "n": "5",
+   "category": "other"
+  },
+  {
+   "locale": "cs",
+   "n": "0",
+   "category": "other"
+  },
+  {
+   "locale": "cs",
+   "n": "1.5",
+   "category": "many"
+  },
+  {
+   "locale": "lt",
+   "n": "1",
+   "category": "one"
+  },
+  {
+   "locale": "lt",
+   "n": "21",
+   "category": "one"
+  },
+  {
+   "locale": "lt",
+   "n": "11",
+   "category": "other"
+  },
+  {
+   "locale": "lt",
+   "n": "2",
+   "category": "few"
+  },
+  {
+   "locale": "lt",
+   "n": "9",
+   "category": "few"
+  },
+  {
+   "locale": "lt",
+   "n": "10",
+   "category": "other"
+  },
+  {
+   "locale": "lt",
+   "n": "12",
+   "category": "other"
+  },
+  {
+   "locale": "lt",
+   "n": "22",
+   "category": "few"
+  },
+  {
+   "locale": "lt",
+   "n": "1.5",
+   "category": "many"
+  }
+ ],
+ "format": [
+  {
+   "message": "Hello {name}!",
+   "locale": "en-US",
+   "args": {
+    "name": "Bob"
+   },
+   "expected": "Hello Bob!"
+  },
+  {
+   "message": "{1} bought {2}",
+   "locale": "en-US",
+   "args": {
+    "1": "Bob",
+    "2": "a sword"
+   },
+   "expected": "Bob bought a sword"
+  },
+  {
+   "message": "Hi {name}",
+   "locale": "en-US",
+   "args": {},
+   "expected": "Hi {name}"
+  },
+  {
+   "message": "d'objets et l''autre",
+   "locale": "fr",
+   "args": {},
+   "expected": "d'objets et l'autre"
+  },
+  {
+   "message": "'{'literal'}' and {x}",
+   "locale": "en-US",
+   "args": {
+    "x": "1"
+   },
+   "expected": "{literal} and 1"
+  },
+  {
+   "message": "{count, plural, one {# item} other {# items}}",
+   "locale": "en-US",
+   "args": {
+    "count": "1"
+   },
+   "expected": "1 item"
+  },
+  {
+   "message": "{count, plural, one {# item} other {# items}}",
+   "locale": "en-US",
+   "args": {
+    "count": "1500"
+   },
+   "expected": "1,500 items"
+  },
+  {
+   "message": "{count, plural, one {# item} other {# items}}",
+   "locale": "fr",
+   "args": {
+    "count": "1500"
+   },
+   "expected": "1 500 items"
+  },
+  {
+   "message": "{count, plural, =0 {none} one {# item} other {# items}}",
+   "locale": "en-US",
+   "args": {
+    "count": "0"
+   },
+   "expected": "none"
+  },
+  {
+   "message": "{count, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}",
+   "locale": "pl",
+   "args": {
+    "count": "5"
+   },
+   "expected": "5 przedmiotów"
+  },
+  {
+   "message": "{count, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}",
+   "locale": "pl",
+   "args": {
+    "count": "3"
+   },
+   "expected": "3 przedmioty"
+  },
+  {
+   "message": "{count, plural, one {# przedmiot} few {# przedmioty} other {# przedmiotu}}",
+   "locale": "pl",
+   "args": {
+    "count": "5"
+   },
+   "expected": "5 przedmiotu"
+  },
+  {
+   "message": "{count, plural, other {# 個}}",
+   "locale": "ja",
+   "args": {
+    "count": "3"
+   },
+   "expected": "3 個"
+  },
+  {
+   "message": "{count, plural, offset:1 =0 {nobody} =1 {just you} one {you and # other} other {you and # others}}",
+   "locale": "en-US",
+   "args": {
+    "count": "3"
+   },
+   "expected": "you and 2 others"
+  },
+  {
+   "message": "{role, select, admin {Administrator} mod {Moderator} other {Member}}",
+   "locale": "en-US",
+   "args": {
+    "role": "mod"
+   },
+   "expected": "Moderator"
+  },
+  {
+   "message": "{role, select, admin {Administrator} other {Member}}",
+   "locale": "en-US",
+   "args": {
+    "role": "x"
+   },
+   "expected": "Member"
+  },
+  {
+   "message": "{price, number} coins",
+   "locale": "de",
+   "args": {
+    "price": "1234567.5"
+   },
+   "expected": "1.234.567,5 coins"
+  },
+  {
+   "message": "{n, plural, one {# day} other {# days}}",
+   "locale": "en-US",
+   "args": {
+    "n": "abc"
+   },
+   "expected": "abc days"
+  },
+  {
+   "message": "{c, plural, one {{g, select, f {she has # cat} other {they have # cat}}} other {# cats}}",
+   "locale": "en-US",
+   "args": {
+    "c": "1",
+    "g": "f"
+   },
+   "expected": "she has 1 cat"
+  }
+ ],
+ "invalid": [
+  "{name",
+  "{a, plural, one {x}}",
+  "{a, foo, other {x}}",
+  "}",
+  "{a, plural, few2 {x} other {y}}",
+  "{a, select, x {y}}",
+  "{}"
+ ],
+ "chain": [
+  {
+   "user": "fr",
+   "guild": "de",
+   "expected": [
+    "fr",
+    "de",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "en-GB",
+   "guild": null,
+   "expected": [
+    "en-GB",
+    "en-US"
+   ]
+  },
+  {
+   "user": "pt-BR",
+   "guild": "es-419",
+   "expected": [
+    "pt-BR",
+    "es-419",
+    "es-ES",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "expected": [
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "xx",
+   "guild": "fr",
+   "expected": [
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "zh-TW",
+   "guild": "fr",
+   "expected": [
+    "zh-TW",
+    "zh-CN",
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
+  }
+ ],
+ "catalog": {
+  "keys": {
+   "shop.bought": {
+    "values": {
+     "en-US": "{user} bought {item}",
+     "fr": "{user} a acheté {item}"
+    }
+   },
+   "shop.items": {
+    "values": {
+     "en": "{n, plural, one {# item} other {# items}}",
+     "pl": "{n, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}"
+    }
+   },
+   "only.german": {
+    "values": {
+     "de": "Nur Deutsch"
+    }
+   },
+   "bad.syntax": {
+    "values": {
+     "en-US": "{oops"
+    }
+   }
+  }
+ },
+ "translate": [
+  {
+   "key": "shop.bought",
+   "user": "fr",
+   "guild": "de",
+   "args": {
+    "user": "Bob",
+    "item": "Épée"
+   },
+   "text": "Bob a acheté Épée",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.bought",
+   "user": "ja",
+   "guild": "de",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob bought X",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "shop.bought",
+   "user": "de",
+   "guild": "fr",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.items",
+   "user": "pl",
+   "guild": null,
+   "args": {
+    "n": "22"
+   },
+   "text": "22 przedmioty",
+   "found": true,
+   "locale": "pl"
+  },
+  {
+   "key": "shop.items",
+   "user": "en-US",
+   "guild": null,
+   "args": {
+    "n": "1"
+   },
+   "text": "1 item",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "only.german",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "only.german",
+   "found": false,
+   "locale": null
+  },
+  {
+   "key": "nope",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "nope",
+   "found": false,
+   "locale": null
+  },
+  {
+   "key": "bad.syntax",
+   "user": "en-US",
+   "guild": null,
+   "args": {},
+   "text": "{oops",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "shop.bought",
+   "user": "fr",
+   "guild": null,
+   "forced": "en-US",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob bought X",
+   "found": true,
+   "locale": "en-US"
+  }
+ ],
+ "arguments": [
+  {
+   "raw": [
+    "name=Bob",
+    "x=1"
+   ],
+   "expected": {
+    "name": "Bob",
+    "x": "1"
+   }
+  },
+  {
+   "raw": [
+    "Bob",
+    "3"
+   ],
+   "expected": {
+    "1": "Bob",
+    "2": "3"
+   }
+  },
+  {
+   "raw": [
+    "Bob",
+    "n=3",
+    "Ann"
+   ],
+   "expected": {
+    "1": "Bob",
+    "n": "3",
+    "2": "Ann"
+   }
+  },
+  {
+   "raw": [
+    "1=a=b"
+   ],
+   "expected": {
+    "1": "a=b"
+   }
+  }
+ ]
+}

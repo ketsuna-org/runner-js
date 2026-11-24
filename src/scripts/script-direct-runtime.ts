@@ -157,7 +157,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       setTimeout,
       clearTimeout,
       // `bc.ai` : fonctions IA du langage (crédits du propriétaire du bot, via le Manager).
-      createBcGlobal(context, () => functionsRef?.fn as never),
+      createBcGlobal(context, () => functionsRef?.fn as never, undefined, (message) => logger.warn(message)),
     ];
     let functionsRef: ReturnType<typeof createScriptFunctions> | undefined;
     const functions = createScriptFunctions({
