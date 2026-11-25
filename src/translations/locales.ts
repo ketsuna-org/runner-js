@@ -35,13 +35,19 @@ export function normalizeLocale(raw: unknown): string | null {
   return text ? (BY_LOWER.get(text) ?? null) : null;
 }
 
-const base = (locale: string): string => locale.split('-')[0] ?? locale;
+// Le chinois simplifié et traditionnel s'écrivent différemment : zh-CN et zh-TW ne sont pas des variantes.
+const base = (locale: string): string => (locale.startsWith('zh-') ? locale : (locale.split('-')[0] ?? locale));
 
 /**
  * Ordre d'essai : la personne et les variantes de sa langue, le serveur idem, la langue par défaut du bot (et ses
  * variantes), puis en-US et en-GB. Sans langue par défaut (ou en-US), comme avant.
  */
-export function localeChain(user?: string | null, guild?: string | null, defaultLocale?: string | null): string[] {
+export function localeChain(
+  user?: string | null,
+  guild?: string | null,
+  defaultLocale?: string | null,
+  useSimilar = true,
+): string[] {
   const out: string[] = [];
   const add = (locale: string | null | undefined): void => {
     if (locale && !out.includes(locale)) out.push(locale);
@@ -50,6 +56,7 @@ export function localeChain(user?: string | null, guild?: string | null, default
     const locale = normalizeLocale(raw);
     if (!locale) return;
     add(locale);
+    if (!useSimilar) return;
     for (const other of DISCORD_LOCALES) {
       if (base(other) === base(locale)) add(other);
     }
