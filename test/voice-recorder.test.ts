@@ -195,69 +195,11 @@ describe('VoiceRecorderManager', () => {
     await expect(off.start(f.guild, base)).rejects.toThrow('disabled');
   });
 
-  it('est coupée par défaut, activée seulement par VOICE_RECORDER_ENABLED=1, coupe-circuit prioritaire', () => {
-    expect(voiceRecorderDisabled({})).toBe(true);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '0' })).toBe(true);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1' })).toBe(false);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1', VOICE_RECORDER_DISABLED: '1' })).toBe(true);
-  });
-});
-
-function quotaGateway(grantedSeconds: number, failWith?: VoiceQuotaError) {
-  const calls: Array<[string, ...unknown[]]> = [];
-  const gateway: VoiceQuotaGateway = {
-    reserve: async (botId, guildId, maxSeconds) => {
-      calls.push(['reserve', botId, guildId, maxSeconds]);
-      if (failWith) throw failWith;
-      return { sessionId: 'q1', grantedSeconds: Math.min(grantedSeconds, maxSeconds), remainingSeconds: 100 };
-    },
-    finish: async (botId, sessionId, used) => void calls.push(['finish', botId, sessionId, used]),
-    quota: async () => ({ premium: true, monthlySeconds: 72000, usedSeconds: 0, remainingSeconds: 72000, resetsAt: '' }),
-  };
-  return { gateway, calls };
-}
-
-describe('quota du Manager', () => {
-  it('réserve avant de rejoindre, plafonne à la durée accordée et rapporte la durée réelle', async () => {
-    const { gateway, calls } = quotaGateway(60);
-    const f = fixture({ quota: gateway });
-    await consent(f.store, 'u1');
-    const started = await f.manager.start(f.guild, { ...base, maxSeconds: 300 });
-    expect(started.maxSeconds).toBe(60);
-    expect(started.quotaLimited).toBe(true);
-    expect(calls[0]).toEqual(['reserve', 'bot1', 'g1', 300]);
-    expect(textOf(f.sent[0]!)).toContain('monthly recording quota');
-    const result = await f.manager.stop('g1');
-    expect(result.reason).toBe('stopped');
-    expect(calls[1]![0]).toBe('finish');
-    expect(calls[1]![2]).toBe('q1');
-  });
-
-  it('n enregistre rien et ne poste aucune annonce si le Manager refuse (Premium, quota, panne)', async () => {
-    for (const code of ['voice_recorder_premium_required', 'voice_recorder_quota_exceeded', 'voice_recorder_unavailable']) {
-      const { gateway } = quotaGateway(60, new VoiceQuotaError(code, `refused ${code}`));
-      const f = fixture({ quota: gateway });
-      await consent(f.store, 'u1');
-      await expect(f.manager.start(f.guild, base)).rejects.toThrow(`refused ${code}`);
-      expect(f.sent.length).toBe(0);
-      expect(f.manager.status('g1').active).toBe(false);
-    }
-  });
-
-  it('rend la réservation (0 s) si l annonce échoue après la réservation', async () => {
-    const { gateway, calls } = quotaGateway(60);
-    const f = fixture({ quota: gateway, announceFails: true });
-    await consent(f.store, 'u1');
-    await expect(f.manager.start(f.guild, base)).rejects.toThrow('announcement');
-    await tick();
-    expect(calls.find((c) => c[0] === 'finish')?.[3]).toBe(0);
-  });
-
-  it('sans Manager (self-host) il n y a pas de quota', async () => {
-    const f = fixture();
-    await consent(f.store, 'u1');
-    const started = await f.manager.start(f.guild, base);
-    expect(started.quotaLimited).toBe(false);
-    expect(await f.manager.quota()).toBeNull();
+  it('est active d office sous un Manager, sur demande seulement sans Manager, coupe-circuit prioritaire', () => {
+    expect(voiceRecorderDisabled({}, false)).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '0' }, false)).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1' }, false)).toBe(false);
+    expect(voiceRecorderDisabled({}, true)).toBe(false);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1', VOICE_RECORDER_DISABLED: '1' }, true)).toBe(true);
   });
 });

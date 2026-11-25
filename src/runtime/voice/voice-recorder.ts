@@ -146,13 +146,17 @@ const CONSENT_CACHE_MS = 15_000;
 const BUTTON_PREFIX = 'bcvc';
 
 /**
- * L'enregistrement vocal est EXPÉRIMENTAL (ni réserve Premium ni quota) : il est coupé par défaut et ne
- * s'active que si l'environnement le demande (`VOICE_RECORDER_ENABLED=1`, staging). `VOICE_RECORDER_DISABLED=1`
- * reste un coupe-circuit qui l'emporte.
+ * Activation : sur un runner géré (une passerelle de quota du Manager est installée), l'enregistrement est actif
+ * d'office et c'est le Manager qui décide (Premium, quota, coupe-circuit `VOICE_RECORDER_ENABLED=false` chez lui).
+ * Sans Manager (self-host, runner embarqué), il faut le demander : `VOICE_RECORDER_ENABLED=1`, sans quota.
+ * `VOICE_RECORDER_DISABLED=1` est un coupe-circuit local qui l'emporte toujours.
  */
-export function voiceRecorderDisabled(env: Record<string, string | undefined> = process.env): boolean {
+export function voiceRecorderDisabled(
+  env: Record<string, string | undefined> = process.env,
+  managed: boolean = getVoiceQuotaGateway() !== null,
+): boolean {
   if (env.VOICE_RECORDER_DISABLED === '1') return true;
-  return env.VOICE_RECORDER_ENABLED !== '1';
+  return !managed && env.VOICE_RECORDER_ENABLED !== '1';
 }
 
 export class VoiceRecorderManager {

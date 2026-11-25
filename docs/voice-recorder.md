@@ -2,12 +2,11 @@
 
 Étude : `DESIGN-flux-vocal.md` du projet (annexes 2 à 6). Réception du flux vocal (DAVE) pour les bots JavaScript.
 
-## Mise en production : un seul interrupteur sur la plateforme, coupé par défaut
+## Activation : par défaut sous un Manager
 
-**`VOICE_RECORDER_ENABLED=true` sur le Manager suffit** : à la création d'un nœud JS du pool, il pose lui-même `VOICE_RECORDER_ENABLED=1` dans l'environnement du runner (les nœuds déjà en marche le reçoivent à leur prochain remplacement). Détail :
-
-1. **Runner** : `VOICE_RECORDER_ENABLED=1` dans l'environnement du runner. Sans lui, `bc.recorder` refuse tout. `VOICE_RECORDER_DISABLED=1` est un coupe-circuit qui l'emporte.
-2. **Manager** : `VOICE_RECORDER_ENABLED=true` dans l'environnement du Manager. Sans lui, il refuse toute réservation (`voice_recorder_disabled`).
+- **Runner géré (Manager)** : actif d'office, rien à régler. Le Manager décide et peut tout couper avec `VOICE_RECORDER_ENABLED=false` dans son environnement (les refus sont alors `voice_recorder_disabled`).
+- **Sans Manager** (self-host, runner embarqué de l'app) : coupé tant que `VOICE_RECORDER_ENABLED=1` n'est pas posé, sans Premium ni quota.
+- `VOICE_RECORDER_DISABLED=1` sur le runner est un coupe-circuit local qui l'emporte.
 
 Sur un runner **géré** (Manager), le Manager décide : **Premium seulement**, **20 h par mois et par compte** (`VOICE_RECORDER_MONTHLY_SECONDS`, 72000 s), **2 enregistrements simultanés par compte**, 600 s au plus par session. Le runner réserve la durée AVANT de rejoindre le salon et rapporte la durée réelle à l'arrêt ; une session jamais clôturée (runner tombé) compte pour sa durée réservée. **Un Manager injoignable = rien n'est enregistré** (échec fermé). Un runner **sans Manager** (self-host, runner embarqué du desktop) n'a ni Premium ni quota : l'opérateur de la machine en est responsable ; pour l'app desktop le runner embarqué n'active pas l'enregistrement.
 
