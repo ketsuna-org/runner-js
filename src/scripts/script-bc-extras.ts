@@ -689,6 +689,10 @@ export interface BcEntitlements {
   skuIds(target?: BcEntitlementTarget): Promise<string[]>;
   /** `$entitlementEndsAt` : fin en secondes Unix, `'never'` sans date de fin, `null` sans droit actif. */
   endsAt(skuId: string, target?: BcEntitlementTarget): Promise<number | 'never' | null>;
+  /** `$entitlementStartsAt` : début le plus ancien en secondes Unix ; `null` sans droit actif ou sans date de début. */
+  startsAt(skuId: string, target?: BcEntitlementTarget): Promise<number | null>;
+  /** `$entitlementType` : type Discord du droit actif (8 abonnement de l'application, 4 achat de test…) ; `null` sans droit actif. */
+  type(skuId: string, target?: BcEntitlementTarget): Promise<number | null>;
   /** `$skuIDs` / `$skuName` : produits de l'application. */
   skus(): Promise<BcSku[]>;
   skuName(skuId: string): Promise<string>;
@@ -816,6 +820,16 @@ export function createBcEntitlements(getClient: () => unknown, defaultUserId: ()
       if (rights.length === 0) return null;
       if (rights.some((e) => e.endsAt === null)) return 'never';
       return Math.floor(Math.max(...rights.map((e) => Date.parse(e.endsAt as string))) / 1000);
+    },
+    async startsAt(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const starts = (await active(target, sku)).flatMap((e) => (e.startsAt === null ? [] : [Date.parse(e.startsAt)]));
+      return starts.length === 0 ? null : Math.floor(Math.min(...starts) / 1000);
+    },
+    async type(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const rights = await active(target, sku);
+      return rights.length === 0 ? null : rights[0].type;
     },
     async skus() {
       const list = await application().fetchSKUs();

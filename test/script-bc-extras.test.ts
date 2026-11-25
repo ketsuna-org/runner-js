@@ -238,7 +238,7 @@ describe('bc.oneTime', () => {
 describe('bc.entitlements', () => {
   const NOW = Date.now();
   const rows = [
-    { id: '1', skuId: '900', userId: '20', guildId: null, type: 8, startsTimestamp: null, endsTimestamp: NOW + 86_400_000 * 30 },
+    { id: '1', skuId: '900', userId: '20', guildId: null, type: 8, startsTimestamp: Date.parse('2026-01-01T00:00:00.000Z'), endsTimestamp: NOW + 86_400_000 * 30 },
     { id: '2', skuId: '901', userId: '20', guildId: null, type: 8, startsTimestamp: null, endsTimestamp: NOW - 1000 },
     { id: '3', skuId: '902', userId: '20', guildId: null, type: 8, deleted: true, startsTimestamp: null, endsTimestamp: null },
     { id: '4', skuId: '900', userId: null, guildId: '77', type: 8, startsTimestamp: null, endsTimestamp: null },
@@ -276,6 +276,13 @@ describe('bc.entitlements', () => {
     expect(await e.endsAt('900', { userId: '20' })).toBe(Math.floor((NOW + 86_400_000 * 30) / 1000));
     expect(await e.endsAt('900', { guildId: '77' })).toBe('never');
     expect(await e.endsAt('902', { userId: '20' })).toBeNull();
+  });
+  test('startsAt and type match $entitlementStartsAt and $entitlementType', async () => {
+    expect(await e.startsAt('900', { userId: '20' })).toBe(1767225600);
+    expect(await e.startsAt('900', { guildId: '77' })).toBeNull();
+    expect(await e.startsAt('902', { userId: '20' })).toBeNull();
+    expect(await e.type('900', { userId: '20' })).toBe(8);
+    expect(await e.type('902', { userId: '20' })).toBeNull();
   });
   test('skus and skuName', async () => {
     expect((await e.skus()).map((s) => s.id)).toEqual(['900', '901']);

@@ -574,6 +574,7 @@ Même comportement que les fonctions BDFD du même nom.
 | `await bc.entitlements.has(skuId, { userId?, guildId? })` | `$hasEntitlement[sku;user;serveur]` : droit Discord actif (sans cible, l'auteur de l'appel ; un droit du serveur compte aussi) |
 | `await bc.entitlements.count(cible?)` / `bc.entitlements.skuIds(cible?)` | `$entitlementCount` / `$entitlementSKUs` |
 | `await bc.entitlements.endsAt(skuId, cible?)` | `$entitlementEndsAt` : secondes Unix, `'never'` sans fin, `null` sans droit actif |
+| `await bc.entitlements.startsAt(skuId, cible?)` / `bc.entitlements.type(skuId, cible?)` | `$entitlementStartsAt` / `$entitlementType` (type Discord : 8 abonnement de l'application, 4 achat de test) |
 | `await bc.entitlements.list({ userId?, guildId?, skuId?, includeEnded? })` | liste des droits (`id`, `skuId`, `userId`, `guildId`, `type`, `startsAt`, `endsAt`, `deleted`, `consumed`, `active`) |
 | `await bc.entitlements.skus()` / `bc.entitlements.skuName(skuId)` | `$skuIDs` / `$skuName` |
 
