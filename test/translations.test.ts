@@ -89,6 +89,26 @@ describe('bc.t', () => {
     const ja = createBcTranslations({ config, interaction: { locale: 'ja' } });
     expect(ja.t('shop.bought', { user: 'Bob', item: 'X' })).toBe('Bob bought X');
   });
+  test('sans interaction : preferredLocale du serveur ignorée, langue par défaut fr', () => {
+    const config = {
+      translations: {
+        defaultLocale: 'fr',
+        keys: {
+          'mod.welcome.hi': { values: { 'en-US': 'Welcome', fr: 'Bienvenue' } },
+          'mod.welcome.bye': { values: { 'en-US': 'Bye' } },
+        },
+      },
+    };
+    const guild = { preferredLocale: 'en-US' };
+    const message = { guild: { preferredLocale: 'en-US' } };
+    expect(createBcTranslations({ config, guild, message }).t('mod.welcome.hi')).toBe('Bienvenue');
+    expect(createBcTranslations({ config, message }).t('mod.welcome.hi')).toBe('Bienvenue');
+    expect(createBcTranslations({ config, guild }).t('mod.welcome.bye')).toBe('Bye');
+    // bc.guildLocale continue d'exposer la langue préférée.
+    expect(createBcTranslations({ config, guild }).guildLocale).toBe('en-US');
+    const de = createBcTranslations({ config, interaction: { locale: 'ja', guildLocale: 'de' } });
+    expect(de.t('mod.welcome.hi')).toBe('Bienvenue');
+  });
   test('arguments positionnels, t.in, t.has, pluriel', () => {
     const bc = createBcTranslations({ config: { translations: { keys: { p: { values: { en: '{1} has {2}' } } } } } });
     expect(bc.t('p', 'Bob', 3)).toBe('Bob has 3');

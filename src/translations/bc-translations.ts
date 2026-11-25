@@ -38,6 +38,11 @@ export function guildLocaleOf(context: TranslationContext): string | null {
   );
 }
 
+/** Langue du serveur pour la CHAÎNE : seulement celle de l'interaction (serveur Communauté), jamais `preferredLocale`. */
+export function chainGuildLocaleOf(context: TranslationContext): string | null {
+  return localeOf(context.interaction, 'guildLocale');
+}
+
 /** Arguments de `t(key, …)` : un objet = nommés ; sinon positionnels (`{1}`, `{2}`). */
 export function toTranslationArgs(args: unknown[]): Record<string, unknown> {
   if (args.length === 1 && isPlainObject(args[0])) return args[0];
@@ -70,7 +75,7 @@ export function createBcTranslations(
     if (!name) throw new Error('Translation key must not be empty.');
     const result = catalog().translate(name, {
       userLocale: userLocaleOf(context),
-      guildLocale: guildLocaleOf(context),
+      guildLocale: chainGuildLocaleOf(context),
       forced,
       args: toTranslationArgs(args),
     });

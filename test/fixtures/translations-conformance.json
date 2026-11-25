@@ -1256,6 +1256,16 @@
     "en-US",
     "en-GB"
    ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "default": "fr",
+   "expected": [
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
   }
  ],
  "catalog": {
@@ -1291,6 +1301,11 @@
     "values": {
      "en-US": "Hello",
      "es-419": "Hola"
+    }
+   },
+   "en.only.key": {
+    "values": {
+     "en-US": "Only English"
     }
    }
   }
@@ -1411,6 +1426,24 @@
    "text": "Hola",
    "found": true,
    "locale": "es-419"
+  },
+  {
+   "key": "en.only.key",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "Only English",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "hello.missing.everywhere",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "hello.missing.everywhere",
+   "found": false,
+   "locale": null
   }
  ],
  "arguments": [
@@ -1477,6 +1510,17 @@
    "bad.syntax": {
     "values": {
      "en-US": "{oops"
+    }
+   },
+   "fr.de.only": {
+    "values": {
+     "fr": "Seulement fr",
+     "de": "Nur de"
+    }
+   },
+   "mod.welcome.bye": {
+    "values": {
+     "en-US": "Bye {user}"
     }
    }
   },
@@ -1551,6 +1595,57 @@
    "text": "Bob a acheté X",
    "found": true,
    "locale": "fr"
+  },
+  {
+   "key": "fr.de.only",
+   "user": "ja",
+   "guild": null,
+   "args": {},
+   "text": "Seulement fr",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "fr.de.only",
+   "user": "ja",
+   "guild": "de",
+   "args": {},
+   "text": "Nur de",
+   "found": true,
+   "locale": "de"
+  },
+  {
+   "key": "mod.welcome.bye",
+   "user": "ja",
+   "guild": null,
+   "args": {
+    "user": "Bob"
+   },
+   "text": "Bye Bob",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "shop.bought",
+   "user": null,
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr",
+   "note": "message préfixé, événement, tâche, webhook : pas de personne ni de langue de serveur (preferredLocale ignorée), la langue par défaut gagne"
+  },
+  {
+   "key": "nope.nowhere",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "nope.nowhere",
+   "found": false,
+   "locale": null
   }
  ],
  "catalogExact": {
