@@ -52,7 +52,7 @@ export interface BcAi {
 export interface BcAiContext {
   /** Configuration du bot (section `translations` pour `bc.t`). */
   config?: { translations?: unknown };
-  client?: { user?: { id?: unknown } | null; application?: { id?: unknown } | null };
+  client?: { user?: { id?: unknown } | null; application?: { id?: unknown } | null; guilds?: { cache?: { has(id: string): boolean } } };
   message?: unknown;
   interaction?: unknown;
   guild?: unknown;
@@ -340,6 +340,7 @@ export function createBcGlobal(
       botId,
       guildId: () => guildIdOf(context),
       userId: () => triggerUserId(context),
+      hasGuild: (id) => Boolean(context.client?.guilds?.cache?.has(id)),
     }),
   };
 }
