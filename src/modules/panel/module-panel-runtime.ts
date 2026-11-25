@@ -4,32 +4,16 @@
  * (variables de serveur) et répond en Components V2. Aucune erreur interne n'est jamais montrée.
  */
 import type { Interaction } from 'discord.js';
-import { PANEL_FLAGS, handlePanelInteraction } from './module-panel.js';
+import { PANEL_FLAGS, handlePanelInteraction, panelStringsLanguage, ps } from './module-panel.js';
 
 interface PanelStore {
   getScopedVariable(botId: string, scope: string, contextId: string, key: string): Promise<unknown>;
   setScopedVariable(botId: string, scope: string, contextId: string, key: string, value: unknown): Promise<void>;
 }
 
-const TEXTS: Record<string, Record<string, string>> = {
-  en: {
-    denied: 'You need the **Manage Server** permission to use this panel.',
-    guild: 'This panel only works inside a server.',
-    failed: 'The panel could not be updated. Run the command again.',
-  },
-  fr: {
-    denied: 'Il faut la permission **Gérer le serveur** pour utiliser ce panneau.',
-    guild: 'Ce panneau ne fonctionne que dans un serveur.',
-    failed: 'Le panneau n’a pas pu être mis à jour. Relance la commande.',
-  },
-};
+const t = (lang: string, key: string): string => ps(lang, key);
 
-const t = (lang: string, key: string): string => TEXTS[lang]?.[key] ?? TEXTS.en[key];
-
-export const panelLanguage = (locale: string | null | undefined): string => {
-  const l = (locale ?? '').toLowerCase();
-  return l === '' ? 'en' : l.split(/[-_]/)[0];
-};
+export const panelLanguage = (locale: string | null | undefined): string => panelStringsLanguage(locale);
 
 const notice = (content: string) => ({
   flags: PANEL_FLAGS,

@@ -5,7 +5,22 @@
  * de conformité (`test/fixtures/module-panel-conformance.json`).
  */
 
+import { PANEL_STRINGS, PANEL_LANGUAGES } from './module-panel-strings.js';
+
 type Json = Record<string, any>;
+
+/** Langue du panneau pour un code Discord (`fr`, `pt-BR`…) ; anglais si non gérée. */
+export function panelStringsLanguage(code: string | null | undefined): string {
+  const short = (code ?? '').toLowerCase().split(/[-_]/)[0];
+  return PANEL_LANGUAGES.includes(short) ? short : 'en';
+}
+
+/** Texte `key` dans `lang` ; `{nom}` est remplacé par `args.nom`. */
+export function ps(lang: string, key: string, args: Record<string, unknown> = {}): string {
+  let s = PANEL_STRINGS[panelStringsLanguage(lang)]?.[key] ?? PANEL_STRINGS.en[key] ?? key;
+  for (const [k, v] of Object.entries(args)) s = s.split(`{${k}}`).join(String(v));
+  return s;
+}
 
 export const PANEL_FLAGS = 32768 | 64; // Components V2 + éphémère
 const MAX_COMPONENTS = 40;
@@ -61,9 +76,9 @@ export function countComponents(node: unknown): number {
 const clip = (s: string, max: number): string => (s.length <= max ? s : `${s.substring(0, max - 1)}…`);
 const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi);
 
-function shown(s: Json): string {
+function shown(s: Json, lang: string): string {
   const v = s.value;
-  if (v === null || v === undefined || String(v) === '') return s.type === 'toggle' ? 'non' : '—';
+  if (v === null || v === undefined || String(v) === '') return s.type === 'toggle' ? ps(lang, 'val.no') : ps(lang, 'val.empty');
   if (s.type === 'choice') {
     for (const c of s.choices ?? []) {
       if (c && String(c.value) === String(v)) return String(c.label);
@@ -73,6 +88,7 @@ function shown(s: Json): string {
 }
 
 export function renderHome(input: Json): Json {
+  const lang = String(input.language ?? 'en');
   const modules: Json[] = [...(input.modules ?? [])];
   modules.sort((a, b) => (b.todo?.length ?? 0) - (a.todo?.length ?? 0));
   const pages = modules.length === 0 ? 1 : Math.ceil(modules.length / MODULES_PER_PAGE);
@@ -81,27 +97,27 @@ export function renderHome(input: Json): Json {
   const active = modules.filter((m) => m.enabled !== false).length;
   const todo = modules.filter((m) => (m.todo?.length ?? 0) > 0).length;
   const children: Json[] = [
-    text(`## ⚙️ Modules du serveur\n-# ${modules.length} installés · ${active} actifs · ${todo} à configurer`),
+    text(ps(lang, 'home.title', { total: modules.length, active, todo })),
     sep(),
   ];
-  if (slice.length === 0) children.push(text("Aucun module installé. Installe-en depuis l'app ou le Studio."));
+  if (slice.length === 0) children.push(text(ps(lang, 'home.empty')));
   for (const m of slice) {
     const id = String(m.id);
     const todoList: string[] = (m.todo ?? []).map(String);
     const status =
       todoList.length > 0
-        ? `⚠️ À configurer: ${todoList.join(', ')}`
+        ? ps(lang, 'home.todo', { list: todoList.join(', ') })
         : m.enabled === false
-          ? 'Désactivé'
-          : `Actif · ${m.settingCount ?? 0} réglages`;
+          ? ps(lang, 'home.off')
+          : ps(lang, 'home.on', { n: m.settingCount ?? 0 });
     children.push(
       section(
         `**${m.name}**\n-# ${status}`,
-        button(panelId('module', id, '0'), todoList.length > 0 ? 'Configurer' : 'Ouvrir', todoList.length > 0 ? 1 : 2),
+        button(panelId('module', id, '0'), todoList.length > 0 ? ps(lang, 'home.configure') : ps(lang, 'home.open'), todoList.length > 0 ? 1 : 2),
       ),
     );
   }
-  children.push(text(`-# Page ${page + 1} / ${pages}`));
+  children.push(text(ps(lang, 'home.page', { p: page + 1, n: pages })));
   const categories: Json[] = input.categories ?? [];
   if (categories.length > 0) {
     children.push(
@@ -109,7 +125,7 @@ export function renderHome(input: Json): Json {
         {
           type: 3,
           custom_id: panelId('cat', '', String(page)),
-          placeholder: 'Catégorie',
+          placeholder: ps(lang, 'home.category'),
           options: categories.slice(0, MAX_CHOICES).map((c) => ({
             label: String(c.label),
             value: String(c.id),
@@ -125,7 +141,7 @@ export function renderHome(input: Json): Json {
         {
           type: 3,
           custom_id: panelId('goto'),
-          placeholder: 'Aller à un module…',
+          placeholder: ps(lang, 'home.goto'),
           options: modules.slice(0, MAX_CHOICES).map((m) => ({ label: clip(String(m.name), 100), value: String(m.id) })),
         },
       ]),
@@ -141,6 +157,7 @@ export function renderHome(input: Json): Json {
 }
 
 export function renderModule(input: Json): Json {
+  const lang = String(input.language ?? 'en');
   const m: Json = input.module;
   const id = String(m.id);
   const settings: Json[] = m.settings ?? [];
@@ -150,11 +167,7 @@ export function renderModule(input: Json): Json {
   const children: Json[] = [
     text(`## ${m.name}${m.tagline != null ? `\n-# ${m.tagline}` : ''}`),
     sep(),
-    text(
-      enabled
-        ? "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
-        : "-# Module en pause · l'activation se gère dans l'app ou le Studio",
-    ),
+    text(enabled ? ps(lang, 'mod.on') : ps(lang, 'mod.paused')),
   ];
   for (const s of settings.slice(page * SETTINGS_PER_PAGE, page * SETTINGS_PER_PAGE + SETTINGS_PER_PAGE)) {
     const key = String(s.key);
@@ -163,7 +176,7 @@ export function renderModule(input: Json): Json {
       case 'toggle': {
         const on = s.value === true || String(s.value) === 'true';
         children.push(
-          section(`**${label}**\n-# ${s.description ?? ''}`, button(panelId('toggle', id, key), on ? '✓ Oui' : 'Non', on ? 3 : 2)),
+          section(`**${label}**\n-# ${s.description ?? ''}`, button(panelId('toggle', id, key), on ? ps(lang, 'mod.yes') : ps(lang, 'mod.no'), on ? 3 : 2)),
         );
         break;
       }
@@ -175,7 +188,7 @@ export function renderModule(input: Json): Json {
             {
               type: s.type === 'channel' ? 8 : 6,
               custom_id: panelId('pick', id, key),
-              placeholder: s.type === 'channel' ? 'Choisir un salon…' : 'Choisir un rôle…',
+              placeholder: s.type === 'channel' ? ps(lang, 'mod.pickChannel') : ps(lang, 'mod.pickRole'),
               min_values: 0,
               max_values: 1,
               ...(String(s.value ?? '') !== '' ? { default_values: [{ id: String(s.value), type: s.type }] } : {}),
@@ -184,14 +197,14 @@ export function renderModule(input: Json): Json {
         );
         break;
       default:
-        children.push(section(`**${label}**\n-# ${shown(s)}`, button(panelId('edit', id, key), 'Modifier')));
+        children.push(section(`**${label}**\n-# ${shown(s, lang)}`, button(panelId('edit', id, key), ps(lang, 'mod.edit'))));
     }
   }
   children.push(sep());
-  children.push(text(`-# Réglages ${page + 1} / ${pages}`));
+  children.push(text(ps(lang, 'mod.page', { p: page + 1, n: pages })));
   children.push(
     row([
-      button(panelId('home'), '◀ Accueil'),
+      button(panelId('home'), ps(lang, 'mod.home')),
       button(panelId('module', id, String(page - 1)), '◀', 2, page === 0),
       button(panelId('module', id, String(page + 1)), '▶', 2, page >= pages - 1),
     ]),
@@ -239,27 +252,27 @@ function tryParseNumber(v: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-export function validateSetting(setting: Json, raw: string): string | null {
+export function validateSetting(setting: Json, raw: string, lang = 'en'): string | null {
   const v = raw.trim();
   if (v === '') return null;
   switch (setting.type) {
     case 'number': {
       const n = tryParseNumber(v.replace(/,/g, '.'));
-      if (n === null) return `« ${setting.label} » doit être un nombre.`;
-      if (typeof setting.min === 'number' && n < setting.min) return `« ${setting.label} » doit être au moins ${setting.min}.`;
-      if (typeof setting.max === 'number' && n > setting.max) return `« ${setting.label} » doit être au plus ${setting.max}.`;
+      if (n === null) return ps(lang, 'err.number', { label: setting.label });
+      if (typeof setting.min === 'number' && n < setting.min) return ps(lang, 'err.min', { label: setting.label, min: setting.min });
+      if (typeof setting.max === 'number' && n > setting.max) return ps(lang, 'err.max', { label: setting.label, max: setting.max });
       break;
     }
     case 'choice':
-      if (!(setting.choices ?? []).some((c: Json) => c && String(c.value) === v)) return `« ${setting.label} » : choix inconnu.`;
+      if (!(setting.choices ?? []).some((c: Json) => c && String(c.value) === v)) return ps(lang, 'err.choice', { label: setting.label });
       break;
   }
   return null;
 }
 
-export function renderError(textValue: string, backId = 'mcfg:home::0'): Json {
+export function renderError(textValue: string, backId = 'mcfg:home::0', lang = 'en'): Json {
   return message(
-    container(ACCENT_ERR, [text(`## ❌ Valeur refusée\n${textValue}\nRien n'a été changé.`), row([button(backId, 'Retour', 1)])]),
+    container(ACCENT_ERR, [text(ps(lang, 'err.title', { text: textValue })), row([button(backId, ps(lang, 'err.back'), 1)])]),
   );
 }
 
@@ -392,12 +405,12 @@ export async function handlePanelInteraction(args: {
   if (!id) return { writes: [] };
 
   const home = async (page: number): Promise<PanelResult> => ({
-    message: renderHome(await panelHomeInput(doc, read, language, page)),
+    message: renderHome({ ...(await panelHomeInput(doc, read, language, page)), language }),
     writes: [],
   });
   const moduleView = async (m: string, page: number): Promise<PanelResult> => {
     const input = await panelModuleInput(doc, m, read, language);
-    return input === null ? home(0) : { message: renderModule({ module: input, page }), writes: [] };
+    return input === null ? home(0) : { message: renderModule({ module: input, page, language }), writes: [] };
   };
 
   switch (id.view) {
@@ -423,11 +436,11 @@ export async function handlePanelInteraction(args: {
         value = values.length === 0 ? '' : values[0];
       } else {
         value = (modal.value ?? '').trim();
-        const error = validateSetting(setting, value);
-        if (error !== null) return { message: renderError(error, panelId('module', id.module, '0')), writes: [] };
+        const error = validateSetting(setting, value, language);
+        if (error !== null) return { message: renderError(error, panelId('module', id.module, '0'), language), writes: [] };
       }
       const updated = await panelModuleInput(doc, id.module, async (v) => (v === variable ? value : read(v)), language);
-      return { message: renderModule({ module: updated, page: 0 }), writes: [{ variable, value }] };
+      return { message: renderModule({ module: updated, page: 0, language }), writes: [{ variable, value }] };
     }
   }
   return home(0);
