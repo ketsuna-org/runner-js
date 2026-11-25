@@ -15,6 +15,7 @@ import {
   commandAllowsNoPrefix,
   commandTriggerType,
   supportsSlash,
+  SCHEDULED_TASK_MAX_TIMEOUT_MS,
   supportsPrefix,
   resolveCommandPrefix,
   resolveCommandPrefixes,
@@ -759,13 +760,12 @@ export class HandlerRegistry {
 
   /**
    * Exécute le script d'une tâche planifiée (appelé par le planificateur). `interaction` et `message` sont
-   * indéfinis dans un script planifié. Le timeout propre à la tâche ne dépasse jamais `scriptTimeoutMs`.
+   * indéfinis dans un script planifié. Le timeout propre à la tâche ne dépasse jamais une heure (`SCHEDULED_TASK_MAX_TIMEOUT_MS`).
    * Le résultat est journalisé par le planificateur, pas ici.
    */
   async runScheduled(entry: ScheduledTaskEntry): Promise<TaskRunOutcome> {
-    const limit = this.config.scriptTimeoutMs;
-    const timeoutMs =
-      entry.timeoutMs === undefined ? limit : limit === undefined ? entry.timeoutMs : Math.min(entry.timeoutMs, limit);
+    // Une tâche planifiée peut durer jusqu'à une heure (`scriptTimeoutMs` ne vaut que pour les commandes et événements).
+    const timeoutMs = Math.min(entry.timeoutMs ?? SCHEDULED_TASK_MAX_TIMEOUT_MS, SCHEDULED_TASK_MAX_TIMEOUT_MS);
     return this.runScript(entry.script, { scheduled: { id: entry.id } }, { timeoutMs });
   }
 

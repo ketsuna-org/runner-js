@@ -409,7 +409,7 @@ secrets des webhooks et les identifiants de base de données ne sont pas exposé
 | `cron` | Expression à 5 champs ou macro (voir plus bas). **Prioritaire sur `everyMinutes`**, même si les deux sont présents. |
 | `timezone` | Fuseau IANA du `cron` (`Europe/Paris`). UTC si absent. Sans effet pour `everyMinutes`. |
 | `runOnStart` | `true` : un tir supplémentaire au démarrage du bot (voir plus bas). Défaut `false`. |
-| `timeoutMs` | Durée maximale de cette tâche. Jamais supérieure à `scriptTimeoutMs`. |
+| `timeoutMs` | Durée maximale de cette tâche. Une heure au plus, et une heure par défaut (`scriptTimeoutMs` ne vaut que pour les commandes et les événements). |
 
 Une entrée sans `cron` valide **ni** `everyMinutes` valide, ou au fuseau inconnu, est **ignorée avec un
 avertissement** (`Scheduled task <id> ignored: <raison>`, une fois par raison) ; elle ne fait jamais rejeter la
@@ -563,6 +563,8 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.grid.tiles({x, y, columns, rows, size, gap, colors})` | `$canvasTileGrid` (renvoie les rectangles à dessiner) |
 | `bc.canvas.create(w, h, fond?)` | `$canvasCreate` (canvas node-canvas, 1 à 4096 px ; dessinez avec `getContext('2d')`) |
 | `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
+| `bc.canvas.font(nom, taille)` | valeur de `ctx.font` en police Geist (`geist`, `geist-medium`, `geist-bold` : accents, grec, cyrillique) |
+| `bc.canvas.gradient(ctx, {x, y, width, height, colors, angle})` | dégradé linéaire de 2 à 4 couleurs, angle 0 = gauche vers droite, 90 = haut vers bas |
 | `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
 | `await bc.oneTime.run(type, fn)` | `$onlyOneTime[script;type;erreur]` : exécute `fn` une seule fois par `'user'` (tous serveurs), `'server'` ou `'global'`, pour la commande en cours. Renvoie `{ ran: true, value }`, ou `{ ran: false }` si c'est déjà pris (à vous d'envoyer le message). La réclamation est prise avant `fn` ; si `fn` lève une erreur, elle est rendue. |

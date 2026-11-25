@@ -29,8 +29,11 @@ export interface BcDbFindOptions {
 }
 
 export interface BcDb {
-  /** Change d'espace pour la suite du script : `'guild'` (défaut), `'user'` (l'auteur) ou `'bot'`. */
-  space(kind: DocSpaceKind): void;
+  /**
+   * Change d'espace pour la suite du script : `'guild'` (défaut), `'user'` (l'auteur) ou `'bot'`.
+   * `space('guild', id)` nomme un serveur où le bot est présent (utile dans une tâche planifiée, qui n'a pas de serveur courant).
+   */
+  space(kind: DocSpaceKind, guildId?: string): void;
   /** Document (ou le champ `path`) ; `fallback` s'il n'existe pas ou en cas d'erreur de donnée. */
   get(collection: string, id: string, path?: string, fallback?: unknown): Promise<unknown>;
   exists(collection: string, id: string): Promise<boolean>;
@@ -65,6 +68,8 @@ export interface BcDbHost {
   botId: () => string;
   guildId: () => string | undefined;
   userId: () => string | undefined;
+  /** Le bot est-il présent sur ce serveur ? Sans cela, seul le serveur courant peut être nommé. */
+  hasGuild?: (guildId: string) => boolean;
 }
 
 function pathValue(data: Record<string, unknown>, path: string): unknown {
@@ -113,9 +118,11 @@ function sortOf(sort: string): [string, string] {
 export function createBcDb(host: BcDbHost): BcDb {
   let last = '';
   let choice: DocSpaceKind | null = null;
+  let named: string | null = null;
 
   function spaceOf(): DocSpace {
     if (choice === 'bot') return { kind: 'bot', id: '_' };
+    if (choice === 'guild' && named) return { kind: 'guild', id: named };
     const guild = (host.guildId() ?? '').trim();
     const user = (host.userId() ?? '').trim();
     if (choice === 'user' || guild === '') {
@@ -165,11 +172,23 @@ export function createBcDb(host: BcDbHost): BcDb {
   const orderOf = (order?: string): boolean => String(order ?? 'desc').trim().toLowerCase() !== 'asc';
 
   return {
-    space(kind) {
+    space(kind, guildId) {
       if (kind !== 'guild' && kind !== 'user' && kind !== 'bot') {
         throw new BcDbError('invalid', 'Space must be guild, user or bot.');
       }
+      let target: string | null = null;
+      const raw = guildId === undefined || guildId === null ? '' : String(guildId).trim();
+      if (raw !== '') {
+        if (kind !== 'guild') throw new BcDbError('invalid', 'Only the guild space takes a server ID.');
+        if (!/^[0-9]{1,20}$/.test(raw) || /^0+$/.test(raw)) throw new BcDbError('invalid', 'Invalid guild ID.');
+        const current = (host.guildId() ?? '').trim();
+        if (raw !== current && !(host.hasGuild?.(raw) ?? false)) {
+          throw new BcDbError('invalid', 'The bot is not in this server.');
+        }
+        target = raw;
+      }
       choice = kind;
+      named = target;
     },
     async get(collection, id, path = '', fallback = null) {
       const doc = await run((gw, bot, space) => gw.get(bot, space, String(collection).trim(), String(id).trim()));

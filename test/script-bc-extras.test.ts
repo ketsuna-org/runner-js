@@ -137,7 +137,7 @@ describe('bc.grid', () => {
   });
 });
 
-import { createBcCanvas } from '../src/scripts/script-bc-extras.js';
+import { createBcCanvas, isPrivateAddress } from '../src/scripts/script-bc-extras.js';
 describe('bc.canvas', () => {
   test('create, drawTiles and attach produce a PNG attachment', () => {
     const bc = createBcCanvas();
@@ -148,6 +148,38 @@ describe('bc.canvas', () => {
     expect((file.attachment as Buffer).subarray(1, 4).toString()).toBe('PNG');
     expect(() => bc.create(0, 10)).toThrow();
     expect(() => bc.create(5000, 10)).toThrow();
+  });
+
+  test('private and local addresses are refused', async () => {
+    for (const a of ['127.0.0.1', '10.1.2.3', '192.168.0.4', '172.20.0.1', '169.254.169.254', '::1', 'fd00::1', '::ffff:10.0.0.1']) expect(isPrivateAddress(a)).toBe(true);
+    for (const a of ['8.8.8.8', '104.16.0.1', '2606:4700::1']) expect(isPrivateAddress(a)).toBe(false);
+    const bc = createBcCanvas();
+    await expect(bc.loadImage('http://example.com/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('https://localhost/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('not a url')).rejects.toThrow();
+  });
+
+  test('gradient goes left to right and font draws accented Geist text', () => {
+    const bc = createBcCanvas();
+    const canvas = bc.create(100, 40, '#000000') as {
+      getContext(t: string): { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray }; font: string; fillStyle: string; fillText(t: string, x: number, y: number): void };
+    };
+    const ctx = canvas.getContext('2d');
+    bc.gradient(ctx, { x: 0, y: 0, width: 100, height: 40, colors: ['#FF0000', '#0000FF'] });
+    const left = ctx.getImageData(1, 20, 1, 1).data;
+    const right = ctx.getImageData(98, 20, 1, 1).data;
+    expect(left[0]).toBeGreaterThan(200);
+    expect(right[2]).toBeGreaterThan(200);
+    expect(() => bc.gradient(ctx, { width: 10, height: 10, colors: ['red'] })).toThrow();
+    expect(bc.font('geist-bold', 32)).toBe('bold 32px "Geist Bold"');
+    expect(bc.font('nope', 12)).toBe('12px sans-serif');
+    ctx.font = bc.font('geist-bold', 24);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('Éloïse Привет', 2, 30);
+    const px = ctx.getImageData(0, 0, 100, 40).data;
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] > 200 && px[i + 1] > 200) lit++;
+    expect(lit).toBeGreaterThan(50);
   });
 });
 
