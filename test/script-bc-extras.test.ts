@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from '../src/scripts/script-bc-extras.js';
+import { createBcEntitlements, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars, toBcEntitlement } from '../src/scripts/script-bc-extras.js';
 
 describe('bc.math', () => {
   const m = createBcMath();
@@ -232,5 +232,59 @@ describe('bc.oneTime', () => {
     await api.reset('user', { userId: '20', command: 'other' });
     expect((await host({ command: 'other' }, taken).api.run('user', () => 1)).ran).toBe(true);
     await expect(api.reset('everyone' as never)).rejects.toThrow('user, server or global');
+  });
+});
+
+describe('bc.entitlements', () => {
+  const NOW = Date.now();
+  const rows = [
+    { id: '1', skuId: '900', userId: '20', guildId: null, type: 8, startsTimestamp: null, endsTimestamp: NOW + 86_400_000 * 30 },
+    { id: '2', skuId: '901', userId: '20', guildId: null, type: 8, startsTimestamp: null, endsTimestamp: NOW - 1000 },
+    { id: '3', skuId: '902', userId: '20', guildId: null, type: 8, deleted: true, startsTimestamp: null, endsTimestamp: null },
+    { id: '4', skuId: '900', userId: null, guildId: '77', type: 8, startsTimestamp: null, endsTimestamp: null },
+  ];
+  const client = {
+    application: {
+      entitlements: {
+        fetch: async (o: { user?: string; guild?: string; skus?: string[] }) =>
+          new Map(
+            rows
+              .filter((r) => (!o.user || r.userId === o.user) && (!o.guild || r.guildId === o.guild) && (!o.skus || o.skus.includes(r.skuId)))
+              .map((r) => [r.id, r]),
+          ),
+      },
+      fetchSKUs: async () =>
+        new Map([
+          ['900', { id: '900', name: 'Premium', slug: 'premium', type: 5 }],
+          ['901', { id: '901', name: 'Pack', slug: 'pack', type: 2 }],
+        ]),
+    },
+  };
+  const e = createBcEntitlements(() => client, () => '20');
+
+  test('has reads active rights of the author, a user or a server (same fixtures as $hasEntitlement)', async () => {
+    expect(await e.has('900')).toBe(true);
+    expect(await e.has('901')).toBe(false);
+    expect(await e.has('902')).toBe(false);
+    expect(await e.has('900', { guildId: '77' })).toBe(true);
+    await expect(e.has('abc')).rejects.toThrow('Invalid SKU ID.');
+  });
+  test('count, skuIds and endsAt match the BDFD functions', async () => {
+    expect(await e.count({ userId: '20' })).toBe(1);
+    expect(await e.count({ guildId: '77' })).toBe(1);
+    expect(await e.skuIds({ userId: '20' })).toEqual(['900']);
+    expect(await e.endsAt('900', { userId: '20' })).toBe(Math.floor((NOW + 86_400_000 * 30) / 1000));
+    expect(await e.endsAt('900', { guildId: '77' })).toBe('never');
+    expect(await e.endsAt('902', { userId: '20' })).toBeNull();
+  });
+  test('skus and skuName', async () => {
+    expect((await e.skus()).map((s) => s.id)).toEqual(['900', '901']);
+    expect(await e.skuName('900')).toBe('Premium');
+    expect(await e.skuName('999')).toBe('');
+  });
+  test('toBcEntitlement marks ended and deleted rights inactive', () => {
+    expect(toBcEntitlement(rows[1] as never).active).toBe(false);
+    expect(toBcEntitlement(rows[2] as never).active).toBe(false);
+    expect(toBcEntitlement(rows[0] as never).active).toBe(true);
   });
 });

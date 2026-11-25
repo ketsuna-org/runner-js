@@ -571,6 +571,13 @@ Même comportement que les fonctions BDFD du même nom.
 | `await bc.oneTime.reset(type?, { userId?, command? })` | `$resetOneTime[type;userId;commande]` : réarme. Sans `type` : les types réclamés plus tôt dans l'exécution (`user` sinon). `command` = nom de la commande visée. |
 | `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files, reason})` | `$createForumPost` (`reason` : motif du journal d'audit) |
 | `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags, reason?)` | `$forumTags` / `$setThreadTags` |
+| `await bc.entitlements.has(skuId, { userId?, guildId? })` | `$hasEntitlement[sku;user;serveur]` : droit Discord actif (sans cible, l'auteur de l'appel ; un droit du serveur compte aussi) |
+| `await bc.entitlements.count(cible?)` / `bc.entitlements.skuIds(cible?)` | `$entitlementCount` / `$entitlementSKUs` |
+| `await bc.entitlements.endsAt(skuId, cible?)` | `$entitlementEndsAt` : secondes Unix, `'never'` sans fin, `null` sans droit actif |
+| `await bc.entitlements.list({ userId?, guildId?, skuId?, includeEnded? })` | liste des droits (`id`, `skuId`, `userId`, `guildId`, `type`, `startsAt`, `endsAt`, `deleted`, `consumed`, `active`) |
+| `await bc.entitlements.skus()` / `bc.entitlements.skuName(skuId)` | `$skuIDs` / `$skuName` |
+
+Événements `entitlementCreate`, `entitlementUpdate`, `entitlementDelete` (monétisation Discord) : le droit arrive dans `webhook.payload` (mêmes champs que `list`), `webhook.path` porte le nom de l'événement. En BDFD, les variables sont `entitlement.id`, `.skuId`, `.userId`, `.guildId`, `.type`, `.startsAt`, `.endsAt`, `.deleted`, `.consumed`, `.active`. Les achats se font chez Discord : le SKU se crée au portail développeur.
 
 Motif du journal d'audit : les fonctions BDFD acceptent un dernier argument `reason` (ou `$auditLogReason[texte]` pour tout le script). En JavaScript, discord.js le fait déjà partout : `member.ban({ reason })`, `member.roles.add(role, reason)`, `channel.delete(reason)`, etc.
 

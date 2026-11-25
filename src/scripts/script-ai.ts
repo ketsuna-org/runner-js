@@ -7,8 +7,8 @@ import { getFilesGateway } from '../files/files-gateway.js';
 import { createBcDb, type BcDb } from './script-documents.js';
 import { createBcFiles, type BcFiles } from './script-files.js';
 import { AiGatewayError, getAiGateway } from '../ai/ai-gateway.js';
-import { createBcActivity, createBcCanvas, createBcGrid, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from './script-bc-extras.js';
-import type { BcActivity, BcCanvas, BcGrid, BcForum, BcLock, BcMath, BcOneTime, BcVars } from './script-bc-extras.js';
+import { createBcActivity, createBcCanvas, createBcEntitlements, createBcGrid, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from './script-bc-extras.js';
+import type { BcActivity, BcCanvas, BcEntitlements, BcGrid, BcForum, BcLock, BcMath, BcOneTime, BcVars } from './script-bc-extras.js';
 import type { AiGateway, AiMessage, AiTool, AiToolCall } from '../ai/ai-gateway.js';
 
 /** Itérations maximales de `bc.ai.agent` (10), comme `$aiAgent` de BDFD ; résultat d'un outil tronqué à 4000 caractères. */
@@ -96,6 +96,14 @@ function triggerUserId(context: BcAiContext): string | undefined {
   const id =
     (context.message as { author?: { id?: unknown } } | undefined)?.author?.id ??
     (context.interaction as { user?: { id?: unknown } } | undefined)?.user?.id;
+  return id === undefined || id === null || id === '' ? undefined : String(id);
+}
+
+/** Utilisateur du droit quand le script est lancé par un événement `entitlement*` (`webhook.payload.userId`). */
+function entitlementEventUserId(context: BcAiContext): string | undefined {
+  const hook = (context as { webhook?: { path?: string; payload?: { userId?: unknown } } }).webhook;
+  if (!hook?.path?.startsWith('entitlement')) return undefined;
+  const id = hook.payload?.userId;
   return id === undefined || id === null || id === '' ? undefined : String(id);
 }
 
@@ -197,7 +205,7 @@ export function createBcGlobal(
   warn: (message: string) => void = () => undefined,
   /** Annulé à l'expiration du script : stoppe les tours IA (et leur débit) encore en cours. */
   signal?: AbortSignal,
-): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
+): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; entitlements: BcEntitlements; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; ws: BcWs; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -383,6 +391,7 @@ export function createBcGlobal(
       release: (contextId) => oneTimeStore(context.db).releaseOneTime(contextId),
     }),
     forum: createBcForum(() => context.client),
+    entitlements: createBcEntitlements(() => context.client, () => triggerUserId(context) ?? entitlementEventUserId(context)),
     activity: createBcActivity(botId()),
     grid: createBcGrid(),
     canvas: createBcCanvas(),

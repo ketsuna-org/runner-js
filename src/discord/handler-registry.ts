@@ -56,6 +56,7 @@ import {
   withScriptView,
 } from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
+import { toBcEntitlement } from '../scripts/script-bc-extras.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import { perfPhase, perfSettings, runWithProbe } from '../runtime/perf.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -729,13 +730,18 @@ export class HandlerRegistry {
         return;
       }
 
+      // `entitlementCreate/Update/Delete` : le droit arrive dans `webhook.payload` (`webhook.path` = nom de l'événement).
+      const entitlement = eventName.startsWith('entitlement') ? args[args.length - 1] : undefined;
+      const entitlementGuild = (entitlement as { guild?: Guild | null } | undefined)?.guild ?? null;
       await this.runScript(handler.script, {
         message: context.message,
         interaction: context.interaction,
-        guild: context.guild,
+        guild: context.guild ?? entitlementGuild,
         member: context.member,
         channel: context.channel,
-        webhook: undefined,
+        webhook: entitlement
+          ? { path: eventName, payload: toBcEntitlement(entitlement as never), headers: {} }
+          : undefined,
       });
     };
 

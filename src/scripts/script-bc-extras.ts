@@ -646,3 +646,189 @@ export function createBcForum(getClient: () => unknown): BcForum {
     },
   };
 }
+
+// ── bc.entitlements : droits Discord (monétisation), parité avec `$hasEntitlement` et ses sœurs ──
+
+export interface BcEntitlement {
+  id: string;
+  skuId: string;
+  userId: string | null;
+  guildId: string | null;
+  type: number;
+  /** ISO 8601 ou null. */
+  startsAt: string | null;
+  endsAt: string | null;
+  deleted: boolean;
+  consumed: boolean;
+  /** Actif maintenant : non supprimé, commencé et non terminé. */
+  active: boolean;
+}
+
+export interface BcSku {
+  id: string;
+  name: string;
+  slug: string;
+  type: number;
+}
+
+export interface BcEntitlementTarget {
+  /** Utilisateur ; sans `userId` ni `guildId`, l'auteur du déclencheur. */
+  userId?: string;
+  /** Serveur (abonnement du serveur). */
+  guildId?: string;
+}
+
+export interface BcEntitlements {
+  /** `$hasEntitlement` : le droit de ce SKU est actif pour l'utilisateur et/ou le serveur. */
+  has(skuId: string, target?: BcEntitlementTarget): Promise<boolean>;
+  /** Droits actifs (`includeEnded: true` garde aussi les droits terminés ou supprimés). */
+  list(target?: BcEntitlementTarget & { skuId?: string; includeEnded?: boolean }): Promise<BcEntitlement[]>;
+  /** `$entitlementCount` : nombre de droits actifs. */
+  count(target?: BcEntitlementTarget): Promise<number>;
+  /** `$entitlementSKUs` : SKU distincts des droits actifs. */
+  skuIds(target?: BcEntitlementTarget): Promise<string[]>;
+  /** `$entitlementEndsAt` : fin en secondes Unix, `'never'` sans date de fin, `null` sans droit actif. */
+  endsAt(skuId: string, target?: BcEntitlementTarget): Promise<number | 'never' | null>;
+  /** `$skuIDs` / `$skuName` : produits de l'application. */
+  skus(): Promise<BcSku[]>;
+  skuName(skuId: string): Promise<string>;
+}
+
+interface EntitlementLike {
+  id: string;
+  skuId: string;
+  userId?: string | null;
+  guildId?: string | null;
+  type?: number;
+  startsTimestamp?: number | null;
+  endsTimestamp?: number | null;
+  deleted?: boolean;
+  consumed?: boolean;
+}
+
+interface EntitlementClientLike {
+  application?: {
+    entitlements: {
+      fetch(options: Record<string, unknown>): Promise<Iterable<[string, EntitlementLike]> | Map<string, EntitlementLike>>;
+    };
+    fetchSKUs(): Promise<Iterable<[string, { id: string; name: string; slug: string; type: number }]>>;
+  } | null;
+}
+
+function snowflakeOf(raw: unknown, label: string): string {
+  const value = String(raw ?? '').trim();
+  if (!/^[0-9]+$/.test(value) || BigInt(value) <= 0n) throw new Error(`Invalid ${label} ID.`);
+  return value;
+}
+
+export function toBcEntitlement(row: EntitlementLike, now: number = Date.now()): BcEntitlement {
+  const starts = row.startsTimestamp ?? null;
+  const ends = row.endsTimestamp ?? null;
+  const deleted = row.deleted === true;
+  return {
+    id: String(row.id),
+    skuId: String(row.skuId),
+    userId: row.userId ? String(row.userId) : null,
+    guildId: row.guildId ? String(row.guildId) : null,
+    type: row.type ?? 8,
+    startsAt: starts === null ? null : new Date(starts).toISOString(),
+    endsAt: ends === null ? null : new Date(ends).toISOString(),
+    deleted,
+    consumed: row.consumed === true,
+    active: !deleted && (starts === null || starts <= now) && (ends === null || ends > now),
+  };
+}
+
+export function createBcEntitlements(getClient: () => unknown, defaultUserId: () => string | undefined): BcEntitlements {
+  const application = () => {
+    const app = (getClient() as EntitlementClientLike).application;
+    if (!app) throw new Error('The application is not ready.');
+    return app;
+  };
+
+  /** Utilisateur et/ou serveur visés ; sans aucun des deux, l'auteur du déclencheur. */
+  function targets(target: BcEntitlementTarget = {}): { userId?: string; guildId?: string } {
+    const userId = target.userId?.toString().trim() ? snowflakeOf(target.userId, 'user') : undefined;
+    const guildId = target.guildId?.toString().trim() ? snowflakeOf(target.guildId, 'server') : undefined;
+    if (userId || guildId) return { userId, guildId };
+    const author = defaultUserId();
+    if (!author) throw new Error('Entitlement lookup needs a user.');
+    return { userId: snowflakeOf(author, 'user') };
+  }
+
+  async function fetchAll(userId: string | undefined, guildId: string | undefined, skuId: string | undefined, includeEnded: boolean) {
+    const out = new Map<string, BcEntitlement>();
+    let after: string | undefined;
+    for (let page = 0; page < 10; page += 1) {
+      const batch = await application().entitlements.fetch({
+        ...(userId ? { user: userId } : {}),
+        ...(guildId ? { guild: guildId } : {}),
+        ...(skuId ? { skus: [skuId] } : {}),
+        ...(after ? { after } : {}),
+        limit: 100,
+        excludeEnded: !includeEnded,
+        excludeDeleted: !includeEnded,
+        cache: false,
+      });
+      const rows = [...(batch as Map<string, EntitlementLike>).values()];
+      let highest = after;
+      for (const row of rows) {
+        out.set(String(row.id), toBcEntitlement(row));
+        if (highest === undefined || BigInt(row.id) > BigInt(highest)) highest = String(row.id);
+      }
+      if (rows.length < 100 || highest === undefined || highest === after) break;
+      after = highest;
+    }
+    return [...out.values()];
+  }
+
+  /** Droits actifs de l'utilisateur et du serveur visés, fusionnés (un droit de serveur compte aussi). */
+  async function active(target: BcEntitlementTarget | undefined, skuId?: string): Promise<BcEntitlement[]> {
+    const { userId, guildId } = targets(target);
+    const merged = new Map<string, BcEntitlement>();
+    if (userId) for (const e of await fetchAll(userId, undefined, skuId, false)) merged.set(e.id, e);
+    if (guildId) for (const e of await fetchAll(undefined, guildId, skuId, false)) merged.set(e.id, e);
+    return [...merged.values()].filter((e) => e.active && (!skuId || e.skuId === skuId));
+  }
+
+  return {
+    async has(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      return (await active(target, sku)).length > 0;
+    },
+    async list(options = {}) {
+      const { userId, guildId } = targets(options);
+      const sku = options.skuId ? snowflakeOf(options.skuId, 'SKU') : undefined;
+      const merged = new Map<string, BcEntitlement>();
+      if (userId) for (const e of await fetchAll(userId, undefined, sku, options.includeEnded === true)) merged.set(e.id, e);
+      if (guildId) for (const e of await fetchAll(undefined, guildId, sku, options.includeEnded === true)) merged.set(e.id, e);
+      return [...merged.values()].filter((e) => options.includeEnded === true || e.active);
+    },
+    async count(target) {
+      return (await active(target)).length;
+    },
+    async skuIds(target) {
+      return [...new Set((await active(target)).map((e) => e.skuId))];
+    },
+    async endsAt(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const rights = await active(target, sku);
+      if (rights.length === 0) return null;
+      if (rights.some((e) => e.endsAt === null)) return 'never';
+      return Math.floor(Math.max(...rights.map((e) => Date.parse(e.endsAt as string))) / 1000);
+    },
+    async skus() {
+      const list = await application().fetchSKUs();
+      return [...(list as Map<string, { id: string; name: string; slug: string; type: number }>).values()].map((s) => ({
+        id: String(s.id),
+        name: s.name,
+        slug: s.slug,
+        type: s.type,
+      }));
+    },
+    async skuName(skuId) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      return (await this.skus()).find((s) => s.id === sku)?.name ?? '';
+    },
+  };
+}
