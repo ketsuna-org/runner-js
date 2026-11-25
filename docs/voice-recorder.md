@@ -2,7 +2,9 @@
 
 Étude : `DESIGN-flux-vocal.md` du projet (annexes 2 à 6). Réception du flux vocal (DAVE) pour les bots JavaScript.
 
-## Mise en production : deux interrupteurs, tous deux coupés par défaut
+## Mise en production : un seul interrupteur sur la plateforme, coupé par défaut
+
+**`VOICE_RECORDER_ENABLED=true` sur le Manager suffit** : à la création d'un nœud JS du pool, il pose lui-même `VOICE_RECORDER_ENABLED=1` dans l'environnement du runner (les nœuds déjà en marche le reçoivent à leur prochain remplacement). Détail :
 
 1. **Runner** : `VOICE_RECORDER_ENABLED=1` dans l'environnement du runner. Sans lui, `bc.recorder` refuse tout. `VOICE_RECORDER_DISABLED=1` est un coupe-circuit qui l'emporte.
 2. **Manager** : `VOICE_RECORDER_ENABLED=true` dans l'environnement du Manager. Sans lui, il refuse toute réservation (`voice_recorder_disabled`).
