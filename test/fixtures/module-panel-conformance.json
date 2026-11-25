@@ -1,0 +1,1750 @@
+{
+  "doc": {
+    "modules": {
+      "levels": {
+        "name": {
+          "en": "Levels",
+          "fr": "Niveaux"
+        },
+        "enabled": true,
+        "settings": [
+          {
+            "key": "xp-min",
+            "type": "number",
+            "scope": "guild",
+            "default": 15,
+            "min": 0,
+            "max": 1000,
+            "i18n": {
+              "en": {
+                "label": "XP min",
+                "description": "Minimum XP"
+              },
+              "fr": {
+                "label": "XP minimum",
+                "description": "XP minimum par message"
+              }
+            }
+          },
+          {
+            "key": "announce-channel",
+            "type": "channel",
+            "scope": "guild",
+            "default": "",
+            "i18n": {
+              "en": {
+                "label": "Channel",
+                "description": "Where to announce"
+              }
+            }
+          },
+          {
+            "key": "stack-rewards",
+            "type": "toggle",
+            "scope": "guild",
+            "default": true,
+            "i18n": {
+              "en": {
+                "label": "Stack rewards"
+              }
+            }
+          },
+          {
+            "key": "theme",
+            "type": "choice",
+            "scope": "guild",
+            "default": "dark",
+            "choices": [
+              "dark",
+              "light"
+            ],
+            "i18n": {
+              "en": {
+                "label": "Theme"
+              }
+            }
+          },
+          {
+            "key": "motto",
+            "type": "text",
+            "scope": "guild",
+            "default": "",
+            "i18n": {
+              "en": {
+                "label": "Motto"
+              }
+            }
+          },
+          {
+            "key": "hidden",
+            "type": "number",
+            "scope": "guild",
+            "default": 1,
+            "i18n": {
+              "en": {
+                "label": "Hidden"
+              }
+            }
+          }
+        ],
+        "features": [
+          {
+            "key": "extra",
+            "entities": [
+              "setting:hidden"
+            ]
+          }
+        ],
+        "disabledFeatures": [
+          "extra"
+        ]
+      },
+      "welcome": {
+        "name": {
+          "en": "Welcome"
+        },
+        "enabled": false,
+        "settings": [
+          {
+            "key": "channel",
+            "type": "channel",
+            "scope": "guild",
+            "default": "",
+            "i18n": {
+              "en": {
+                "label": "Welcome channel"
+              }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "variables": {
+    "mod_levels_xp_min": "20",
+    "mod_levels_motto": "GG"
+  },
+  "cases": [
+    {
+      "name": "accueil",
+      "customId": "mcfg:home::0",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 8150256,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ⚙️ Modules du serveur\n-# 2 installés · 1 actifs · 2 à configurer"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Levels**\n-# ⚠️ À configurer: Channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:levels:0"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Welcome**\n-# ⚠️ À configurer: Welcome channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:welcome:0"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "-# Page 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 3,
+                      "custom_id": "mcfg:goto::",
+                      "placeholder": "Aller à un module…",
+                      "options": [
+                        {
+                          "label": "Levels",
+                          "value": "levels"
+                        },
+                        {
+                          "label": "Welcome",
+                          "value": "welcome"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:home::-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:home::1",
+                      "disabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "accueil en français",
+      "customId": "mcfg:home::0",
+      "language": "fr",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 8150256,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ⚙️ Modules du serveur\n-# 2 installés · 1 actifs · 2 à configurer"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Niveaux**\n-# ⚠️ À configurer: Channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:levels:0"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Welcome**\n-# ⚠️ À configurer: Welcome channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:welcome:0"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "-# Page 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 3,
+                      "custom_id": "mcfg:goto::",
+                      "placeholder": "Aller à un module…",
+                      "options": [
+                        {
+                          "label": "Niveaux",
+                          "value": "levels"
+                        },
+                        {
+                          "label": "Welcome",
+                          "value": "welcome"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:home::-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:home::1",
+                      "disabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "page hors limites",
+      "customId": "mcfg:home::9",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 8150256,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ⚙️ Modules du serveur\n-# 2 installés · 1 actifs · 2 à configurer"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Levels**\n-# ⚠️ À configurer: Channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:levels:0"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Welcome**\n-# ⚠️ À configurer: Welcome channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:welcome:0"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "-# Page 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 3,
+                      "custom_id": "mcfg:goto::",
+                      "placeholder": "Aller à un module…",
+                      "options": [
+                        {
+                          "label": "Levels",
+                          "value": "levels"
+                        },
+                        {
+                          "label": "Welcome",
+                          "value": "welcome"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:home::-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:home::1",
+                      "disabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "module",
+      "customId": "mcfg:module:levels:0",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 5763719,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Levels"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**XP min**\n-# 20"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:xp-min"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "**Channel**\n-# Where to announce"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:levels:announce-channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1
+                    }
+                  ]
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Stack rewards**\n-# "
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 3,
+                    "label": "✓ Oui",
+                    "custom_id": "mcfg:toggle:levels:stack-rewards"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Theme**\n-# dark"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:theme"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Motto**\n-# GG"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:motto"
+                  }
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:levels:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:levels:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:levels:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:levels:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "module inconnu",
+      "customId": "mcfg:module:nope:0",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 8150256,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ⚙️ Modules du serveur\n-# 2 installés · 1 actifs · 2 à configurer"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Levels**\n-# ⚠️ À configurer: Channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:levels:0"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Welcome**\n-# ⚠️ À configurer: Welcome channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:welcome:0"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "-# Page 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 3,
+                      "custom_id": "mcfg:goto::",
+                      "placeholder": "Aller à un module…",
+                      "options": [
+                        {
+                          "label": "Levels",
+                          "value": "levels"
+                        },
+                        {
+                          "label": "Welcome",
+                          "value": "welcome"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:home::-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:home::1",
+                      "disabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "aller à un module",
+      "customId": "mcfg:goto::",
+      "language": "en",
+      "values": [
+        "welcome"
+      ],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 9739172,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Welcome"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Module en pause · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 10,
+                  "content": "**Welcome channel**\n-# "
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:welcome:channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1
+                    }
+                  ]
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:welcome:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:welcome:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:welcome:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:welcome:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "modale nombre",
+      "customId": "mcfg:edit:levels:xp-min",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": null,
+        "modal": {
+          "title": "XP min",
+          "custom_id": "mcfg:save:levels:xp-min",
+          "components": [
+            {
+              "type": 18,
+              "label": "XP min",
+              "description": "Minimum XP",
+              "component": {
+                "type": 4,
+                "custom_id": "value",
+                "style": 1,
+                "required": false,
+                "value": "20",
+                "max_length": 32
+              }
+            }
+          ]
+        },
+        "writes": []
+      }
+    },
+    {
+      "name": "modale choix",
+      "customId": "mcfg:edit:levels:theme",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": null,
+        "modal": {
+          "title": "Theme",
+          "custom_id": "mcfg:save:levels:theme",
+          "components": [
+            {
+              "type": 18,
+              "label": "Theme",
+              "description": "",
+              "component": {
+                "type": 3,
+                "custom_id": "value",
+                "options": [
+                  {
+                    "label": "dark",
+                    "value": "dark",
+                    "default": true
+                  },
+                  {
+                    "label": "light",
+                    "value": "light"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "writes": []
+      }
+    },
+    {
+      "name": "modale texte",
+      "customId": "mcfg:edit:levels:motto",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": null,
+        "modal": {
+          "title": "Motto",
+          "custom_id": "mcfg:save:levels:motto",
+          "components": [
+            {
+              "type": 18,
+              "label": "Motto",
+              "description": "",
+              "component": {
+                "type": 4,
+                "custom_id": "value",
+                "style": 2,
+                "required": false,
+                "value": "GG",
+                "max_length": 2000
+              }
+            }
+          ]
+        },
+        "writes": []
+      }
+    },
+    {
+      "name": "bascule",
+      "customId": "mcfg:toggle:levels:stack-rewards",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 5763719,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Levels"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**XP min**\n-# 20"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:xp-min"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "**Channel**\n-# Where to announce"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:levels:announce-channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1
+                    }
+                  ]
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Stack rewards**\n-# "
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Non",
+                    "custom_id": "mcfg:toggle:levels:stack-rewards"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Theme**\n-# dark"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:theme"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Motto**\n-# GG"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:motto"
+                  }
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:levels:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:levels:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:levels:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:levels:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": [
+          {
+            "variable": "mod_levels_stack_rewards",
+            "value": "false"
+          }
+        ]
+      }
+    },
+    {
+      "name": "salon choisi",
+      "customId": "mcfg:pick:levels:announce-channel",
+      "language": "en",
+      "values": [
+        "1234"
+      ],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 5763719,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Levels"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**XP min**\n-# 20"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:xp-min"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "**Channel**\n-# Where to announce"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:levels:announce-channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1,
+                      "default_values": [
+                        {
+                          "id": "1234",
+                          "type": "channel"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Stack rewards**\n-# "
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 3,
+                    "label": "✓ Oui",
+                    "custom_id": "mcfg:toggle:levels:stack-rewards"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Theme**\n-# dark"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:theme"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Motto**\n-# GG"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:motto"
+                  }
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:levels:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:levels:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:levels:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:levels:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": [
+          {
+            "variable": "mod_levels_announce_channel",
+            "value": "1234"
+          }
+        ]
+      }
+    },
+    {
+      "name": "salon vidé",
+      "customId": "mcfg:pick:levels:announce-channel",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 5763719,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Levels"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**XP min**\n-# 20"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:xp-min"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "**Channel**\n-# Where to announce"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:levels:announce-channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1
+                    }
+                  ]
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Stack rewards**\n-# "
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 3,
+                    "label": "✓ Oui",
+                    "custom_id": "mcfg:toggle:levels:stack-rewards"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Theme**\n-# dark"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:theme"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Motto**\n-# GG"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:motto"
+                  }
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:levels:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:levels:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:levels:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:levels:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": [
+          {
+            "variable": "mod_levels_announce_channel",
+            "value": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "enregistrement valide",
+      "customId": "mcfg:save:levels:xp-min",
+      "language": "en",
+      "values": [],
+      "modal": {
+        "value": "50"
+      },
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 5763719,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## Levels"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# ✓ Module actif · l'activation se gère dans l'app ou le Studio"
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**XP min**\n-# 50"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:xp-min"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "**Channel**\n-# Where to announce"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 8,
+                      "custom_id": "mcfg:pick:levels:announce-channel",
+                      "placeholder": "Choisir un salon…",
+                      "min_values": 0,
+                      "max_values": 1
+                    }
+                  ]
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Stack rewards**\n-# "
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 3,
+                    "label": "✓ Oui",
+                    "custom_id": "mcfg:toggle:levels:stack-rewards"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Theme**\n-# dark"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:theme"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Motto**\n-# GG"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Modifier",
+                    "custom_id": "mcfg:edit:levels:motto"
+                  }
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 10,
+                  "content": "-# Réglages 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀ Accueil",
+                      "custom_id": "mcfg:home::"
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:module:levels:-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:module:levels:1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "📝 Textes",
+                      "custom_id": "mcfg:texts:levels:0"
+                    },
+                    {
+                      "type": 2,
+                      "style": 4,
+                      "label": "Réinitialiser",
+                      "custom_id": "mcfg:reset:levels:"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": [
+          {
+            "variable": "mod_levels_xp_min",
+            "value": "50"
+          }
+        ]
+      }
+    },
+    {
+      "name": "enregistrement hors bornes",
+      "customId": "mcfg:save:levels:xp-min",
+      "language": "en",
+      "values": [],
+      "modal": {
+        "value": "5000"
+      },
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 15548997,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ❌ Valeur refusée\n« XP min » doit être au plus 1000.\nRien n'a été changé."
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 1,
+                      "label": "Retour",
+                      "custom_id": "mcfg:module:levels:0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "enregistrement choix inconnu",
+      "customId": "mcfg:save:levels:theme",
+      "language": "en",
+      "values": [],
+      "modal": {
+        "value": "blue"
+      },
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 15548997,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ❌ Valeur refusée\n« Theme » : choix inconnu.\nRien n'a été changé."
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 1,
+                      "label": "Retour",
+                      "custom_id": "mcfg:module:levels:0"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "réglage masqué",
+      "customId": "mcfg:edit:levels:hidden",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": {
+          "flags": 32832,
+          "components": [
+            {
+              "type": 17,
+              "accent_color": 8150256,
+              "components": [
+                {
+                  "type": 10,
+                  "content": "## ⚙️ Modules du serveur\n-# 2 installés · 1 actifs · 2 à configurer"
+                },
+                {
+                  "type": 14,
+                  "divider": true,
+                  "spacing": 1
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Levels**\n-# ⚠️ À configurer: Channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:levels:0"
+                  }
+                },
+                {
+                  "type": 9,
+                  "components": [
+                    {
+                      "type": 10,
+                      "content": "**Welcome**\n-# ⚠️ À configurer: Welcome channel"
+                    }
+                  ],
+                  "accessory": {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Configurer",
+                    "custom_id": "mcfg:module:welcome:0"
+                  }
+                },
+                {
+                  "type": 10,
+                  "content": "-# Page 1 / 1"
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 3,
+                      "custom_id": "mcfg:goto::",
+                      "placeholder": "Aller à un module…",
+                      "options": [
+                        {
+                          "label": "Levels",
+                          "value": "levels"
+                        },
+                        {
+                          "label": "Welcome",
+                          "value": "welcome"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": 1,
+                  "components": [
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "◀",
+                      "custom_id": "mcfg:home::-1",
+                      "disabled": true
+                    },
+                    {
+                      "type": 2,
+                      "style": 2,
+                      "label": "▶",
+                      "custom_id": "mcfg:home::1",
+                      "disabled": true
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        "modal": null,
+        "writes": []
+      }
+    },
+    {
+      "name": "identifiant étranger",
+      "customId": "other:thing",
+      "language": "en",
+      "values": [],
+      "modal": {},
+      "expect": {
+        "message": null,
+        "modal": null,
+        "writes": []
+      }
+    }
+  ]
+}
