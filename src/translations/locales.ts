@@ -37,8 +37,11 @@ export function normalizeLocale(raw: unknown): string | null {
 
 const base = (locale: string): string => locale.split('-')[0] ?? locale;
 
-/** Ordre d'essai : la personne et les variantes de sa langue, le serveur idem, puis en-US et en-GB. */
-export function localeChain(user?: string | null, guild?: string | null): string[] {
+/**
+ * Ordre d'essai : la personne et les variantes de sa langue, le serveur idem, la langue par défaut du bot (et ses
+ * variantes), puis en-US et en-GB. Sans langue par défaut (ou en-US), comme avant.
+ */
+export function localeChain(user?: string | null, guild?: string | null, defaultLocale?: string | null): string[] {
   const out: string[] = [];
   const add = (locale: string | null | undefined): void => {
     if (locale && !out.includes(locale)) out.push(locale);
@@ -53,6 +56,7 @@ export function localeChain(user?: string | null, guild?: string | null): string
   };
   addWithSiblings(user);
   addWithSiblings(guild);
+  addWithSiblings(defaultLocale);
   add(FALLBACK_LOCALE);
   add('en-GB');
   return out;

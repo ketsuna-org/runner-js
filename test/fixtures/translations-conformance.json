@@ -1148,6 +1148,69 @@
     "en-US",
     "en-GB"
    ]
+  },
+  {
+   "user": "de",
+   "guild": null,
+   "default": "fr",
+   "expected": [
+    "de",
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": "ja",
+   "default": "pt-BR",
+   "expected": [
+    "ja",
+    "pt-BR",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "fr",
+   "guild": "de",
+   "default": "fr",
+   "expected": [
+    "fr",
+    "de",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "default": "zh-TW",
+   "expected": [
+    "zh-TW",
+    "zh-CN",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "default": "en-US",
+   "expected": [
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "de",
+   "guild": null,
+   "default": "xx",
+   "expected": [
+    "de",
+    "en-US",
+    "en-GB"
+   ]
   }
  ],
  "catalog": {
@@ -1316,6 +1379,104 @@
    "expected": {
     "1": "a=b"
    }
+  }
+ ],
+ "catalogDefault": {
+  "keys": {
+   "shop.bought": {
+    "values": {
+     "en-US": "{user} bought {item}",
+     "fr": "{user} a acheté {item}"
+    }
+   },
+   "shop.items": {
+    "values": {
+     "en": "{n, plural, one {# item} other {# items}}",
+     "pl": "{n, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}"
+    }
+   },
+   "only.german": {
+    "values": {
+     "de": "Nur Deutsch"
+    }
+   },
+   "bad.syntax": {
+    "values": {
+     "en-US": "{oops"
+    }
+   }
+  },
+  "defaultLocale": "fr"
+ },
+ "translateDefault": [
+  {
+   "key": "shop.bought",
+   "user": "de",
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.bought",
+   "user": "ja",
+   "guild": "de",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.bought",
+   "user": "en-US",
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob bought X",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "shop.items",
+   "user": "de",
+   "guild": null,
+   "args": {
+    "n": "2"
+   },
+   "text": "2 items",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "only.german",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "only.german",
+   "found": false,
+   "locale": null
+  },
+  {
+   "key": "shop.bought",
+   "user": "de",
+   "guild": null,
+   "forced": "ja",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
   }
  ]
 }

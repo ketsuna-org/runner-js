@@ -36,7 +36,7 @@ describe('conformance des traductions', () => {
 
   for (const c of conformance.chain) {
     test(`chaîne ${c.user} / ${c.guild}`, () => {
-      expect(localeChain(c.user, c.guild)).toEqual(c.expected);
+      expect(localeChain(c.user, c.guild, (c as { default?: string | null }).default)).toEqual(c.expected);
     });
   }
 
@@ -44,6 +44,17 @@ describe('conformance des traductions', () => {
   for (const c of conformance.translate as Array<Record<string, any>>) {
     test(`traduire ${c.key} ${c.user}/${c.guild}/${c.forced ?? ''}`, () => {
       const r = catalog.translate(c.key, { userLocale: c.user, guildLocale: c.guild, forced: c.forced, args: c.args });
+      expect(r.text).toBe(c.text);
+      expect(r.found).toBe(c.found);
+      expect(r.locale).toBe(c.locale);
+    });
+  }
+
+  const catalogDefault = TranslationCatalog.fromDocument(conformance.catalogDefault);
+  test('langue par défaut lue', () => expect(catalogDefault.defaultLocale).toBe('fr'));
+  for (const c of conformance.translateDefault as Array<Record<string, any>>) {
+    test(`traduire (défaut fr) ${c.key} ${c.user}/${c.guild}/${c.forced ?? ''}`, () => {
+      const r = catalogDefault.translate(c.key, { userLocale: c.user, guildLocale: c.guild, forced: c.forced, args: c.args });
       expect(r.text).toBe(c.text);
       expect(r.found).toBe(c.found);
       expect(r.locale).toBe(c.locale);
