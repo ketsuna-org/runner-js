@@ -1,8 +1,19 @@
-# Enregistrement vocal (`bc.recorder`) : EXPÉRIMENTAL, staging seulement
+# Enregistrement vocal (`bc.recorder`)
 
-Étude : `DESIGN-flux-vocal.md` du projet (annexes 2 à 5). Version minimale pour tester la réception du flux
-vocal (DAVE) avec un vrai bot. **Pas de réserve Premium ni de quota dans cette version : ne pas la mettre en
-production avant que le Manager les applique.** **Coupée par défaut** : elle ne s'active que si `VOICE_RECORDER_ENABLED=1` (staging). `VOICE_RECORDER_DISABLED=1` reste un coupe-circuit qui l'emporte.
+Étude : `DESIGN-flux-vocal.md` du projet (annexes 2 à 6). Réception du flux vocal (DAVE) pour les bots JavaScript.
+
+## Mise en production : deux interrupteurs, tous deux coupés par défaut
+
+1. **Runner** : `VOICE_RECORDER_ENABLED=1` dans l'environnement du runner. Sans lui, `bc.recorder` refuse tout. `VOICE_RECORDER_DISABLED=1` est un coupe-circuit qui l'emporte.
+2. **Manager** : `VOICE_RECORDER_ENABLED=true` dans l'environnement du Manager. Sans lui, il refuse toute réservation (`voice_recorder_disabled`).
+
+Sur un runner **géré** (Manager), le Manager décide : **Premium seulement**, **20 h par mois et par compte** (`VOICE_RECORDER_MONTHLY_SECONDS`, 72000 s), **2 enregistrements simultanés par compte**, 600 s au plus par session. Le runner réserve la durée AVANT de rejoindre le salon et rapporte la durée réelle à l'arrêt ; une session jamais clôturée (runner tombé) compte pour sa durée réservée. **Un Manager injoignable = rien n'est enregistré** (échec fermé). Un runner **sans Manager** (self-host, runner embarqué du desktop) n'a ni Premium ni quota : l'opérateur de la machine en est responsable ; pour l'app desktop le runner embarqué n'active pas l'enregistrement.
+
+### Au dépassement du quota
+
+- Quota restant plus court que la durée demandée : l'enregistrement démarre avec la durée restante (`start()` renvoie `maxSeconds` et `quotaLimited: true`, l'annonce le dit) et s'arrête seul à l'échéance (`reason: 'quota'` dans le résultat de `stop()`). Il ne dépasse jamais le quota.
+- Quota épuisé : `start()` est refusé avant toute connexion vocale ni annonce (« The monthly voice recording quota of this account is used up. It resets on the 1st of the month (UTC). »). Compte sans Premium : « Voice recording needs a Premium subscription… ». Trop de sessions : « …maximum number of voice recordings running. ». Les erreurs portent un `code` stable : `voice_recorder_quota_exceeded`, `voice_recorder_premium_required`, `voice_recorder_too_many_sessions`, `voice_recorder_disabled`, `voice_recorder_unavailable`.
+- `await bc.recorder.quota()` : `{ premium, monthlySeconds, usedSeconds, remainingSeconds, resetsAt }`, ou `null` sans Manager.
 
 Le bot doit avoir l'intent **Guild Voice States** et la permission de rejoindre le salon. Un serveur ne
 supporte qu'une connexion vocale par bot : refus si le bot est déjà dans un salon (musique Lavalink incluse).
@@ -39,9 +50,10 @@ supporte qu'une connexion vocale par bot : refus si le bot est déjà dans un sa
 | `await bc.recorder.consentPrompt(channelId, { locale?, texts? })` | Poste le message de consentement (anglais, plus la traduction complète demandée) avec ses boutons. |
 | `await bc.recorder.hasConsent(userId)` | Lecture seule : accord valide ou non. |
 | `await bc.recorder.withdraw(userId)` | Retire l'accord : la personne elle-même, ou un membre qui a « Gérer le serveur ». |
-| `await bc.recorder.start({ channelId, announceChannelId, maxSeconds? })` | Rejoint, annonce, enregistre. Renvoie `{ id, channelId, recordedUserIds }`. |
+| `await bc.recorder.start({ channelId, announceChannelId, maxSeconds? })` | Réserve la durée auprès du Manager, rejoint, annonce, enregistre. Renvoie `{ id, channelId, recordedUserIds, maxSeconds, quotaLimited }`. |
+| `await bc.recorder.quota()` | Quota mensuel restant du compte (`null` sans Manager). |
 | `bc.recorder.status()` | `{ active, id, channelId, startedAt, recordingUserIds }`. |
-| `await bc.recorder.stop()` | Arrête et renvoie `{ id, durationMs, reason, tracks: [{ userId, name, bytes, externalConsent, file }] }`. |
+| `await bc.recorder.stop()` | Arrête et renvoie `{ id, durationMs, reason ('stopped' \| 'max-duration' \| 'quota' \| 'connection-lost'), tracks: [{ userId, name, bytes, externalConsent, file }] }`. |
 
 ```js
 // /rec consent : poste le message de consentement dans le salon courant

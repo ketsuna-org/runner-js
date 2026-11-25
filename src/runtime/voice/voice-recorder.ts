@@ -30,6 +30,7 @@ import {
   renderPrompt,
 } from './consent.js';
 import { OggOpusMuxer } from './ogg-opus.js';
+import { getVoiceQuotaGateway, type VoiceQuotaGateway, type VoiceQuotaStatus } from './voice-quota.js';
 import { clientHasGuildVoiceStatesIntent } from '../../discord/discord-client-options.js';
 
 /**
@@ -71,7 +72,7 @@ export interface RecordingResult {
   id: string;
   channelId: string;
   durationMs: number;
-  reason: 'stopped' | 'max-duration' | 'connection-lost';
+  reason: 'stopped' | 'max-duration' | 'quota' | 'connection-lost';
   tracks: RecordedTrack[];
 }
 
@@ -109,6 +110,10 @@ interface Session {
   writers: Map<string, TrackWriter>;
   allWriters: TrackWriter[];
   timer: ReturnType<typeof setTimeout>;
+  /** Réservation faite auprès du Manager (quota mensuel) ; absente sans Manager. */
+  quotaSessionId?: string;
+  /** Raison de l'arrêt à l'échéance : « quota » quand le quota restant a raccourci la durée demandée. */
+  limitReason: 'max-duration' | 'quota';
   onSpeaking: (userId: string) => void;
   stopping?: Promise<RecordingResult>;
 }
@@ -117,12 +122,21 @@ interface Session {
 export interface RecorderDeps {
   join: typeof joinVoiceChannel;
   waitReady: (connection: VoiceConnection) => Promise<unknown>;
+  /** Quota du Manager (Premium, heures mensuelles). Null/absent : pas de Manager, pas de quota. */
+  quota?: () => VoiceQuotaGateway | null;
+  botId?: string;
 }
 
-const defaultDeps: RecorderDeps = {
-  join: joinVoiceChannel,
-  waitReady: (connection) => entersState(connection, VoiceConnectionStatus.Ready, 20_000),
-};
+export function defaultRecorderDeps(botId: string): RecorderDeps {
+  return {
+    join: joinVoiceChannel,
+    waitReady: (connection) => entersState(connection, VoiceConnectionStatus.Ready, 20_000),
+    quota: getVoiceQuotaGateway,
+    botId,
+  };
+}
+
+const defaultDeps: RecorderDeps = defaultRecorderDeps('');
 
 function clean(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value).trim() : '';
@@ -274,7 +288,10 @@ export class VoiceRecorderManager {
 
   // ---- Enregistrement ----
 
-  async start(guild: Guild, options: RecorderStartOptions): Promise<{ id: string; channelId: string; recordedUserIds: string[] }> {
+  async start(
+    guild: Guild,
+    options: RecorderStartOptions,
+  ): Promise<{ id: string; channelId: string; recordedUserIds: string[]; maxSeconds: number; quotaLimited: boolean }> {
     if (this.disabled || this.disposed) throw new Error('The voice recorder is disabled.');
     if (this.sessions.has(guild.id)) throw new Error('A recording is already running on this server.');
     if (!clientHasGuildVoiceStatesIntent(this.client)) {
@@ -313,6 +330,24 @@ export class VoiceRecorderManager {
       );
     }
 
+    // Quota du compte (Manager) : Premium, heures du mois, sessions simultanées. Réservé AVANT de rejoindre le salon ;
+    // la durée accordée peut être plus courte que celle demandée (quota restant). Échoue fermé si le Manager ne répond pas.
+    const gateway = this.deps.quota?.() ?? null;
+    let quotaSessionId: string | undefined;
+    let limitReason: Session['limitReason'] = 'max-duration';
+    let grantedSeconds = seconds;
+    if (gateway) {
+      const grant = await gateway.reserve(this.deps.botId ?? '', guild.id, seconds);
+      quotaSessionId = grant.sessionId;
+      if (grant.grantedSeconds < seconds) {
+        grantedSeconds = grant.grantedSeconds;
+        limitReason = 'quota';
+      }
+    }
+    const releaseQuota = (): void => {
+      if (gateway && quotaSessionId) void this.reportUsage(gateway, quotaSessionId, 0);
+    };
+
     const id = `rec-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
     const dir = await mkdtemp(join(tmpdir(), 'bc-voice-'));
     const connection = this.deps.join({
@@ -327,6 +362,7 @@ export class VoiceRecorderManager {
     } catch {
       connection.destroy();
       await rm(dir, { recursive: true, force: true });
+      releaseQuota();
       throw new Error('Could not join the voice channel (DAVE handshake or permissions). Check Connect permission.');
     }
 
@@ -334,7 +370,7 @@ export class VoiceRecorderManager {
     const names = consenting.slice(0, MAX_RECORDED_SPEAKERS).map((u) => `<@${u}>`).join(', ');
     try {
       await (announce as unknown as { send: (m: unknown) => Promise<unknown> }).send({
-        content: `🔴 **Recording started** in <#${channelId}>. Being recorded (they agreed): ${names}. Everyone else is not recorded. Anyone can withdraw their consent at any time with the button of the consent message: recording of their voice stops immediately. The recording stops automatically after ${Math.round((seconds / 60) * 10) / 10} min.`,
+        content: `🔴 **Recording started** in <#${channelId}>. Being recorded (they agreed): ${names}. Everyone else is not recorded. Anyone can withdraw their consent at any time with the button of the consent message: recording of their voice stops immediately. The recording stops automatically after ${Math.round((grantedSeconds / 60) * 10) / 10} min${limitReason === 'quota' ? ' (the monthly recording quota of this server\'s bot owner is almost used up)' : ''}.`,
         allowedMentions: { parse: [] },
         // Retrait en un clic, en pleine session, sans dépendre d'un ancien message.
         components: [
@@ -346,6 +382,7 @@ export class VoiceRecorderManager {
     } catch {
       connection.destroy();
       await rm(dir, { recursive: true, force: true });
+      releaseQuota();
       throw new Error('Could not post the recording announcement: nothing was recorded.');
     }
 
@@ -360,7 +397,9 @@ export class VoiceRecorderManager {
       consentCache: new Map(),
       writers: new Map(),
       allWriters: [],
-      timer: setTimeout(() => void this.stop(guild.id, 'max-duration').catch(() => undefined), seconds * 1000),
+      quotaSessionId,
+      limitReason,
+      timer: setTimeout(() => void this.stop(guild.id, limitReason).catch(() => undefined), grantedSeconds * 1000),
       onSpeaking: () => undefined,
     };
     session.onSpeaking = (userId) => void this.listen(session, userId).catch(() => undefined);
@@ -382,8 +421,34 @@ export class VoiceRecorderManager {
       }
     });
     this.sessions.set(guild.id, session);
-    this.log('info', `[recorder] ${id} started in ${channelId} (${consenting.length} consenting present, max ${seconds}s)`);
-    return { id, channelId, recordedUserIds: consenting.slice(0, MAX_RECORDED_SPEAKERS) };
+    this.log('info', `[recorder] ${id} started in ${channelId} (${consenting.length} consenting present, max ${grantedSeconds}s)`);
+    return {
+      id,
+      channelId,
+      recordedUserIds: consenting.slice(0, MAX_RECORDED_SPEAKERS),
+      maxSeconds: grantedSeconds,
+      quotaLimited: limitReason === 'quota',
+    };
+  }
+
+  /** Rapporte la durée réellement enregistrée au Manager (une nouvelle tentative) ; sinon la durée réservée compte. */
+  private async reportUsage(gateway: VoiceQuotaGateway, sessionId: string, usedSeconds: number): Promise<void> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await gateway.finish(this.deps.botId ?? '', sessionId, usedSeconds);
+        return;
+      } catch (error) {
+        if (attempt === 1) {
+          this.log('warn', `[recorder] could not report the recording time to the platform: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+  }
+
+  /** Quota mensuel restant du compte (Manager) ; null sans Manager. */
+  async quota(): Promise<VoiceQuotaStatus | null> {
+    const gateway = this.deps.quota?.() ?? null;
+    return gateway ? gateway.quota(this.deps.botId ?? '') : null;
   }
 
   /** Consentement valide, avec un cache de 15 s pour ne pas interroger le magasin à chaque rafale de parole. */
@@ -457,6 +522,10 @@ export class VoiceRecorderManager {
       // déjà détruite
     }
     this.sessions.delete(session.guildId);
+    const gateway = this.deps.quota?.() ?? null;
+    if (gateway && session.quotaSessionId) {
+      await this.reportUsage(gateway, session.quotaSessionId, Math.ceil((Date.now() - session.startedAt) / 1000));
+    }
 
     const tracks: RecordedTrack[] = [];
     for (const writer of session.allWriters) {
@@ -495,7 +564,9 @@ export class VoiceRecorderApi {
     return this.guild;
   }
 
-  start(options: RecorderStartOptions): Promise<{ id: string; channelId: string; recordedUserIds: string[] }> {
+  start(
+    options: RecorderStartOptions,
+  ): Promise<{ id: string; channelId: string; recordedUserIds: string[]; maxSeconds: number; quotaLimited: boolean }> {
     return this.manager.start(this.requireGuild(), options);
   }
 
@@ -530,5 +601,10 @@ export class VoiceRecorderApi {
 
   status(): RecorderStatus {
     return this.manager.status(this.requireGuild().id);
+  }
+
+  /** Quota mensuel du compte : `null` sans Manager (self-host), sinon secondes utilisées et restantes. */
+  quota(): Promise<VoiceQuotaStatus | null> {
+    return this.manager.quota();
   }
 }

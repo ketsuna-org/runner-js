@@ -46,7 +46,7 @@ import { MusicManager } from '../runtime/music/music-manager.js';
 import { ConsentStore } from '../runtime/voice/consent.js';
 import { WebSocketSourceManager } from '../runtime/websocket/ws-manager.js';
 import { parseWebSocketSources } from '../runtime/websocket/ws-source.js';
-import { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
+import { VoiceRecorderManager, defaultRecorderDeps } from '../runtime/voice/voice-recorder.js';
 import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
@@ -327,6 +327,7 @@ export class JsDiscordRunner {
       this.client,
       (level, message) => this.onLog(level, message, 'script'),
       new ConsentStore(this.variableStore, this.botId),
+      defaultRecorderDeps(this.botId),
     );
     this.registry = new HandlerRegistry(
       this.client,
