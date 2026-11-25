@@ -55,6 +55,11 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
    */
   noPrefix: tolerant('commands.noPrefix', z.boolean()),
   options: z.array(z.record(z.unknown())).default([]),
+  /**
+   * Traductions de la commande (noms, descriptions, options, choix) pour le client Discord : voir
+   * `translations/command-localizations.ts`. Lue `data.localizations ?? localizations`.
+   */
+  localizations: tolerant('commands.localizations', z.record(z.unknown())),
   aliases: z.array(z.string()).default([]),
   /**
    * Discord `default_member_permissions` (a bitfield as text, e.g. "8" for
