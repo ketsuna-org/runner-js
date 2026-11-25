@@ -127,6 +127,8 @@ export const presenceSchema = z
 
 export const MAX_SCRIPT_TIMEOUT_MS = 15 * 60 * 1000;
 export const DEFAULT_SCRIPT_TIMEOUT_MS = MAX_SCRIPT_TIMEOUT_MS;
+/** Durée maximale d'une tâche planifiée (les gratuits n'en ont pas) : une heure, quelle que soit `scriptTimeoutMs`. */
+export const SCHEDULED_TASK_MAX_TIMEOUT_MS = 60 * 60 * 1000;
 
 export const databaseConfigSchema = z
   .object({

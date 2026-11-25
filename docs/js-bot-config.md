@@ -409,7 +409,7 @@ secrets des webhooks et les identifiants de base de données ne sont pas exposé
 | `cron` | Expression à 5 champs ou macro (voir plus bas). **Prioritaire sur `everyMinutes`**, même si les deux sont présents. |
 | `timezone` | Fuseau IANA du `cron` (`Europe/Paris`). UTC si absent. Sans effet pour `everyMinutes`. |
 | `runOnStart` | `true` : un tir supplémentaire au démarrage du bot (voir plus bas). Défaut `false`. |
-| `timeoutMs` | Durée maximale de cette tâche. Jamais supérieure à `scriptTimeoutMs`. |
+| `timeoutMs` | Durée maximale de cette tâche. Une heure au plus, et une heure par défaut (`scriptTimeoutMs` ne vaut que pour les commandes et les événements). |
 
 Une entrée sans `cron` valide **ni** `everyMinutes` valide, ou au fuseau inconnu, est **ignorée avec un
 avertissement** (`Scheduled task <id> ignored: <raison>`, une fois par raison) ; elle ne fait jamais rejeter la
