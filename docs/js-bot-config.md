@@ -563,6 +563,8 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.grid.tiles({x, y, columns, rows, size, gap, colors})` | `$canvasTileGrid` (renvoie les rectangles à dessiner) |
 | `bc.canvas.create(w, h, fond?)` | `$canvasCreate` (canvas node-canvas, 1 à 4096 px ; dessinez avec `getContext('2d')`) |
 | `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
+| `bc.canvas.font(nom, taille)` | valeur de `ctx.font` en police Geist (`geist`, `geist-medium`, `geist-bold` : accents, grec, cyrillique) |
+| `bc.canvas.gradient(ctx, {x, y, width, height, colors, angle})` | dégradé linéaire de 2 à 4 couleurs, angle 0 = gauche vers droite, 90 = haut vers bas |
 | `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
 | `await bc.oneTime.run(type, fn)` | `$onlyOneTime[script;type;erreur]` : exécute `fn` une seule fois par `'user'` (tous serveurs), `'server'` ou `'global'`, pour la commande en cours. Renvoie `{ ran: true, value }`, ou `{ ran: false }` si c'est déjà pris (à vous d'envoyer le message). La réclamation est prise avant `fn` ; si `fn` lève une erreur, elle est rendue. |

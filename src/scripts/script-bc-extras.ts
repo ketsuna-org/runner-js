@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { AttachmentBuilder } from 'discord.js';
 
 import { countChannelMessages } from '../runtime/channel-activity.js';
+import { GEIST_FONTS_BASE64 } from './fonts/geist-fonts.js';
 
 /**
  * Parité JS des fonctions du moteur BDFD (`$floorDiv`, `$mod`, `$hash`, `$seededRandom`,
@@ -182,6 +186,10 @@ export interface BcCanvas {
   drawTiles(ctx: unknown, tiles: TileRect[]): void;
   /** Pièce jointe PNG (`$attachImage`) d'un canvas ou d'un Buffer : à mettre dans `files: [...]`. */
   attach(source: unknown, name?: string): AttachmentBuilder;
+  /** Police Geist (accents, grec, cyrillique) : `geist`, `geist-medium` ou `geist-bold`. Renvoie la valeur à mettre dans `ctx.font`, par exemple `bc.canvas.font('geist-bold', 32)`. Une autre valeur donne la police `sans-serif`. */
+  font(name: string, size: number): string;
+  /** Remplit un rectangle d'un dégradé linéaire de 2 à 4 couleurs (`$canvasDrawGradient`) : angle 0 = gauche vers droite, 90 = haut vers bas. */
+  gradient(ctx: unknown, options: { x?: number; y?: number; width: number; height: number; colors: string[]; angle?: number }): void;
 }
 
 export interface BcActivity {
@@ -361,6 +369,50 @@ export function createBcGrid(): BcGrid {
 
 const MAX_CANVAS_SIDE = 4096;
 
+let geistRegistered = false;
+function registerGeist(canvasLib: { registerFont?: (path: string, o: { family: string; weight?: string }) => void }): void {
+  if (geistRegistered || typeof canvasLib.registerFont !== 'function') return;
+  geistRegistered = true;
+  try {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-geist-'));
+    for (const [key, family, weight] of [
+      ['medium', 'Geist Medium', 'normal'],
+      ['bold', 'Geist Bold', 'bold'],
+    ] as const) {
+      const file = join(dir, `${key}.ttf`);
+      writeFileSync(file, Buffer.from(GEIST_FONTS_BASE64[key], 'base64'));
+      canvasLib.registerFont(file, { family, weight });
+    }
+  } catch {
+    geistRegistered = false;
+  }
+}
+
+/** Valeur de `ctx.font` pour un nom de police Geist ; `sans-serif` sinon. */
+export function geistCssFont(name: string, size: number): string {
+  const px = Math.max(1, Math.min(512, Math.round(Number(size) || 16)));
+  switch (String(name).trim().toLowerCase()) {
+    case 'geist-bold':
+      return `bold ${px}px "Geist Bold"`;
+    case 'geist':
+    case 'geist-medium':
+      return `${px}px "Geist Medium"`;
+    default:
+      return `${px}px sans-serif`;
+  }
+}
+
+/** Points d'un dégradé linéaire sur un rectangle : t va de 0 à 1 d'un coin à l'autre selon l'angle. */
+export function gradientLine(x: number, y: number, w: number, h: number, angleDeg: number) {
+  const a = (angleDeg * Math.PI) / 180;
+  const dx = Math.cos(a);
+  const dy = Math.sin(a);
+  const half = (Math.abs(dx) * w + Math.abs(dy) * h) / 2;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  return { x0: cx - dx * half, y0: cy - dy * half, x1: cx + dx * half, y1: cy + dy * half };
+}
+
 export function createBcCanvas(): BcCanvas {
   const load = (): { createCanvas(w: number, h: number): any } => {
     try {
@@ -370,11 +422,37 @@ export function createBcCanvas(): BcCanvas {
     }
   };
   return {
+    font(name, size) {
+      try {
+        registerGeist(load() as never);
+      } catch {
+        /* la bibliothèque manque : create() le signalera */
+      }
+      return geistCssFont(name, size);
+    },
+    gradient(ctx, o) {
+      const colors = (o.colors ?? []).map((c) => String(c).trim()).filter(Boolean);
+      if (colors.length < 2 || colors.length > 4) throw new Error('A gradient takes 2 to 4 colors.');
+      const c = ctx as {
+        createLinearGradient(a: number, b: number, c: number, d: number): { addColorStop(o: number, c: string): void };
+        fillStyle: unknown;
+        fillRect(x: number, y: number, w: number, h: number): void;
+      };
+      const x = o.x ?? 0;
+      const y = o.y ?? 0;
+      const l = gradientLine(x, y, o.width, o.height, o.angle ?? 0);
+      const g = c.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
+      colors.forEach((col, i) => g.addColorStop(i / (colors.length - 1), col));
+      c.fillStyle = g;
+      c.fillRect(x, y, o.width, o.height);
+    },
     create(width, height, background) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_CANVAS_SIDE || height > MAX_CANVAS_SIDE) {
         throw new Error(`The canvas size must be integers between 1 and ${MAX_CANVAS_SIDE}.`);
       }
-      const canvas = load().createCanvas(width, height);
+      const lib = load();
+      registerGeist(lib as never);
+      const canvas = lib.createCanvas(width, height);
       if (background) {
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = background;
