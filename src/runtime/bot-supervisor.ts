@@ -1,4 +1,5 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import type {
   CommandEventName,
   CommandEventPayload,
@@ -48,6 +49,8 @@ export interface BotRunnerHandle {
   deleteCommand?(commandId: string): Promise<void>;
   /** Une commande a été créée, modifiée ou supprimée : lance les handlers `commandCreated`/`Updated`/`Deleted`. */
   triggerCommandEvent?(eventName: CommandEventName, payload: CommandEventPayload): Promise<number>;
+  /** Événement de droit relayé par les Webhook Events de Discord (sans effet si le Gateway l'a déjà livré). */
+  triggerEntitlementEvent?(eventName: string, row: EntitlementLike): Promise<number>;
   triggerWebhook(
     pathKey: string,
     payload: unknown,
@@ -480,6 +483,14 @@ export class BotSupervisor {
       return;
     }
     await this.bots.get(botId)?.runner.triggerCommandEvent?.(eventName, payload);
+  }
+
+  /** Rend le nombre de handlers lancés ; le bot doit tourner (sinon le Manager garde l'événement). */
+  async triggerEntitlementEvent(botId: string, eventName: string, row: EntitlementLike): Promise<number> {
+    if (!this.isRunning(botId)) {
+      throw new Error(`Bot "${botId}" is not running.`);
+    }
+    return (await this.bots.get(botId)?.runner.triggerEntitlementEvent?.(eventName, row)) ?? 0;
   }
 
   async triggerInboundWebhook(

@@ -295,3 +295,19 @@ describe('bc.entitlements', () => {
     expect(toBcEntitlement(rows[0] as never).active).toBe(true);
   });
 });
+
+describe('entitlementFromDiscordRest', () => {
+  test('lit un droit au format REST de Discord', async () => {
+    const { entitlementFromDiscordRest, toBcEntitlement } = await import('../src/scripts/script-bc-extras.js');
+    const row = entitlementFromDiscordRest({
+      id: '1', sku_id: '2', user_id: '3', guild_id: null, type: 8,
+      starts_at: '2026-01-01T00:00:00.000Z', ends_at: null, deleted: false,
+    });
+    expect(row.startsTimestamp).toBe(Date.parse('2026-01-01T00:00:00.000Z'));
+    expect(row.endsTimestamp).toBeNull();
+    expect(row.guildId).toBeNull();
+    expect(toBcEntitlement(row).active).toBe(true);
+    const gone = entitlementFromDiscordRest({ id: '1', sku_id: '2' }, true);
+    expect(toBcEntitlement(gone).active).toBe(false);
+  });
+});

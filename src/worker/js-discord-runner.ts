@@ -1,4 +1,5 @@
 import { getCommandStatsShipper } from '../runtime/command-stats-shipper.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import path from 'node:path';
 
 import { Client, Events } from 'discord.js';
@@ -564,6 +565,10 @@ export class JsDiscordRunner {
       return false;
     }
     return this.registry.triggerWebhook(pathKey, payload, headers, meta);
+  }
+
+  async triggerEntitlementEvent(eventName: string, row: EntitlementLike): Promise<number> {
+    return this.registry ? this.registry.triggerEntitlementEvent(eventName, row) : 0;
   }
 
   async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {

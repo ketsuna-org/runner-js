@@ -56,7 +56,7 @@ import {
   withScriptView,
 } from '../scripts/script-member.js';
 import { ScriptDb } from '../scripts/script-db.js';
-import { toBcEntitlement } from '../scripts/script-bc-extras.js';
+import { toBcEntitlement, type EntitlementLike } from '../scripts/script-bc-extras.js';
 import { buildScriptVariables, type ScopedExecutionContext } from '../runtime/scoped-context.js';
 import { perfPhase, perfSettings, runWithProbe } from '../runtime/perf.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
@@ -623,6 +623,43 @@ export class HandlerRegistry {
     return handlers.length;
   }
 
+  private readonly seenEntitlementEvents = new Map<string, number>();
+
+  /** Vrai la première fois qu'un événement de droit est vu (Gateway ou Webhook Events) ; oublié après 15 minutes. */
+  private claimEntitlementEvent(
+    eventName: string,
+    row: { id: unknown; endsTimestamp?: number | null; deleted?: boolean },
+  ): boolean {
+    const now = Date.now();
+    for (const [key, at] of this.seenEntitlementEvents) {
+      if (now - at > 15 * 60_000) this.seenEntitlementEvents.delete(key);
+    }
+    const key = `${eventName}:${String(row.id)}:${row.endsTimestamp ?? ''}:${row.deleted === true}`;
+    if (this.seenEntitlementEvents.has(key)) return false;
+    this.seenEntitlementEvents.set(key, now);
+    return true;
+  }
+
+  /**
+   * Événement de droit reçu par les Webhook Events de Discord (relayé par le Manager). Les handlers
+   * `entitlementCreate/Update/Delete` s'exécutent comme pour le Gateway, sauf si le Gateway l'a déjà livré.
+   * Rend le nombre de handlers lancés.
+   */
+  async triggerEntitlementEvent(eventName: string, row: EntitlementLike): Promise<number> {
+    if (!this.claimEntitlementEvent(eventName, row)) {
+      return 0;
+    }
+    const handlers = (this.config.events ?? []).filter(
+      (event) => event.enabled !== false && event.name.trim() === eventName && !event.customIdFilter,
+    );
+    for (const handler of handlers) {
+      await this.runScript(handler.script, {
+        webhook: { path: eventName, payload: toBcEntitlement(row), headers: {} },
+      });
+    }
+    return handlers.length;
+  }
+
   /**
    * Arrêt complet : démontage des routes ET des tâches planifiées du registre. Un planificateur fourni par le
    * propriétaire du client n'est pas touché ici (il survit à la reconnexion ; son propriétaire l'arrête).
@@ -732,6 +769,10 @@ export class HandlerRegistry {
 
       // `entitlementCreate/Update/Delete` : le droit arrive dans `webhook.payload` (`webhook.path` = nom de l'événement).
       const entitlement = eventName.startsWith('entitlement') ? args[args.length - 1] : undefined;
+      // Le même droit peut aussi arriver par les Webhook Events de Discord : une seule exécution.
+      if (entitlement && !this.claimEntitlementEvent(eventName, entitlement as never)) {
+        return;
+      }
       const entitlementGuild = (entitlement as { guild?: Guild | null } | undefined)?.guild ?? null;
       await this.runScript(handler.script, {
         message: context.message,

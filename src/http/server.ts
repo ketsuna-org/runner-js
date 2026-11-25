@@ -1,5 +1,6 @@
 import os from 'node:os';
 
+import { entitlementFromDiscordRest } from '../scripts/script-bc-extras.js';
 import { Hono } from 'hono';
 import { getConnInfo } from 'hono/bun';
 import { ZodError } from 'zod';
@@ -714,6 +715,28 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
   app.post('/bots/:id/variables/scoped-values/remove', handleScopedValueRemove);
   app.post('/bots/:id/variables/scoped/remove', handleScopedValueRemove);
+
+  // Événement de droit (Webhook Events de Discord) relayé par le Manager : `{event, entitlement}`.
+  app.post('/bots/:id/discord-events', async (c) => {
+    const botId = c.req.param('id');
+    const body = (await c.req.json().catch(() => null)) as { event?: unknown; entitlement?: unknown } | null;
+    const event = typeof body?.event === 'string' ? body.event : '';
+    if (!['entitlementCreate', 'entitlementUpdate', 'entitlementDelete'].includes(event)) {
+      throw badRequest('Unsupported event.');
+    }
+    if (!body?.entitlement || typeof body.entitlement !== 'object') {
+      throw badRequest('Missing entitlement.');
+    }
+    if (!deps.runtime.isBotRunning(botId)) {
+      throw conflict(`Bot "${botId}" is not running.`);
+    }
+    const handled = await deps.runtime.triggerEntitlementEvent(
+      botId,
+      event,
+      entitlementFromDiscordRest(body.entitlement as Record<string, unknown>, event === 'entitlementDelete'),
+    );
+    return c.json({ ok: true, botId, handled });
+  });
 
   // `{.+}` : un chemin de webhook peut porter des « / » (`topgg/vote`), le Manager les relaie tels quels.
   app.post('/bots/:id/inbound/:pathKey{.+}', async (c) => {

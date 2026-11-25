@@ -1,4 +1,5 @@
 import { ONE_TIME_PREFIX } from '../scripts/script-db.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   commandHandlerSchema,
@@ -283,6 +284,10 @@ export class RuntimeController {
       return removeWorkflowFromConfig(config, workflowName);
     });
     await this.reloadBotIfRunning(botId);
+  }
+
+  async triggerEntitlementEvent(botId: string, eventName: string, row: EntitlementLike): Promise<number> {
+    return this.processManager.triggerEntitlementEvent(botId, eventName, row);
   }
 
   async triggerInboundWebhook(

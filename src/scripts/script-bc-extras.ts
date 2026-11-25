@@ -698,7 +698,7 @@ export interface BcEntitlements {
   skuName(skuId: string): Promise<string>;
 }
 
-interface EntitlementLike {
+export interface EntitlementLike {
   id: string;
   skuId: string;
   userId?: string | null;
@@ -723,6 +723,27 @@ function snowflakeOf(raw: unknown, label: string): string {
   const value = String(raw ?? '').trim();
   if (!/^[0-9]+$/.test(value) || BigInt(value) <= 0n) throw new Error(`Invalid ${label} ID.`);
   return value;
+}
+
+/** Droit tel que Discord l'envoie en REST/webhook (snake_case, dates ISO) vers la forme de discord.js. */
+export function entitlementFromDiscordRest(raw: Record<string, unknown>, forceDeleted = false): EntitlementLike {
+  const ts = (v: unknown): number | null => {
+    if (typeof v !== 'string' || v === '') return null;
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? null : t;
+  };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+  return {
+    id: String(raw.id ?? ''),
+    skuId: String(raw.sku_id ?? ''),
+    userId: str(raw.user_id),
+    guildId: str(raw.guild_id),
+    type: typeof raw.type === 'number' ? raw.type : undefined,
+    startsTimestamp: ts(raw.starts_at),
+    endsTimestamp: ts(raw.ends_at),
+    deleted: forceDeleted || raw.deleted === true,
+    consumed: raw.consumed === true,
+  };
 }
 
 export function toBcEntitlement(row: EntitlementLike, now: number = Date.now()): BcEntitlement {
