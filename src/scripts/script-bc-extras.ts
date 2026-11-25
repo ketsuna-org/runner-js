@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { createRequire } from 'node:module';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -189,6 +190,8 @@ export interface BcCanvas {
   /** Police Geist (accents, grec, cyrillique) : `geist`, `geist-medium` ou `geist-bold`. Renvoie la valeur à mettre dans `ctx.font`, par exemple `bc.canvas.font('geist-bold', 32)`. Une autre valeur donne la police `sans-serif`. */
   font(name: string, size: number): string;
   /** Remplit un rectangle d'un dégradé linéaire de 2 à 4 couleurs (`$canvasDrawGradient`) : angle 0 = gauche vers droite, 90 = haut vers bas. */
+  /** Charge une image (https, jamais un réseau privé, 8 Mo au plus) pour `ctx.drawImage`. Renvoie une image node-canvas. */
+  loadImage(url: string): Promise<unknown>;
   gradient(ctx: unknown, options: { x?: number; y?: number; width: number; height: number; colors: string[]; angle?: number }): void;
 }
 
@@ -368,6 +371,38 @@ export function createBcGrid(): BcGrid {
 }
 
 const MAX_CANVAS_SIDE = 4096;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/** Adresse privée, locale ou réservée (IPv4 et IPv6). */
+export function isPrivateAddress(address: string): boolean {
+  const a = address.toLowerCase();
+  if (a.includes(':')) {
+    if (a === '::1' || a === '::' || a.startsWith('fe80') || a.startsWith('fc') || a.startsWith('fd')) return true;
+    const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return mapped ? isPrivateAddress(mapped[1]) : false;
+  }
+  const p = a.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [x, y] = p;
+  return x === 0 || x === 10 || x === 127 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224;
+}
+
+async function fetchPublicImage(raw: string): Promise<Buffer> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('The image address is not valid.');
+  }
+  if (url.protocol !== 'https:') throw new Error('The image address must start with https://.');
+  const addresses = await lookup(url.hostname, { all: true });
+  if (addresses.length === 0 || addresses.some((x) => isPrivateAddress(x.address))) throw new Error('This image address is not allowed.');
+  const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`The image could not be downloaded (${res.status}).`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > MAX_IMAGE_BYTES) throw new Error('The image is larger than 8 MB.');
+  return buf;
+}
 
 let geistRegistered = false;
 function registerGeist(canvasLib: { registerFont?: (path: string, o: { family: string; weight?: string }) => void }): void {
@@ -429,6 +464,10 @@ export function createBcCanvas(): BcCanvas {
         /* la bibliothèque manque : create() le signalera */
       }
       return geistCssFont(name, size);
+    },
+    async loadImage(url) {
+      const lib = load() as unknown as { loadImage(b: Buffer): Promise<unknown> };
+      return lib.loadImage(await fetchPublicImage(String(url).trim()));
     },
     gradient(ctx, o) {
       const colors = (o.colors ?? []).map((c) => String(c).trim()).filter(Boolean);

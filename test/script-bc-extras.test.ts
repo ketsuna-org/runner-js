@@ -137,7 +137,7 @@ describe('bc.grid', () => {
   });
 });
 
-import { createBcCanvas } from '../src/scripts/script-bc-extras.js';
+import { createBcCanvas, isPrivateAddress } from '../src/scripts/script-bc-extras.js';
 describe('bc.canvas', () => {
   test('create, drawTiles and attach produce a PNG attachment', () => {
     const bc = createBcCanvas();
@@ -148,6 +148,15 @@ describe('bc.canvas', () => {
     expect((file.attachment as Buffer).subarray(1, 4).toString()).toBe('PNG');
     expect(() => bc.create(0, 10)).toThrow();
     expect(() => bc.create(5000, 10)).toThrow();
+  });
+
+  test('private and local addresses are refused', async () => {
+    for (const a of ['127.0.0.1', '10.1.2.3', '192.168.0.4', '172.20.0.1', '169.254.169.254', '::1', 'fd00::1', '::ffff:10.0.0.1']) expect(isPrivateAddress(a)).toBe(true);
+    for (const a of ['8.8.8.8', '104.16.0.1', '2606:4700::1']) expect(isPrivateAddress(a)).toBe(false);
+    const bc = createBcCanvas();
+    await expect(bc.loadImage('http://example.com/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('https://localhost/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('not a url')).rejects.toThrow();
   });
 
   test('gradient goes left to right and font draws accented Geist text', () => {
