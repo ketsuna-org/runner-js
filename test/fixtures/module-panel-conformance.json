@@ -571,18 +571,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:levels:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:levels:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:levels:"
                     }
                   ]
                 }
@@ -774,18 +762,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:welcome:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:welcome:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:welcome:"
                     }
                   ]
                 }
@@ -1028,18 +1004,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:levels:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:levels:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:levels:"
                     }
                   ]
                 }
@@ -1198,18 +1162,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:levels:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:levels:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:levels:"
                     }
                   ]
                 }
@@ -1360,18 +1312,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:levels:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:levels:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:levels:"
                     }
                   ]
                 }
@@ -1524,18 +1464,6 @@
                       "label": "▶",
                       "custom_id": "mcfg:module:levels:1",
                       "disabled": true
-                    },
-                    {
-                      "type": 2,
-                      "style": 2,
-                      "label": "📝 Textes",
-                      "custom_id": "mcfg:texts:levels:0"
-                    },
-                    {
-                      "type": 2,
-                      "style": 4,
-                      "label": "Réinitialiser",
-                      "custom_id": "mcfg:reset:levels:"
                     }
                   ]
                 }

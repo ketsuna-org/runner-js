@@ -194,8 +194,6 @@ export function renderModule(input: Json): Json {
       button(panelId('home'), '◀ Accueil'),
       button(panelId('module', id, String(page - 1)), '◀', 2, page === 0),
       button(panelId('module', id, String(page + 1)), '▶', 2, page >= pages - 1),
-      button(panelId('texts', id, '0'), '📝 Textes'),
-      button(panelId('reset', id), 'Réinitialiser', 4),
     ]),
   );
   return message(container(enabled ? ACCENT_ON : ACCENT_OFF, children));
