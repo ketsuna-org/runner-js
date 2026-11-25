@@ -160,12 +160,39 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
  * hosts every bot of the process (an OOM kill is not limited to the bot that
  * misbehaved). The readers that consume the body are capped here.
  *
- * SCOPE, stated honestly: `response.body` (the raw stream) is NOT capped — a
- * script that reads the stream itself keeps the raw, unbounded behaviour. This
- * bounds the ordinary reads (`text`, `json`, `arrayBuffer`, `blob`,
- * `formData`), which is what script-side fetches actually use; it is not a
+ * SCOPE: the ordinary reads (`text`, `json`, `arrayBuffer`, `blob`,
+ * `formData`) and the raw `response.body` stream are all bounded; it is not a
  * sandbox.
  */
+const cappedStreams = new WeakMap<Response, ReadableStream<Uint8Array> | null>();
+
+/** The raw `response.body`, bounded: the stream errors once more than `maxBytes` have gone through. */
+function cappedBodyStream(response: Response, maxBytes: number): ReadableStream<Uint8Array> | null {
+  if (cappedStreams.has(response)) {
+    return cappedStreams.get(response) ?? null;
+  }
+  const raw = response.body;
+  if (!raw) {
+    cappedStreams.set(response, null);
+    return null;
+  }
+  let total = 0;
+  const capped = raw.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        total += chunk.byteLength;
+        if (total > maxBytes) {
+          controller.error(new Error(`fetch: response body exceeds ${maxBytes} byte limit`));
+          return;
+        }
+        controller.enqueue(chunk);
+      },
+    }),
+  );
+  cappedStreams.set(response, capped);
+  return capped;
+}
+
 export function createCappedFetch(
   fetchImpl: typeof fetch,
   maxBytes: number = MAX_FETCH_BODY_BYTES,
@@ -198,6 +225,8 @@ export function createCappedFetch(
               return new Response(buffer, { headers: target.headers }).formData();
             };
           }
+          case 'body':
+            return cappedBodyStream(target, maxBytes);
           case 'clone':
             return () => {
               throw new Error(

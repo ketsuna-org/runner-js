@@ -90,13 +90,11 @@ describe('createCappedFetch', () => {
     expect(() => response.clone()).toThrow(/clone\(\) is disabled/);
   });
 
-  // La portée du garde-fou, dite franchement : ce n'est PAS un bac à sable.
-  it('does not cap the raw body stream (documented limit, not a sandbox)', async () => {
+  it('also bounds the raw body stream', async () => {
     const fakeFetch = (async () => new Response(bigBody)) as unknown as typeof fetch;
     const capped = createCappedFetch(fakeFetch, 50);
 
     const response = await capped('http://example.test');
-    const raw = await new Response(response.body).text();
-    expect(raw.length).toBe(200);
+    await expect(new Response(response.body).text()).rejects.toThrow('byte limit');
   });
 });

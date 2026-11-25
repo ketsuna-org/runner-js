@@ -29,6 +29,11 @@ export interface AiReply {
   content: string;
   toolCalls: AiToolCall[];
   remainingTokens?: number;
+  /** Tokens débités par le Manager pour cet appel. */
+  tokensBilled?: number;
+  finishReason?: string;
+  /** La réponse a été coupée par le plafond de sortie. */
+  truncated?: boolean;
 }
 
 export class AiGatewayError extends Error {
@@ -50,6 +55,8 @@ export interface AiGateway {
     userId?: string;
     /** Commande ou workflow dont le script appelle la fonction IA (statistiques de crédits). */
     origin?: { kind: 'command' | 'workflow'; name: string };
+    /** Annule l'appel en cours (script expiré) : aucun rejeu, aucun nouveau tour. */
+    signal?: AbortSignal;
   }): Promise<AiReply>;
   /** Crédits restants, en tokens (1 crédit = 1000 tokens). */
   remainingTokens(botId: string): Promise<number>;
@@ -82,7 +89,7 @@ export class ManagedAiGateway implements AiGateway {
     this.#baseUrl = options.baseUrl.endsWith('/') ? options.baseUrl.slice(0, -1) : options.baseUrl;
     this.#token = options.token;
     this.#fetch = options.fetchImpl ?? fetch;
-    this.#timeoutMs = options.timeoutMs ?? 70_000;
+    this.#timeoutMs = options.timeoutMs ?? 75_000;
   }
 
   /** Installe la passerelle si la configuration est celle d'un runner géré. */
@@ -118,6 +125,7 @@ export class ManagedAiGateway implements AiGateway {
     /** Utilisateur Discord à l'origine de l'appel (limite par joueur côté Manager). */
     userId?: string;
     origin?: { kind: 'command' | 'workflow'; name: string };
+    signal?: AbortSignal;
   }): Promise<AiReply> {
     const body = JSON.stringify({
       key: request.key,
@@ -132,11 +140,16 @@ export class ManagedAiGateway implements AiGateway {
     // Un seul rejeu, avec la même clé : le Manager ne débite pas deux fois une clé déjà vue.
     for (let attempt = 0; ; attempt++) {
       try {
+        if (request.signal?.aborted) {
+          throw new AiGatewayError('ai_aborted');
+        }
         const response = await this.#fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.#token}` },
           body,
-          signal: AbortSignal.timeout(this.#timeoutMs),
+          signal: request.signal
+            ? AbortSignal.any([AbortSignal.timeout(this.#timeoutMs), request.signal])
+            : AbortSignal.timeout(this.#timeoutMs),
         });
         if (response.status >= 500 && response.status !== 503 && attempt === 0) {
           continue;
@@ -147,15 +160,24 @@ export class ManagedAiGateway implements AiGateway {
         const json = (await response.json()) as {
           message?: { content?: string; tool_calls?: AiToolCall[] };
           remaining_tokens?: number;
+          tokens_billed?: number;
+          finish_reason?: string;
+          truncated?: boolean;
         };
         return {
           content: json.message?.content ?? '',
           toolCalls: json.message?.tool_calls ?? [],
           remainingTokens: json.remaining_tokens,
+          tokensBilled: json.tokens_billed,
+          finishReason: json.finish_reason,
+          truncated: json.truncated,
         };
       } catch (error) {
         if (error instanceof AiGatewayError) {
           throw error;
+        }
+        if (request.signal?.aborted) {
+          throw new AiGatewayError('ai_aborted');
         }
         if (attempt === 0) {
           continue;
