@@ -1143,8 +1143,116 @@
    "guild": "fr",
    "expected": [
     "zh-TW",
-    "zh-CN",
     "fr",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "de",
+   "guild": null,
+   "default": "fr",
+   "expected": [
+    "de",
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": "ja",
+   "default": "pt-BR",
+   "expected": [
+    "ja",
+    "pt-BR",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "fr",
+   "guild": "de",
+   "default": "fr",
+   "expected": [
+    "fr",
+    "de",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "default": "zh-TW",
+   "expected": [
+    "zh-TW",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": null,
+   "guild": null,
+   "default": "en-US",
+   "expected": [
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "de",
+   "guild": null,
+   "default": "xx",
+   "expected": [
+    "de",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "zh-TW",
+   "guild": null,
+   "default": null,
+   "expected": [
+    "zh-TW",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "en-GB",
+   "guild": "es-ES",
+   "default": null,
+   "similar": false,
+   "expected": [
+    "en-GB",
+    "es-ES",
+    "en-US"
+   ]
+  },
+  {
+   "user": "es-ES",
+   "guild": null,
+   "default": "fr",
+   "similar": false,
+   "expected": [
+    "es-ES",
+    "fr",
+    "en-US",
+    "en-GB"
+   ]
+  },
+  {
+   "user": "es-419",
+   "guild": "fr",
+   "default": "pt-BR",
+   "similar": true,
+   "expected": [
+    "es-419",
+    "es-ES",
+    "fr",
+    "pt-BR",
     "en-US",
     "en-GB"
    ]
@@ -1172,6 +1280,17 @@
    "bad.syntax": {
     "values": {
      "en-US": "{oops"
+    }
+   },
+   "gb.only": {
+    "values": {
+     "en-GB": "Colour"
+    }
+   },
+   "es.only": {
+    "values": {
+     "en-US": "Hello",
+     "es-419": "Hola"
     }
    }
   }
@@ -1274,6 +1393,24 @@
    "text": "Bob bought X",
    "found": true,
    "locale": "en-US"
+  },
+  {
+   "key": "gb.only",
+   "user": "en-US",
+   "guild": null,
+   "args": {},
+   "text": "Colour",
+   "found": true,
+   "locale": "en-GB"
+  },
+  {
+   "key": "es.only",
+   "user": "es-ES",
+   "guild": null,
+   "args": {},
+   "text": "Hola",
+   "found": true,
+   "locale": "es-419"
   }
  ],
  "arguments": [
@@ -1316,6 +1453,185 @@
    "expected": {
     "1": "a=b"
    }
+  }
+ ],
+ "catalogDefault": {
+  "keys": {
+   "shop.bought": {
+    "values": {
+     "en-US": "{user} bought {item}",
+     "fr": "{user} a acheté {item}"
+    }
+   },
+   "shop.items": {
+    "values": {
+     "en": "{n, plural, one {# item} other {# items}}",
+     "pl": "{n, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}"
+    }
+   },
+   "only.german": {
+    "values": {
+     "de": "Nur Deutsch"
+    }
+   },
+   "bad.syntax": {
+    "values": {
+     "en-US": "{oops"
+    }
+   }
+  },
+  "defaultLocale": "fr"
+ },
+ "translateDefault": [
+  {
+   "key": "shop.bought",
+   "user": "de",
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.bought",
+   "user": "ja",
+   "guild": "de",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  },
+  {
+   "key": "shop.bought",
+   "user": "en-US",
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob bought X",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "shop.items",
+   "user": "de",
+   "guild": null,
+   "args": {
+    "n": "2"
+   },
+   "text": "2 items",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "only.german",
+   "user": "fr",
+   "guild": null,
+   "args": {},
+   "text": "only.german",
+   "found": false,
+   "locale": null
+  },
+  {
+   "key": "shop.bought",
+   "user": "de",
+   "guild": null,
+   "forced": "ja",
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
+  }
+ ],
+ "catalogExact": {
+  "keys": {
+   "shop.bought": {
+    "values": {
+     "en-US": "{user} bought {item}",
+     "fr": "{user} a acheté {item}"
+    }
+   },
+   "shop.items": {
+    "values": {
+     "en": "{n, plural, one {# item} other {# items}}",
+     "pl": "{n, plural, one {# przedmiot} few {# przedmioty} many {# przedmiotów} other {# przedmiotu}}"
+    }
+   },
+   "only.german": {
+    "values": {
+     "de": "Nur Deutsch"
+    }
+   },
+   "bad.syntax": {
+    "values": {
+     "en-US": "{oops"
+    }
+   },
+   "gb.only": {
+    "values": {
+     "en-GB": "Colour"
+    }
+   },
+   "es.only": {
+    "values": {
+     "en-US": "Hello",
+     "es-419": "Hola"
+    }
+   }
+  },
+  "useSimilarLocales": false
+ },
+ "translateExact": [
+  {
+   "key": "shop.items",
+   "user": "en-GB",
+   "guild": null,
+   "args": {
+    "n": "2"
+   },
+   "text": "2 items",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "es.only",
+   "user": "es-ES",
+   "guild": null,
+   "args": {},
+   "text": "Hello",
+   "found": true,
+   "locale": "en-US"
+  },
+  {
+   "key": "es.only",
+   "user": "es-419",
+   "guild": null,
+   "args": {},
+   "text": "Hola",
+   "found": true,
+   "locale": "es-419"
+  },
+  {
+   "key": "shop.bought",
+   "user": "fr",
+   "guild": null,
+   "args": {
+    "user": "Bob",
+    "item": "X"
+   },
+   "text": "Bob a acheté X",
+   "found": true,
+   "locale": "fr"
   }
  ]
 }

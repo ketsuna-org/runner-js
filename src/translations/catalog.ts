@@ -1,4 +1,4 @@
-import { localeChain, normalizeLocale } from './locales.js';
+import { FALLBACK_LOCALE, localeChain, normalizeLocale } from './locales.js';
 import { MessageFormatError, ParsedMessage } from './message-format.js';
 
 export interface TranslationResult {
@@ -19,7 +19,17 @@ export interface TranslateOptions {
 export class TranslationCatalog {
   private readonly parsed = new Map<string, ParsedMessage | null>();
 
-  constructor(private readonly keys: Map<string, Map<string, string>>) {}
+  /** Langue par défaut du bot (`en-US` si le document n'en choisit pas). */
+  readonly defaultLocale: string;
+
+  constructor(
+    private readonly keys: Map<string, Map<string, string>>,
+    defaultLocale?: string | null,
+    /** Essayer les variantes d'une langue (en-GB pour en-US…) avant l'étape suivante. */
+    readonly useSimilarLocales = true,
+  ) {
+    this.defaultLocale = normalizeLocale(defaultLocale) ?? FALLBACK_LOCALE;
+  }
 
   static fromDocument(raw: unknown): TranslationCatalog {
     const keys = new Map<string, Map<string, string>>();
@@ -36,7 +46,7 @@ export class TranslationCatalog {
       }
       if (byLocale.size > 0) keys.set(key, byLocale);
     }
-    return new TranslationCatalog(keys);
+    return new TranslationCatalog(keys, doc.defaultLocale as string | undefined, doc.useSimilarLocales !== false);
   }
 
   has(key: string): boolean {
@@ -58,7 +68,9 @@ export class TranslationCatalog {
   }
 
   translate(key: string, options: TranslateOptions = {}): TranslationResult {
-    const chain = options.forced ? localeChain(options.forced) : localeChain(options.userLocale, options.guildLocale);
+    const chain = options.forced
+      ? localeChain(options.forced, null, this.defaultLocale, this.useSimilarLocales)
+      : localeChain(options.userLocale, options.guildLocale, this.defaultLocale, this.useSimilarLocales);
     const picked = this.pick(key, chain);
     if (!picked) {
       return {

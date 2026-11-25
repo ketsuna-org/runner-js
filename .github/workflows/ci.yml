@@ -407,6 +407,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Un run lent qui finit après un run plus récent ne doit pas publier: le Manager épinglerait
+      # son image et ferait reculer staging (incident du 25/11).
+      - name: Refuse to publish a stale image
+        run: |
+          head=$(git ls-remote origin refs/heads/dev 2>/dev/null | cut -f1 || true)
+          [ -n "$head" ] || exit 0
+          if [ "$head" != "$GITHUB_SHA" ]; then echo "dev a avancé ($head): image périmée, publication annulée."; exit 1; fi
+
       # Pas de tag latest/SemVer sur dev : seul dev-<sha> existe. Le workflow terminé avec
       # succès laisse le Manager de staging déployer exactement cette image via son webhook.
       - name: Publish immutable staging image
