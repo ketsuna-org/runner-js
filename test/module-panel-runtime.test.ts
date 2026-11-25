@@ -81,3 +81,13 @@ describe('panneau de config : branchement discord.js', () => {
     expect(a.calls[0].method).toBe('showModal');
   });
 });
+
+describe('langue du panneau', () => {
+  test('personne, puis langue par défaut du bot, puis anglais', async () => {
+    const { panelLanguageFor } = await import('../src/modules/panel/module-panel.js');
+    expect(panelLanguageFor('de', 'fr')).toBe('de');
+    expect(panelLanguageFor('sv', 'fr-FR')).toBe('fr');
+    expect(panelLanguageFor('sv', 'xx')).toBe('en');
+    expect(panelLanguageFor(null, null)).toBe('en');
+  });
+});

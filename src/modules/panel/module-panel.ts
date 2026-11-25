@@ -15,6 +15,15 @@ export function panelStringsLanguage(code: string | null | undefined): string {
   return PANEL_LANGUAGES.includes(short) ? short : 'en';
 }
 
+/** Langue du panneau : celle de la personne si gérée, sinon la langue par défaut du bot, sinon l'anglais. */
+export function panelLanguageFor(userLocale: string | null | undefined, botDefault: string | null | undefined): string {
+  const supported = (code: string | null | undefined): string | null => {
+    const short = (code ?? '').toLowerCase().split(/[-_]/)[0];
+    return PANEL_LANGUAGES.includes(short) ? short : null;
+  };
+  return supported(userLocale) ?? supported(botDefault) ?? 'en';
+}
+
 /** Texte `key` dans `lang` ; `{nom}` est remplacé par `args.nom`. */
 export function ps(lang: string, key: string, args: Record<string, unknown> = {}): string {
   let s = PANEL_STRINGS[panelStringsLanguage(lang)]?.[key] ?? PANEL_STRINGS.en[key] ?? key;

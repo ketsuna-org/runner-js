@@ -4,7 +4,7 @@
  * (variables de serveur) et répond en Components V2. Aucune erreur interne n'est jamais montrée.
  */
 import type { Interaction } from 'discord.js';
-import { PANEL_FLAGS, handlePanelInteraction, panelStringsLanguage, ps } from './module-panel.js';
+import { PANEL_FLAGS, handlePanelInteraction, panelLanguageFor, panelStringsLanguage, ps } from './module-panel.js';
 
 interface PanelStore {
   getScopedVariable(botId: string, scope: string, contextId: string, key: string): Promise<unknown>;
@@ -22,7 +22,11 @@ const notice = (content: string) => ({
 
 export interface PanelRuntimeContext {
   botId: string;
-  config: { modules?: Record<string, unknown>; moduleConfigCommand?: Record<string, unknown> };
+  config: {
+    modules?: Record<string, unknown>;
+    moduleConfigCommand?: Record<string, unknown>;
+    translations?: Record<string, unknown>;
+  };
   store: PanelStore;
   log: (message: string) => void;
 }
@@ -46,7 +50,7 @@ export async function tryHandlePanel(interaction: Interaction, ctx: PanelRuntime
     return false;
   }
 
-  const lang = panelLanguage(anyI.locale);
+  const lang = panelLanguageFor(anyI.locale, String(ctx.config.translations?.defaultLocale ?? ''));
   const reply = async (payload: object) => {
     if (opening || !(anyI.isFromMessage?.() ?? is('isMessageComponent'))) {
       await anyI.reply(payload);
