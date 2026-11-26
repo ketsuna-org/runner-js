@@ -116,7 +116,7 @@ export function createBcMath(): BcMath {
 // Variables atomiques et verrous nommés
 // ---------------------------------------------------------------------------
 
-type DbScope = 'user' | 'guild' | 'channel' | 'message' | 'guildMember' | 'global';
+type DbScope = 'user' | 'guild' | 'channel' | 'role' | 'message' | 'guildMember' | 'global';
 
 interface ScopedDb {
   get(key: string, id?: string): Promise<unknown>;

@@ -105,6 +105,7 @@ export interface DbTarget {
   userId?: string;
   guildId?: string;
   channelId?: string;
+  roleId?: string;
   messageId?: string;
 }
 
@@ -162,6 +163,13 @@ export function resolveContextIdForScope(
         );
       }
       return channelId;
+    }
+    case 'role': {
+      const roleId = target?.roleId?.trim();
+      if (!roleId) {
+        throw new Error('db: missing roleId — pass the role ID: db.role.get(key, roleId).');
+      }
+      return roleId;
     }
     case 'guildMember': {
       const guildId = target?.guildId?.trim() || resolveGuildId(executionCtx);
