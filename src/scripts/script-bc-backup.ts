@@ -77,6 +77,8 @@ export function createBcBackup(getClient: () => unknown, defaultGuild: () => str
       const liveChannels = await guild.channels.fetch();
       const result: BackupResult = { dryRun, createdRoles: [], createdChannels: [], skippedRoles: 0, skippedChannels: 0, failed: [] };
 
+      const rolePositions: { role: string; position: number }[] = [];
+      const channelPositions: { channel: string; position: number }[] = [];
       const roleMap = new Map<string, string>([[guild.id, guild.id]]);
       const roleByName = new Map<string, string>([...liveRoles.values()].map((r: Any) => [String(r.name).toLowerCase(), String(r.id)]));
       for (const r of snap.roles) {
@@ -91,6 +93,7 @@ export function createBcBackup(getClient: () => unknown, defaultGuild: () => str
         try {
           const created = await guild.roles.create({ name: r.name, color: r.color, hoist: r.hoist, mentionable: r.mentionable, permissions: BigInt(r.permissions), reason: 'Backup restore' });
           roleMap.set(r.id, String(created.id));
+          rolePositions.push({ role: String(created.id), position: Number(r.position) || 0 });
         } catch (e) {
           result.createdRoles.splice(result.createdRoles.indexOf(r.name), 1);
           result.failed.push({ kind: 'role', name: r.name, error: short(e) });
@@ -136,10 +139,16 @@ export function createBcBackup(getClient: () => unknown, defaultGuild: () => str
             reason: 'Backup restore',
           });
           if (c.type === 'category') newCategory.set(c.id, String(created.id));
+          channelPositions.push({ channel: String(created.id), position: Number(c.position) || 0 });
         } catch (e) {
           result.createdChannels.splice(result.createdChannels.indexOf(c.name), 1);
           result.failed.push({ kind: 'channel', name: c.name, error: short(e) });
         }
+      }
+      if (!dryRun) {
+        // Remet l'ordre d'origine : seuls les éléments créés par la restauration sont déplacés.
+        try { await guild.roles.setPositions(rolePositions.sort((a, b) => a.position - b.position)); } catch { /* au-dessus du rôle du bot */ }
+        try { await guild.channels.setPositions(channelPositions.sort((a, b) => a.position - b.position)); } catch { /* refus de Discord */ }
       }
       return result;
     },
