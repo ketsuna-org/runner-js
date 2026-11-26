@@ -503,6 +503,10 @@ export class RuntimeController {
     return this.processManager.runScheduledNow(botId, taskId);
   }
 
+  backupAction(botId: string, action: 'create' | 'restore', options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean }) {
+    return this.processManager.backupAction(botId, action, options);
+  }
+
   webSocketSnapshot(botId: string) {
     return this.processManager.getWebSocketSnapshot(botId);
   }

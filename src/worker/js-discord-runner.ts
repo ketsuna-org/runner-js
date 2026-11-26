@@ -41,6 +41,8 @@ import { applyPresence, presenceTextScript, stopPresenceRotation } from '../disc
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
+import { createBackupFile, restoreBackupFile } from '../scripts/backup-actions.js';
+import { getFilesGateway } from '../files/files-gateway.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
 import { ConsentStore } from '../runtime/voice/consent.js';
@@ -178,6 +180,18 @@ export class JsDiscordRunner {
   /** État des sources WebSocket pour `GET /bots/:id/websockets/live` (jamais de secret ni de message). */
   getWebSocketSnapshot(): Array<Record<string, unknown>> {
     return this.webSockets.snapshot();
+  }
+
+  /** Sauvegarde d'un serveur demandée par le Manager (écrans de l'app et du Studio) ; null si le client n'est pas prêt. */
+  backupAction(
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null {
+    const client = this.client;
+    if (!client || !client.isReady()) return null;
+    return action === 'create'
+      ? createBackupFile(client, getFilesGateway(), this.botId, options)
+      : restoreBackupFile(client, getFilesGateway(), this.botId, { guild: options.guild, backupId: options.backupId ?? '', dryRun: options.dryRun });
   }
 
   /** « Exécuter maintenant » : une tâche planifiée tout de suite, sans toucher à son minuteur. */

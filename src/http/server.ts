@@ -18,6 +18,7 @@ import {
   isDiscordTokenUnauthorized,
 } from '../discord/discord-auth-errors.js';
 import { safeEqual } from './safe-equal.js';
+import { BackupActionError } from '../scripts/backup-actions.js';
 import { runWebSocketTest } from '../runtime/websocket/ws-test.js';
 
 export interface HttpServerDeps {
@@ -188,6 +189,34 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     deps.logStore.append('info', `Scheduled task ${taskId} run manually (${done.status}, ${done.ms}ms)`, botId);
     return c.json({ ok: done.status === 'ok', ...done });
   });
+
+  // Sauvegarde d'un serveur à la demande du Manager : créer (nom et type facultatifs) ou restaurer (aperçu par défaut).
+  const backupRoute = (action: 'create' | 'restore') => async (c: import('hono').Context) => {
+    const botId = c.req.param('id') ?? '';
+    const body = ((await c.req.json().catch(() => null)) ?? {}) as Record<string, unknown>;
+    const pending = deps.runtime.backupAction(botId, action, {
+      guild: String(body.guild ?? ''),
+      label: typeof body.label === 'string' ? body.label : undefined,
+      auto: body.auto === true,
+      backupId: typeof body.backupId === 'string' ? body.backupId : undefined,
+      dryRun: body.dryRun === false ? false : true,
+    });
+    if (pending === undefined) throw conflict('The bot is not running.');
+    if (pending === null) throw conflict('The Discord client is not ready yet.');
+    try {
+      return c.json({ apiVersion: 2, ok: true, ...((await pending) as object) });
+    } catch (error) {
+      if (error instanceof BackupActionError) {
+        const status = { invalid: 400, bad_format: 422, not_found: 404, unavailable: 503, quota: 403, too_many: 409 }[error.code];
+        throw new HttpError(status, error.message);
+      }
+      const message = String((error as Error)?.message ?? error);
+      if (/Unknown Guild|Missing Access|Missing Permissions/i.test(message)) throw new HttpError(403, 'The bot cannot reach this server or lacks the permissions.');
+      throw error;
+    }
+  };
+  app.post('/bots/:id/backup/create', backupRoute('create'));
+  app.post('/bots/:id/backup/restore', backupRoute('restore'));
 
   app.get('/bots', async (c) => {
     const entries = await deps.runtime.botStore.listAll();

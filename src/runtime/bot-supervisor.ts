@@ -63,6 +63,11 @@ export interface BotRunnerHandle {
   getScheduledSnapshot?(): ScheduledSnapshot;
   /** Exécute une tâche planifiée tout de suite sans toucher à son minuteur. */
   runScheduledNow?(taskId: string): Promise<RunNowResult>;
+  /** Sauvegarde d'un serveur à la demande du Manager ; null si le client Discord n'est pas prêt. */
+  backupAction?(
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null;
   /** État des sources WebSocket du bot (compteurs, jamais de message ni de secret). */
   getWebSocketSnapshot?(): Array<Record<string, unknown>>;
   /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
@@ -201,6 +206,16 @@ export class BotSupervisor {
   /** « Exécuter maintenant » : null si le bot ne tourne pas ou ne gère pas de tâches planifiées. */
   runScheduledNow(botId: string, taskId: string): Promise<RunNowResult> | null {
     return this.bots.get(botId)?.runner.runScheduledNow?.(taskId) ?? null;
+  }
+
+  /** Sauvegarde d'un serveur : undefined si le bot ne tourne pas, null si le client n'est pas prêt. */
+  backupAction(
+    botId: string,
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null | undefined {
+    const runner = this.bots.get(botId)?.runner;
+    return runner ? (runner.backupAction?.(action, options) ?? null) : undefined;
   }
 
   /** Tâches planifiées d'un bot qui tourne (null sinon). */
