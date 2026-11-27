@@ -1,4 +1,5 @@
 import type { LogOrigin } from '../runtime/log-store.js';
+import { DiscordUnavailableError } from './discord-auth-errors.js';
 
 /**
  * Observabilité des réponses REST de Discord, bot par bot.
@@ -49,6 +50,8 @@ export type DiscordResponseInfo = {
 };
 
 export interface DiscordRestSnapshot {
+  /** Disjoncteur des réponses invalides de ce bot. */
+  breaker?: DiscordBreakerSnapshot;
   /** Événements `invalidRequestWarning` reçus (seuils de 250 du compteur global du processus). */
   invalidRequestWarnings: number;
   lastInvalidRequestWarningAt: string | null;
@@ -105,6 +108,51 @@ export function emptyDiscordRestSnapshot(): DiscordRestSnapshot {
   };
 }
 
+/**
+ * Disjoncteur par bot : au-delà de `limit` réponses invalides sur la fenêtre de 10 minutes de
+ * Discord, les appels REST du bot sont coupés localement pendant `cooldownMs`. Réglable :
+ * DISCORD_BOT_INVALID_LIMIT (0 = désactivé) et DISCORD_BOT_BREAKER_COOLDOWN_SECONDS.
+ */
+export interface DiscordBreakerConfig {
+  limit: number;
+  cooldownMs: number;
+}
+
+export const DEFAULT_BREAKER_CONFIG: DiscordBreakerConfig = {
+  limit: 200,
+  cooldownMs: 15 * 60_000,
+};
+
+export function readBreakerConfig(
+  env: Record<string, string | undefined> = process.env,
+): DiscordBreakerConfig {
+  const readInt = (key: string, fallback: number, min: number): number => {
+    const raw = env[key]?.trim();
+    if (!raw) return fallback;
+    const value = Number(raw);
+    return Number.isInteger(value) && value >= min ? value : fallback;
+  };
+  return {
+    limit: readInt('DISCORD_BOT_INVALID_LIMIT', DEFAULT_BREAKER_CONFIG.limit, 0),
+    cooldownMs:
+      readInt(
+        'DISCORD_BOT_BREAKER_COOLDOWN_SECONDS',
+        DEFAULT_BREAKER_CONFIG.cooldownMs / 1000,
+        10,
+      ) * 1000,
+  };
+}
+
+export interface DiscordBreakerSnapshot {
+  open: boolean;
+  limit: number;
+  invalidInWindow: number;
+  trips: number;
+  reopensAt: string | null;
+  reason: string | null;
+  lastTrippedAt: string | null;
+}
+
 export type RestLogKind = 'invalid_request_warning' | 'rate_limited';
 
 /**
@@ -123,7 +171,70 @@ export class DiscordRestStats {
   private readonly routes = new Map<string, { route: string; status: number; count: number }>();
   private readonly lineWindows = new Map<RestLogKind, { start: number; count: number }>();
 
-  constructor(private readonly now: () => number = Date.now) {}
+  private breakerOpenUntil = 0;
+  private breakerReason: string | null = null;
+  private breakerTrips = 0;
+  private breakerLastTrippedAt: string | null = null;
+  /** Appelé une fois à chaque ouverture, avec la raison lisible par le propriétaire du bot. */
+  onBreakerTrip: ((reason: string) => void) | null = null;
+
+  constructor(
+    private readonly now: () => number = Date.now,
+    private readonly breakerConfig: DiscordBreakerConfig = readBreakerConfig(),
+  ) {}
+
+  /** Lève DiscordUnavailableError('bot_paused') tant que le disjoncteur de ce bot est ouvert. */
+  assertCallsAllowed(): void {
+    if (this.breakerOpenUntil === 0) return;
+    const left = this.breakerOpenUntil - this.now();
+    if (left <= 0) {
+      // Demi-ouvert : la fenêtre repart de zéro, le prochain dépassement ré-ouvre.
+      this.breakerOpenUntil = 0;
+      this.buckets.length = 0;
+      return;
+    }
+    throw new DiscordUnavailableError('bot_paused', left / 1000, {
+      message: this.breakerReason ?? 'Discord calls of this bot are paused',
+    });
+  }
+
+  private maybeTripBreaker(): void {
+    const { limit, cooldownMs } = this.breakerConfig;
+    if (limit <= 0 || this.breakerOpenUntil !== 0) return;
+    const window = this.window();
+    if (window.total < limit) return;
+    const now = this.now();
+    this.breakerOpenUntil = now + cooldownMs;
+    this.breakerTrips += 1;
+    this.breakerLastTrippedAt = new Date(now).toISOString();
+    const detail = (['401', '403', '429'] as const)
+      .filter((key) => window.byStatus[key] > 0)
+      .map((key) => `${key}: ${window.byStatus[key]}`)
+      .join(', ');
+    this.breakerReason =
+      `Appels Discord de ce bot suspendus pendant ${Math.ceil(cooldownMs / 60_000)} min : ` +
+      `${window.total} réponses refusées par Discord en 10 min (${detail}). ` +
+      'Cela protège les autres bots de la plateforme. Vérifiez le jeton, les permissions du bot ' +
+      'et les scripts qui appellent Discord en boucle.';
+    try {
+      this.onBreakerTrip?.(this.breakerReason);
+    } catch {
+      // Un journal en échec ne doit jamais empêcher la coupure.
+    }
+  }
+
+  breakerSnapshot(): DiscordBreakerSnapshot {
+    const open = this.breakerOpenUntil !== 0 && this.breakerOpenUntil > this.now();
+    return {
+      open,
+      limit: this.breakerConfig.limit,
+      invalidInWindow: this.window().total,
+      trips: this.breakerTrips,
+      reopensAt: open ? new Date(this.breakerOpenUntil).toISOString() : null,
+      reason: open ? this.breakerReason : null,
+      lastTrippedAt: this.breakerLastTrippedAt,
+    };
+  }
 
   recordInvalidResponse(info: DiscordResponseInfo): void {
     if (!isInvalidStatus(info.status)) return;
@@ -159,6 +270,7 @@ export class DiscordRestStats {
         count: 1,
       });
     }
+    this.maybeTripBreaker();
   }
 
   recordInvalidRequestWarning(): void {
@@ -205,6 +317,7 @@ export class DiscordRestStats {
   snapshot(): DiscordRestSnapshot {
     const window = this.window();
     return {
+      breaker: this.breakerSnapshot(),
       invalidRequestWarnings: this.invalidRequestWarnings,
       lastInvalidRequestWarningAt: this.lastInvalidRequestWarningAt,
       rateLimited: this.rateLimited,

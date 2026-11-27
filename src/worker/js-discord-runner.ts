@@ -316,10 +316,15 @@ export class JsDiscordRunner {
     }
 
     this.client = new Client(
-      buildDiscordClientOptions(this.effectiveIntents, undefined, (info) =>
-        this.restStats.recordInvalidResponse(info),
+      buildDiscordClientOptions(
+        this.effectiveIntents,
+        undefined,
+        (info) => this.restStats.recordInvalidResponse(info),
+        () => this.restStats.assertCallsAllowed(),
       ),
     );
+    // Visible dans les journaux du bot (donc dans l'app) : pourquoi ses appels Discord sont coupés.
+    this.restStats.onBreakerTrip = (reason) => this.onLog('warn', reason);
     attachRestObservers(
       this.client.rest as unknown as RestEventSource,
       this.botId,
