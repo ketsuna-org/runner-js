@@ -4,9 +4,7 @@
  * (variables de serveur) et répond en Components V2. Aucune erreur interne n'est jamais montrée.
  */
 import type { Interaction } from 'discord.js';
-import { PANEL_FLAGS, handlePanelInteraction, panelLanguageFor, panelStringsLanguage, parsePanelId, ps } from './module-panel.js';
-import { automationsOpen, handleAutomationInteraction, type PanelAutomationApi } from './module-panel-automations.js';
-import { panelAutomationApiFor } from './managed-automation-api.js';
+import { PANEL_FLAGS, handlePanelInteraction, panelLanguageFor, panelStringsLanguage, ps } from './module-panel.js';
 
 interface PanelStore {
   getScopedVariable(botId: string, scope: string, contextId: string, key: string): Promise<unknown>;
@@ -31,8 +29,6 @@ export interface PanelRuntimeContext {
   };
   store: PanelStore;
   log: (message: string) => void;
-  /** Accès au Manager pour l'écran « Alertes » ; absent = écran masqué. Par défaut: celui du runner géré. */
-  automations?: PanelAutomationApi | null;
 }
 
 /** Renvoie vrai si l'interaction appartient au panneau (le routeur ne doit alors rien faire d'autre). */
@@ -80,42 +76,17 @@ export async function tryHandlePanel(interaction: Interaction, ctx: PanelRuntime
         if (v != null) modal[String(key)] = String(v);
       });
     }
-    const messageValues = is('isMessageComponent') && 'values' in anyI ? [...(anyI.values ?? [])].map(String) : [];
-    const api = ctx.automations === undefined ? panelAutomationApiFor(ctx.botId) : ctx.automations;
-    const parsed = parsePanelId(id);
-    let result;
-    if (api && parsed?.view === 'auto') {
-      result = await handleAutomationInteraction({
-        api,
-        guildId,
-        actorId: String(anyI.user?.id ?? anyI.member?.user?.id ?? ''),
-        step: parsed.module,
-        arg: parsed.arg,
-        language: lang,
-        modal,
-      });
-    } else {
-      let showAlerts = false;
-      if (api && parsed?.view === 'home') {
-        try {
-          showAlerts = automationsOpen(await api.list(guildId));
-        } catch {
-          showAlerts = false;
-        }
-      }
-      result = await handlePanelInteraction({
-        doc: { modules: ctx.config.modules ?? {} },
-        customId: id,
-        read: async (variable) => {
-          const v = await ctx.store.getScopedVariable(ctx.botId, 'guild', guildId, variable);
-          return v === undefined || v === null ? null : String(v);
-        },
-        language: lang,
-        values: messageValues,
-        modal,
-        automations: showAlerts,
-      });
-    }
+    const result = await handlePanelInteraction({
+      doc: { modules: ctx.config.modules ?? {} },
+      customId: id,
+      read: async (variable) => {
+        const v = await ctx.store.getScopedVariable(ctx.botId, 'guild', guildId, variable);
+        return v === undefined || v === null ? null : String(v);
+      },
+      language: lang,
+      values: is('isMessageComponent') && 'values' in anyI ? [...(anyI.values ?? [])].map(String) : [],
+      modal,
+    });
     for (const w of result.writes) {
       await ctx.store.setScopedVariable(ctx.botId, 'guild', guildId, w.variable, w.value);
     }
