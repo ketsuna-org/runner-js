@@ -49,7 +49,8 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
       const hostName = hostHeader.startsWith('[')
         ? hostHeader.slice(0, hostHeader.indexOf(']') + 1)
         : hostHeader.split(':')[0];
-      const localHost = ['localhost', '127.0.0.1', '[::1]'].includes(hostName);
+      // Un navigateur envoie toujours Host : son absence (appel interne, test) n'ouvre rien au web.
+      const localHost = hostHeader === '' || ['localhost', '127.0.0.1', '[::1]'].includes(hostName);
       if (c.req.header('origin') || (!localHost && c.req.path !== '/health')) {
         return c.json({ error: 'Browser access is refused: set BOT_CREATOR_API_TOKEN.' }, 403);
       }
