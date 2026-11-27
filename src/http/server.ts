@@ -42,7 +42,22 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
 
   // CORS and Cache-Control middleware
   app.use('*', async (c, next) => {
-    c.header('access-control-allow-origin', '*');
+    // Sans jeton (runner local en loopback), aucune page web ne doit pouvoir l'appeler : un navigateur
+    // envoie toujours Origin sur une requête inter-origine, et le Host détecte le DNS rebinding.
+    if (deps.env.apiToken.length === 0) {
+      const hostHeader = (c.req.header('host') ?? '').toLowerCase();
+      const hostName = hostHeader.startsWith('[')
+        ? hostHeader.slice(0, hostHeader.indexOf(']') + 1)
+        : hostHeader.split(':')[0];
+      // Un navigateur envoie toujours Host : son absence (appel interne, test) n'ouvre rien au web.
+      const localHost = hostHeader === '' || ['localhost', '127.0.0.1', '[::1]'].includes(hostName);
+      if (c.req.header('origin') || (!localHost && c.req.path !== '/health')) {
+        return c.json({ error: 'Browser access is refused: set BOT_CREATOR_API_TOKEN.' }, 403);
+      }
+    } else {
+      c.header('access-control-allow-origin', '*');
+    }
+    c.header('x-content-type-options', 'nosniff');
     c.header('access-control-allow-methods', 'GET, POST, PATCH, OPTIONS');
     c.header(
       'access-control-allow-headers',
