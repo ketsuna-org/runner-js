@@ -767,6 +767,25 @@ export function createHttpServer(deps: HttpServerDeps): Hono {
     return c.json({ ok: true, botId, handled });
   });
 
+  // Alerte d'une automatisation par serveur relayée par le Manager : `{automation: {title, link, ...}}`.
+  app.post('/bots/:id/automation-alert', async (c) => {
+    const botId = c.req.param('id');
+    const body = (await c.req.json().catch(() => null)) as { automation?: unknown } | null;
+    const raw = body?.automation;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      throw badRequest('Missing automation.');
+    }
+    const values: Record<string, string> = {};
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (typeof value === 'string') values[key] = value;
+    }
+    if (!deps.runtime.isBotRunning(botId)) {
+      throw conflict(`Bot "${botId}" is not running.`);
+    }
+    const handled = await deps.runtime.triggerAutomationAlert(botId, values);
+    return c.json({ ok: true, botId, handled });
+  });
+
   // `{.+}` : un chemin de webhook peut porter des « / » (`topgg/vote`), le Manager les relaie tels quels.
   app.post('/bots/:id/inbound/:pathKey{.+}', async (c) => {
     const botId = c.req.param('id');

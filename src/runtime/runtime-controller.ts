@@ -290,6 +290,10 @@ export class RuntimeController {
     return this.processManager.triggerEntitlementEvent(botId, eventName, row);
   }
 
+  async triggerAutomationAlert(botId: string, values: Record<string, string>): Promise<number> {
+    return this.processManager.triggerAutomationAlert(botId, values);
+  }
+
   async triggerInboundWebhook(
     botId: string,
     pathKey: string,

@@ -1,3 +1,4 @@
+import { installGuildAlertsApi } from './runtime/alerts/guild-alerts-api.js';
 import { join } from 'node:path';
 import { ManagedAiGateway } from './ai/ai-gateway.js';
 import { ManagedDocumentsGateway, setDocumentsGateway } from './documents/documents-gateway.js';
@@ -39,6 +40,7 @@ export async function startMainServer(): Promise<void> {
 
   // Fonctions IA du langage (`bc.ai`) : seulement avec un Manager (runner géré ou pool).
   ManagedAiGateway.install(env);
+  installGuildAlertsApi(env);
   // Quota de l'enregistrement vocal (`bc.recorder`) : Premium et heures mensuelles tenus par le Manager.
   ManagedVoiceQuotaGateway.install(env);
   // Fichiers des bots (`bc.files`) : stockage du compte, via le Manager.

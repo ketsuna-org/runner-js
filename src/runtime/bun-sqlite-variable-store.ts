@@ -75,7 +75,7 @@ export class BunSqliteVariableStore implements VariableDatabase {
         updated_at INTEGER NOT NULL,
         expires_at INTEGER,
         UNIQUE(bot_id, scope, context_id_1, context_id_2, key),
-        CHECK(scope IN ('_global_', 'guild', 'user', 'channel', 'guildMember', 'message'))
+        CHECK(scope IN ('_global_', 'guild', 'user', 'channel', 'guildMember', 'message', 'role'))
       )
     `);
     this.db.exec(`
@@ -88,6 +88,7 @@ export class BunSqliteVariableStore implements VariableDatabase {
     `);
     this.initialized = true;
     this.migrateExpiresAtColumnIfNeeded();
+    this.migrateRoleScopeIfNeeded();
   }
 
   private get database(): Database {
@@ -108,6 +109,56 @@ export class BunSqliteVariableStore implements VariableDatabase {
       return;
     }
     this.database.exec('ALTER TABLE variables ADD COLUMN expires_at INTEGER');
+  }
+
+  /** Tables created before the `role` scope refuse it in their CHECK: rebuilt once, every row kept. */
+  private migrateRoleScopeIfNeeded(): void {
+    const row = this.database
+      .query<{ sql: string | null }, []>(
+        "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'variables' LIMIT 1",
+      )
+      .get();
+    const sql = row?.sql ?? '';
+    if (!sql || sql.includes("'role'")) {
+      return;
+    }
+    const db = this.database;
+    db.exec('BEGIN IMMEDIATE');
+    try {
+      db.exec(`
+        CREATE TABLE variables_v3 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bot_id TEXT NOT NULL,
+          scope TEXT NOT NULL,
+          context_id_1 TEXT NOT NULL,
+          context_id_2 TEXT,
+          key TEXT NOT NULL,
+          value_raw TEXT NOT NULL,
+          value_type TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          expires_at INTEGER,
+          UNIQUE(bot_id, scope, context_id_1, context_id_2, key),
+          CHECK(scope IN ('_global_', 'guild', 'user', 'channel', 'guildMember', 'message', 'role'))
+        )
+      `);
+      db.exec(`
+        INSERT INTO variables_v3 (
+          id, bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at
+        )
+        SELECT
+          id, bot_id, scope, context_id_1, context_id_2, key, value_raw, value_type, created_at, updated_at, expires_at
+        FROM variables
+      `);
+      db.exec('DROP TABLE variables');
+      db.exec('ALTER TABLE variables_v3 RENAME TO variables');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_bot_lookup ON variables(bot_id, scope, context_id_1, context_id_2)');
+      db.exec('CREATE INDEX IF NOT EXISTS idx_scope_key_lookup ON variables(bot_id, scope, key)');
+      db.exec('COMMIT');
+    } catch (error) {
+      db.exec('ROLLBACK');
+      throw error;
+    }
   }
 
   private scopedWhere(includeKey: boolean): string {

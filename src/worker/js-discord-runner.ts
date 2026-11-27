@@ -586,6 +586,10 @@ export class JsDiscordRunner {
     return this.registry ? this.registry.triggerEntitlementEvent(eventName, row) : 0;
   }
 
+  async triggerAutomationAlert(values: Record<string, string>): Promise<number> {
+    return this.registry ? this.registry.triggerAutomationAlert(values) : 0;
+  }
+
   async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {
     return this.registry ? this.registry.triggerCommandEvent(eventName, payload) : 0;
   }
