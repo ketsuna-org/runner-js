@@ -123,6 +123,8 @@ type ScriptRunPartial = {
     sourceIp?: string;
     requestId?: string;
   };
+  /** Valeurs de l'alerte d'automatisation (événement « automationAlert »). */
+  automation?: Record<string, string>;
   /** Événement d'une source WebSocket qui lance le workflow. */
   wsEvent?: import('../runtime/websocket/ws-manager.js').WsEvent;
 };
@@ -673,6 +675,25 @@ export class HandlerRegistry {
   }
 
   /**
+   * Alerte d'une automatisation par serveur (relayée par le Manager) : lance les événements « automationAlert »
+   * du bot avec les valeurs de la nouveauté (global `automation`). Rend le nombre de handlers lancés.
+   */
+  async triggerAutomationAlert(values: Record<string, string>): Promise<number> {
+    const handlers = (this.config.events ?? []).filter(
+      (event) => event.enabled !== false && event.name.trim() === 'automationAlert',
+    );
+    const guild = values.guildId ? (this.client.guilds.cache.get(values.guildId) ?? null) : null;
+    for (const handler of handlers) {
+      await this.runScript(handler.script, {
+        guild,
+        automation: values,
+        webhook: { path: 'automationAlert', payload: values, headers: {} },
+      });
+    }
+    return handlers.length;
+  }
+
+  /**
    * Arrêt complet : démontage des routes ET des tâches planifiées du registre. Un planificateur fourni par le
    * propriétaire du client n'est pas touché ici (il survit à la reconnexion ; son propriétaire l'arrête).
    */
@@ -1003,6 +1024,7 @@ export class HandlerRegistry {
           member,
           channel: scriptChannel as never,
           webhook: partial.webhook,
+          automation: partial.automation,
           ws: { bridge: this.webSockets, event: partial.wsEvent },
         },
         this.scriptLogger,

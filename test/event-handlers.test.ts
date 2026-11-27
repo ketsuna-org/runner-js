@@ -207,3 +207,27 @@ it('gives a channel event the server of the channel, not the channel itself', as
   await Promise.all(client.listeners('channelCreate').map(listener => listener(channel)));
   expect(seen?.guild?.id).toBe('guild-1');
 });
+
+it('runs automationAlert events with the alert values and ignores other events', async () => {
+  const client = new EventEmitter();
+  (client as unknown as { guilds: unknown }).guilds = { cache: new Map() };
+  const config = parseJsBotConfig({ events: [
+    { id: 'a', name: 'automationAlert', script: 'alert' },
+    { id: 'off', name: 'automationAlert', script: 'off', enabled: false },
+    { id: 'b', name: 'guildMemberAdd', script: 'member' },
+  ] });
+  validateJsBotConfig(config);
+  const seen: Array<{ script: string; automation?: Record<string, string> }> = [];
+  const executor = { execute: async (script: string, context: { automation?: Record<string, string> }) => {
+    seen.push({ script, automation: context.automation });
+  } } as unknown as ScriptExecutor;
+  const variables = { getGlobalVariables: async () => ({}) } as VariableDatabase;
+  const registry = new HandlerRegistry(client as unknown as Client, config, 'bot-1', executor, variables, () => undefined);
+  registry.mount();
+  const handled = await registry.triggerAutomationAlert({ title: 'Nouvelle vidéo', link: 'https://x.test/v', guildId: '1' });
+  expect(handled).toBe(1);
+  expect(seen).toHaveLength(1);
+  expect(seen[0]?.script).toBe('alert');
+  expect(seen[0]?.automation?.title).toBe('Nouvelle vidéo');
+  registry.clear();
+});

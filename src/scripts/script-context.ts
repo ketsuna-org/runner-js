@@ -25,6 +25,8 @@ export interface ScriptExecutionContext {
     /** Identifiant de la requête (`inbound.request.id` en BDFD, l'en-tête `x-request-id`) ; vide s'il n'y en a pas. */
     requestId?: string;
   };
+  /** Valeurs de l'alerte d'automatisation (global `automation`) quand le script est lancé par « Alerte reçue ». */
+  automation?: Record<string, string> | null;
   /** Sources WebSocket du bot (global `bc.ws`) : pont du bot et événement qui a lancé le script, s'il y en a un. */
   ws?: {
     bridge?: import('../runtime/websocket/ws-support.js').WebSocketBridge;
