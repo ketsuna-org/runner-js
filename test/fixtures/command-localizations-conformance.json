@@ -1,0 +1,4553 @@
+{
+ "discordLocales": [
+  "id",
+  "da",
+  "de",
+  "en-GB",
+  "en-US",
+  "es-ES",
+  "es-419",
+  "fr",
+  "hr",
+  "it",
+  "lt",
+  "hu",
+  "nl",
+  "no",
+  "pl",
+  "pt-BR",
+  "ro",
+  "fi",
+  "sv-SE",
+  "vi",
+  "tr",
+  "cs",
+  "el",
+  "bg",
+  "ru",
+  "uk",
+  "hi",
+  "th",
+  "zh-CN",
+  "ja",
+  "zh-TW",
+  "ko"
+ ],
+ "validate": [
+  {
+   "name": "rien à valider",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {},
+   "issues": []
+  },
+  {
+   "name": "traductions valides",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "boutique",
+     "de": "laden",
+     "ja": "ショップ",
+     "hi": "दुकान",
+     "th": "ร้านค้า"
+    },
+    "description": {
+     "fr": "Ouvre la boutique"
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "description": {
+       "fr": "L'objet à acheter"
+      },
+      "choices": {
+       "sword": {
+        "fr": "Épée"
+       }
+      }
+     },
+     "count": {
+      "choices": {
+       "1": {
+        "fr": "Un"
+       }
+      }
+     }
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "langue inconnue",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr-FR": "boutique",
+     "xx": "x"
+    }
+   },
+   "issues": [
+    "name|fr-FR|unknown_locale",
+    "name|xx|unknown_locale"
+   ]
+  },
+  {
+   "name": "nom en majuscules",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "Boutique"
+    }
+   },
+   "issues": [
+    "name|fr|name_must_be_lowercase"
+   ]
+  },
+  {
+   "name": "nom avec espace",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "ma boutique"
+    }
+   },
+   "issues": [
+    "name|fr|name_invalid_format"
+   ]
+  },
+  {
+   "name": "apostrophe ASCII refusée",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "l'objet"
+    }
+   },
+   "issues": [
+    "name|fr|name_invalid_format"
+   ]
+  },
+  {
+   "name": "apostrophe modificatrice permise",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "lʼobjet"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "tiret et soulignement permis",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "ma-boutique_2"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "nom de 32 caractères",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "nom de 33 caractères",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   "issues": [
+    "name|fr|name_too_long"
+   ]
+  },
+  {
+   "name": "32 points de code hors plan de base",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "ja": "ああああああああああああああああああああああああああああああああ"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "nom vide = pas de traduction",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "",
+     "de": "   "
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "espaces autour rognés",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": " boutique "
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "description de 100",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "description": {
+     "fr": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "description de 101",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "description": {
+     "fr": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"
+    }
+   },
+   "issues": [
+    "description|fr|description_too_long"
+   ]
+  },
+  {
+   "name": "langue sans nom mais avec description",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "description": {
+     "de": "Öffnet den Laden"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "doublon avec le nom traduit d'un frère",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "magasin"
+    }
+   },
+   "issues": [
+    "name|fr|name_duplicate"
+   ],
+   "siblings": [
+    {
+     "name": "store",
+     "nameLocalizations": {
+      "fr": "magasin"
+     }
+    }
+   ]
+  },
+  {
+   "name": "doublon avec le nom d'origine d'un frère",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "store"
+    }
+   },
+   "issues": [
+    "name|fr|name_duplicate"
+   ],
+   "siblings": [
+    {
+     "name": "store"
+    }
+   ]
+  },
+  {
+   "name": "même nom dans une autre langue : permis",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "de": "magasin"
+    }
+   },
+   "issues": [],
+   "siblings": [
+    {
+     "name": "store",
+     "nameLocalizations": {
+      "fr": "magasin"
+     }
+    }
+   ]
+  },
+  {
+   "name": "option : majuscules",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "name": {
+       "fr": "Objet"
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.item.name|fr|name_must_be_lowercase"
+   ]
+  },
+  {
+   "name": "option : description trop longue",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.item.description|fr|description_too_long"
+   ]
+  },
+  {
+   "name": "choix de 100 et de 101",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "choices": {
+       "sword": {
+        "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+       },
+       "shield": {
+        "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+       }
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.item.choices.shield|fr|choice_too_long"
+   ]
+  },
+  {
+   "name": "choix numérique",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "count": {
+      "choices": {
+       "2": {
+        "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+       }
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.count.choices.2|fr|choice_too_long"
+   ]
+  },
+  {
+   "name": "option inconnue ignorée",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "ghost": {
+      "name": {
+       "fr": "FANTÔME ET ESPACE"
+      }
+     }
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "choix inconnu ignoré",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "choices": {
+       "ghost": {
+        "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+       }
+      }
+     }
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "doublon entre options",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "name": {
+       "fr": "nombre"
+      }
+     },
+     "count": {
+      "name": {
+       "fr": "nombre"
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.item.name|fr|name_duplicate",
+    "options.count.name|fr|name_duplicate"
+   ]
+  },
+  {
+   "name": "doublon avec un nom d'origine d'option",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "item": {
+      "name": {
+       "fr": "count"
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.item.name|fr|name_duplicate"
+   ]
+  },
+  {
+   "name": "sous-commandes et groupes valides",
+   "kind": "chat_input",
+   "command": {
+    "name": "admin",
+    "description": "Admin",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommandGroup",
+       "name": "users",
+       "description": "Users",
+       "options": [
+        {
+         "type": "subcommand",
+         "name": "ban",
+         "description": "Ban",
+         "options": [
+          {
+           "type": "user",
+           "name": "target",
+           "description": "desc"
+          }
+         ]
+        },
+        {
+         "type": "subcommand",
+         "name": "kick",
+         "description": "Kick",
+         "options": []
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "stats",
+       "description": "Stats",
+       "options": []
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "users": {
+      "name": {
+       "fr": "membres"
+      },
+      "description": {
+       "fr": "Membres"
+      },
+      "options": {
+       "ban": {
+        "name": {
+         "fr": "bannir"
+        },
+        "options": {
+         "target": {
+          "name": {
+           "fr": "cible"
+          }
+         }
+        }
+       }
+      }
+     },
+     "stats": {
+      "name": {
+       "fr": "chiffres"
+      }
+     }
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "sous-commande : erreur en profondeur",
+   "kind": "chat_input",
+   "command": {
+    "name": "admin",
+    "description": "Admin",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommandGroup",
+       "name": "users",
+       "description": "Users",
+       "options": [
+        {
+         "type": "subcommand",
+         "name": "ban",
+         "description": "Ban",
+         "options": [
+          {
+           "type": "user",
+           "name": "target",
+           "description": "desc"
+          }
+         ]
+        },
+        {
+         "type": "subcommand",
+         "name": "kick",
+         "description": "Kick",
+         "options": []
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "stats",
+       "description": "Stats",
+       "options": []
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "users": {
+      "options": {
+       "ban": {
+        "options": {
+         "target": {
+          "name": {
+           "fr": "Cible"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.users.options.ban.options.target.name|fr|name_must_be_lowercase"
+   ]
+  },
+  {
+   "name": "sous-commandes : doublon dans le groupe",
+   "kind": "chat_input",
+   "command": {
+    "name": "admin",
+    "description": "Admin",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommandGroup",
+       "name": "users",
+       "description": "Users",
+       "options": [
+        {
+         "type": "subcommand",
+         "name": "ban",
+         "description": "Ban",
+         "options": [
+          {
+           "type": "user",
+           "name": "target",
+           "description": "desc"
+          }
+         ]
+        },
+        {
+         "type": "subcommand",
+         "name": "kick",
+         "description": "Kick",
+         "options": []
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "stats",
+       "description": "Stats",
+       "options": []
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "users": {
+      "options": {
+       "ban": {
+        "name": {
+         "fr": "retirer"
+        }
+       },
+       "kick": {
+        "name": {
+         "fr": "retirer"
+        }
+       }
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.users.options.ban.name|fr|name_duplicate",
+    "options.users.options.kick.name|fr|name_duplicate"
+   ]
+  },
+  {
+   "name": "groupe et sous-commande de même niveau en doublon",
+   "kind": "chat_input",
+   "command": {
+    "name": "admin",
+    "description": "Admin",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommandGroup",
+       "name": "users",
+       "description": "Users",
+       "options": [
+        {
+         "type": "subcommand",
+         "name": "ban",
+         "description": "Ban",
+         "options": [
+          {
+           "type": "user",
+           "name": "target",
+           "description": "desc"
+          }
+         ]
+        },
+        {
+         "type": "subcommand",
+         "name": "kick",
+         "description": "Kick",
+         "options": []
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "stats",
+       "description": "Stats",
+       "options": []
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "users": {
+      "name": {
+       "fr": "chiffres"
+      }
+     },
+     "stats": {
+      "name": {
+       "fr": "chiffres"
+      }
+     }
+    }
+   },
+   "issues": [
+    "options.users.name|fr|name_duplicate",
+    "options.stats.name|fr|name_duplicate"
+   ]
+  },
+  {
+   "name": "menu contextuel : espaces et majuscules permis",
+   "kind": "message",
+   "command": {
+    "name": "Report message",
+    "type": "message",
+    "description": ""
+   },
+   "localizations": {
+    "name": {
+     "fr": "Signaler le message"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "menu contextuel : trop long",
+   "kind": "user",
+   "command": {
+    "name": "Profile",
+    "type": "user"
+   },
+   "localizations": {
+    "name": {
+     "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "issues": [
+    "name|fr|name_too_long"
+   ]
+  },
+  {
+   "name": "menu contextuel : description ignorée",
+   "kind": "user",
+   "command": {
+    "name": "Profile",
+    "type": "user"
+   },
+   "localizations": {
+    "description": {
+     "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "menu contextuel : langue inconnue",
+   "kind": "message",
+   "command": {
+    "name": "Report message",
+    "type": "message",
+    "description": ""
+   },
+   "localizations": {
+    "name": {
+     "zz": "x"
+    }
+   },
+   "issues": [
+    "name|zz|unknown_locale"
+   ]
+  },
+  {
+   "name": "les 32 langues sont permises",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "id": "boutique",
+     "da": "boutique",
+     "de": "boutique",
+     "en-GB": "boutique",
+     "en-US": "boutique",
+     "es-ES": "boutique",
+     "es-419": "boutique",
+     "fr": "boutique",
+     "hr": "boutique",
+     "it": "boutique",
+     "lt": "boutique",
+     "hu": "boutique",
+     "nl": "boutique",
+     "no": "boutique",
+     "pl": "boutique",
+     "pt-BR": "boutique",
+     "ro": "boutique",
+     "fi": "boutique",
+     "sv-SE": "boutique",
+     "vi": "boutique",
+     "tr": "boutique",
+     "cs": "boutique",
+     "el": "boutique",
+     "bg": "boutique",
+     "ru": "boutique",
+     "uk": "boutique",
+     "hi": "boutique",
+     "th": "boutique",
+     "zh-CN": "boutique",
+     "ja": "boutique",
+     "zh-TW": "boutique",
+     "ko": "boutique"
+    }
+   },
+   "issues": []
+  },
+  {
+   "name": "taille totale au-dessus de 8000",
+   "kind": "chat_input",
+   "command": {
+    "name": "big",
+    "description": "Big",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommand",
+       "name": "sub0",
+       "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub1",
+       "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub2",
+       "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {},
+   "issues": [
+    "||payload_too_large"
+   ]
+  },
+  {
+   "name": "taille totale sous 8000",
+   "kind": "chat_input",
+   "command": {
+    "name": "big",
+    "description": "Big",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommand",
+       "name": "sub0",
+       "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub1",
+       "description": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {},
+   "issues": []
+  },
+  {
+   "name": "les traductions comptent dans la taille",
+   "kind": "chat_input",
+   "command": {
+    "name": "big",
+    "description": "Big",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommand",
+       "name": "sub0",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub1",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub2",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "sub0": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "options": {
+       "opt00": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt01": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt02": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt03": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt04": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt05": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt06": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt07": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt08": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt09": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt10": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt11": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt12": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt13": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt14": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt15": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt16": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt17": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt18": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt19": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt20": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt21": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt22": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt23": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt24": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       }
+      }
+     },
+     "sub1": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "options": {
+       "opt00": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt01": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt02": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt03": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt04": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt05": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt06": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt07": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt08": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt09": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt10": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt11": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt12": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt13": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt14": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt15": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt16": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt17": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt18": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt19": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt20": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt21": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt22": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt23": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt24": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       }
+      }
+     },
+     "sub2": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      },
+      "options": {
+       "opt00": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt01": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt02": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt03": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt04": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt05": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt06": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt07": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt08": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt09": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt10": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt11": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt12": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt13": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt14": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt15": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt16": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt17": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt18": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt19": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt20": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt21": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt22": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt23": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       },
+       "opt24": {
+        "description": {
+         "fr": "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"
+        }
+       }
+      }
+     }
+    }
+   },
+   "issues": [
+    "||payload_too_large"
+   ]
+  },
+  {
+   "name": "taille : seule la plus longue langue compte",
+   "kind": "chat_input",
+   "command": {
+    "name": "big",
+    "description": "Big",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommand",
+       "name": "sub0",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub1",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "sub2",
+       "description": "x",
+       "options": [
+        {
+         "type": "string",
+         "name": "opt00",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt01",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt02",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt03",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt04",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt05",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt06",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt07",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt08",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt09",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt10",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt11",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt12",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt13",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt14",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt15",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt16",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt17",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt18",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt19",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt20",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt21",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt22",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt23",
+         "description": "y"
+        },
+        {
+         "type": "string",
+         "name": "opt24",
+         "description": "y"
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "sub0": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "de": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+     },
+     "sub1": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "de": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+     },
+     "sub2": {
+      "description": {
+       "fr": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+       "de": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+     }
+    }
+   },
+   "issues": []
+  }
+ ],
+ "payload": [
+  {
+   "name": "sans traduction",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {},
+   "expected": {
+    "name": "shop",
+    "description": "Open the shop",
+    "options": [
+     {
+      "name": "item",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "Sword",
+        "value": "sword"
+       },
+       {
+        "name": "Shield",
+        "value": "shield"
+       }
+      ]
+     },
+     {
+      "name": "count",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "One",
+        "value": 1
+       },
+       {
+        "name": "Two",
+        "value": 2
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "commande, option et choix traduits",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "boutique",
+     "de": "laden"
+    },
+    "description": {
+     "fr": "Ouvre la boutique"
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "description": {
+       "fr": "L'objet à acheter"
+      },
+      "choices": {
+       "sword": {
+        "fr": "Épée"
+       }
+      }
+     },
+     "count": {
+      "choices": {
+       "2": {
+        "fr": "Deux"
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "name": "shop",
+    "name_localizations": {
+     "fr": "boutique",
+     "de": "laden"
+    },
+    "description": "Open the shop",
+    "description_localizations": {
+     "fr": "Ouvre la boutique"
+    },
+    "options": [
+     {
+      "name": "item",
+      "name_localizations": {
+       "fr": "objet"
+      },
+      "description": "desc",
+      "description_localizations": {
+       "fr": "L'objet à acheter"
+      },
+      "choices": [
+       {
+        "name": "Sword",
+        "value": "sword",
+        "name_localizations": {
+         "fr": "Épée"
+        }
+       },
+       {
+        "name": "Shield",
+        "value": "shield"
+       }
+      ]
+     },
+     {
+      "name": "count",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "One",
+        "value": 1
+       },
+       {
+        "name": "Two",
+        "value": 2,
+        "name_localizations": {
+         "fr": "Deux"
+        }
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "les textes vides et invalides ne partent pas",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "name": {
+     "fr": "",
+     "de": "Laden",
+     "es-ES": "tienda",
+     "xx": "x"
+    },
+    "description": {
+     "fr": "ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+     "de": "ok"
+    }
+   },
+   "expected": {
+    "name": "shop",
+    "name_localizations": {
+     "es-ES": "tienda"
+    },
+    "description": "Open the shop",
+    "description_localizations": {
+     "de": "ok"
+    },
+    "options": [
+     {
+      "name": "item",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "Sword",
+        "value": "sword"
+       },
+       {
+        "name": "Shield",
+        "value": "shield"
+       }
+      ]
+     },
+     {
+      "name": "count",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "One",
+        "value": 1
+       },
+       {
+        "name": "Two",
+        "value": 2
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "ordre des langues : celui de Discord",
+   "kind": "chat_input",
+   "command": {
+    "name": "x",
+    "description": "d",
+    "data": {
+     "options": []
+    }
+   },
+   "localizations": {
+    "name": {
+     "ko": "ㅋ",
+     "fr": "f",
+     "id": "i",
+     "en-GB": "e"
+    }
+   },
+   "expected": {
+    "name": "x",
+    "name_localizations": {
+     "id": "i",
+     "en-GB": "e",
+     "fr": "f",
+     "ko": "ㅋ"
+    },
+    "description": "d",
+    "options": []
+   }
+  },
+  {
+   "name": "sous-commandes et groupes",
+   "kind": "chat_input",
+   "command": {
+    "name": "admin",
+    "description": "Admin",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "subcommandGroup",
+       "name": "users",
+       "description": "Users",
+       "options": [
+        {
+         "type": "subcommand",
+         "name": "ban",
+         "description": "Ban",
+         "options": [
+          {
+           "type": "user",
+           "name": "target",
+           "description": "desc"
+          }
+         ]
+        },
+        {
+         "type": "subcommand",
+         "name": "kick",
+         "description": "Kick",
+         "options": []
+        }
+       ]
+      },
+      {
+       "type": "subcommand",
+       "name": "stats",
+       "description": "Stats",
+       "options": []
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "users": {
+      "name": {
+       "fr": "membres"
+      },
+      "options": {
+       "ban": {
+        "name": {
+         "fr": "bannir"
+        },
+        "description": {
+         "fr": "Bannir"
+        },
+        "options": {
+         "target": {
+          "name": {
+           "fr": "cible"
+          }
+         }
+        }
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "name": "admin",
+    "description": "Admin",
+    "options": [
+     {
+      "name": "users",
+      "name_localizations": {
+       "fr": "membres"
+      },
+      "description": "Users",
+      "options": [
+       {
+        "name": "ban",
+        "name_localizations": {
+         "fr": "bannir"
+        },
+        "description": "Ban",
+        "description_localizations": {
+         "fr": "Bannir"
+        },
+        "options": [
+         {
+          "name": "target",
+          "name_localizations": {
+           "fr": "cible"
+          },
+          "description": "desc"
+         }
+        ]
+       },
+       {
+        "name": "kick",
+        "description": "Kick",
+        "options": []
+       }
+      ]
+     },
+     {
+      "name": "stats",
+      "description": "Stats",
+      "options": []
+     }
+    ]
+   }
+  },
+  {
+   "name": "menu contextuel : nom seulement",
+   "kind": "message",
+   "command": {
+    "name": "Report message",
+    "type": "message",
+    "description": ""
+   },
+   "localizations": {
+    "name": {
+     "fr": "Signaler le message"
+    },
+    "description": {
+     "fr": "ignorée"
+    }
+   },
+   "expected": {
+    "name": "Report message",
+    "name_localizations": {
+     "fr": "Signaler le message"
+    }
+   }
+  },
+  {
+   "name": "option inconnue ignorée",
+   "kind": "chat_input",
+   "command": {
+    "name": "shop",
+    "description": "Open the shop",
+    "type": "chatInput",
+    "data": {
+     "options": [
+      {
+       "type": "string",
+       "name": "item",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "Sword",
+         "value": "sword"
+        },
+        {
+         "name": "Shield",
+         "value": "shield"
+        }
+       ]
+      },
+      {
+       "type": "integer",
+       "name": "count",
+       "description": "desc",
+       "choices": [
+        {
+         "name": "One",
+         "value": 1
+        },
+        {
+         "name": "Two",
+         "value": 2
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "localizations": {
+    "options": {
+     "ghost": {
+      "name": {
+       "fr": "fantome"
+      }
+     }
+    }
+   },
+   "expected": {
+    "name": "shop",
+    "description": "Open the shop",
+    "options": [
+     {
+      "name": "item",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "Sword",
+        "value": "sword"
+       },
+       {
+        "name": "Shield",
+        "value": "shield"
+       }
+      ]
+     },
+     {
+      "name": "count",
+      "description": "desc",
+      "choices": [
+       {
+        "name": "One",
+        "value": 1
+       },
+       {
+        "name": "Two",
+        "value": 2
+       }
+      ]
+     }
+    ]
+   }
+  },
+  {
+   "name": "langues courtes normalisées",
+   "kind": "chat_input",
+   "command": {
+    "name": "x",
+    "description": "d",
+    "data": {
+     "options": []
+    }
+   },
+   "localizations": {
+    "name": {
+     "pt": "p",
+     "en": "e",
+     "zh": "z"
+    }
+   },
+   "expected": {
+    "name": "x",
+    "name_localizations": {
+     "en-US": "e",
+     "pt-BR": "p",
+     "zh-CN": "z"
+    },
+    "description": "d",
+    "options": []
+   }
+  }
+ ],
+ "normalize": [
+  {
+   "name": "forme canonique inchangée",
+   "raw": {
+    "name": {
+     "fr": "boutique"
+    },
+    "description": {
+     "fr": "Ouvre"
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "choices": {
+       "sword": {
+        "fr": "Épée"
+       }
+      }
+     }
+    }
+   },
+   "expected": {
+    "name": {
+     "fr": "boutique"
+    },
+    "description": {
+     "fr": "Ouvre"
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "choices": {
+       "sword": {
+        "fr": "Épée"
+       }
+      }
+     }
+    }
+   }
+  },
+  {
+   "name": "le vide disparaît",
+   "raw": {
+    "name": {
+     "fr": "",
+     "de": "  "
+    },
+    "description": {},
+    "options": {
+     "item": {
+      "name": {}
+     }
+    },
+    "choices": {}
+   },
+   "expected": {}
+  },
+  {
+   "name": "valeurs non textuelles ignorées",
+   "raw": {
+    "name": {
+     "fr": 3,
+     "de": null,
+     "es-ES": "tienda"
+    }
+   },
+   "expected": {
+    "name": {
+     "es-ES": "tienda"
+    }
+   }
+  },
+  {
+   "name": "clés inconnues conservées",
+   "raw": {
+    "name": {
+     "fr": "boutique"
+    },
+    "future": {
+     "a": 1
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "hint": true
+     }
+    }
+   },
+   "expected": {
+    "name": {
+     "fr": "boutique"
+    },
+    "options": {
+     "item": {
+      "name": {
+       "fr": "objet"
+      },
+      "hint": true
+     }
+    },
+    "future": {
+     "a": 1
+    }
+   }
+  },
+  {
+   "name": "langue courte normalisée, inconnue conservée",
+   "raw": {
+    "name": {
+     "fr": "boutique",
+     "en": "shop",
+     "xx": "x"
+    }
+   },
+   "expected": {
+    "name": {
+     "fr": "boutique",
+     "en-US": "shop",
+     "xx": "x"
+    }
+   }
+  },
+  {
+   "name": "pas un objet",
+   "raw": "oops",
+   "expected": {}
+  },
+  {
+   "name": "null",
+   "raw": null,
+   "expected": {}
+  }
+ ]
+}

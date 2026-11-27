@@ -1,0 +1,1086 @@
+{
+  "doc": {
+    "translations": {
+      "defaultLocale": "fr"
+    },
+    "modules": {
+      "tickets": {
+        "version": "1.2.0",
+        "name": {
+          "en": "Tickets",
+          "fr": "Billets"
+        },
+        "entities": [
+          {
+            "kind": "command",
+            "name": "ticket"
+          },
+          {
+            "kind": "workflow",
+            "name": "ticket-close"
+          },
+          {
+            "kind": "translation",
+            "name": "mod.tickets.hello"
+          }
+        ],
+        "features": [
+          {
+            "key": "transcripts",
+            "name": {
+              "en": "Transcripts",
+              "fr": "Transcriptions"
+            },
+            "entities": [
+              "setting:transcript-channel"
+            ],
+            "requires": []
+          },
+          {
+            "key": "claims",
+            "name": {
+              "en": "Claims"
+            },
+            "entities": [
+              "command:claim"
+            ],
+            "requires": [
+              "transcripts",
+              "welcome:greeting"
+            ]
+          }
+        ],
+        "disabledFeatures": [
+          "transcripts"
+        ],
+        "settings": [
+          {
+            "key": "category",
+            "type": "channel",
+            "scope": "guild",
+            "default": null,
+            "i18n": {
+              "en": {
+                "label": "Category",
+                "description": "Where tickets open"
+              },
+              "fr": {
+                "label": "Catégorie",
+                "description": "Où ils s’ouvrent"
+              }
+            }
+          },
+          {
+            "key": "max-open",
+            "type": "number",
+            "scope": "guild",
+            "default": 3,
+            "min": 1,
+            "max": 10,
+            "i18n": {
+              "en": {
+                "label": "Open tickets",
+                "description": "Per person"
+              }
+            }
+          },
+          {
+            "key": "transcript-channel",
+            "type": "channel",
+            "scope": "guild",
+            "default": null,
+            "i18n": {
+              "en": {
+                "label": "Transcripts",
+                "description": "Where they go"
+              }
+            }
+          },
+          {
+            "key": "style",
+            "type": "choice",
+            "scope": "guild",
+            "default": "embed",
+            "choices": [
+              "embed",
+              "plain"
+            ],
+            "i18n": {
+              "en": {
+                "label": "Style",
+                "description": ""
+              }
+            }
+          },
+          {
+            "key": "ping-staff",
+            "type": "toggle",
+            "scope": "guild",
+            "default": true,
+            "i18n": {
+              "en": {
+                "label": "Ping staff",
+                "description": ""
+              }
+            }
+          },
+          {
+            "key": "secret",
+            "type": "text",
+            "scope": "global",
+            "default": "x",
+            "i18n": {
+              "en": {
+                "label": "Secret",
+                "description": ""
+              }
+            }
+          }
+        ]
+      },
+      "welcome": {
+        "version": "1.0.0",
+        "name": {
+          "en": "Welcome"
+        },
+        "entities": [
+          {
+            "kind": "command",
+            "name": "welcome"
+          }
+        ],
+        "features": [],
+        "disabledFeatures": [],
+        "settings": [],
+        "enabled": false
+      }
+    }
+  },
+  "commands": [
+    {
+      "name": "ticket",
+      "description": "Open a ticket",
+      "triggerType": "slash",
+      "data": {
+        "commandType": "chatInput",
+        "options": [
+          {
+            "type": "subCommand",
+            "name": "open",
+            "description": "Open one",
+            "options": [
+              {
+                "type": "string",
+                "name": "reason",
+                "required": true
+              },
+              {
+                "type": "string",
+                "name": "note"
+              }
+            ]
+          },
+          {
+            "type": "subCommandGroup",
+            "name": "staff",
+            "description": "Staff tools",
+            "options": [
+              {
+                "type": "subCommand",
+                "name": "claim",
+                "description": "Claim it",
+                "options": [
+                  {
+                    "type": "user",
+                    "name": "who",
+                    "required": true
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "localizations": {
+          "name": {
+            "fr": "billet"
+          },
+          "description": {
+            "fr": "Ouvrir un billet"
+          }
+        }
+      }
+    },
+    {
+      "name": "welcome",
+      "description": "Welcome tools",
+      "triggerType": "slash",
+      "data": {
+        "commandType": "chatInput",
+        "options": []
+      }
+    },
+    {
+      "name": "hello",
+      "description": "Say hello",
+      "triggerType": "slash",
+      "data": {
+        "commandType": "chatInput",
+        "options": [
+          {
+            "type": "user",
+            "name": "who",
+            "required": true
+          },
+          {
+            "type": "string",
+            "name": "style"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ping",
+      "description": "Text ping",
+      "triggerType": "text",
+      "data": {
+        "commandType": "chatInput",
+        "options": []
+      }
+    }
+  ],
+  "variables": {
+    "mod_tickets_category": "123456789012345678",
+    "mod_tickets_ping_staff": "false"
+  },
+  "cases": [
+    {
+      "fn": "moduleList",
+      "args": [],
+      "expect": {
+        "ok": "tickets,welcome"
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        " | ",
+        "all",
+        "name"
+      ],
+      "locale": "fr",
+      "expect": {
+        "ok": "Billets | Welcome"
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        ",",
+        "all",
+        "name"
+      ],
+      "locale": "pt-BR",
+      "expect": {
+        "ok": "Billets,Welcome"
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        ",",
+        "enabled",
+        "id"
+      ],
+      "expect": {
+        "ok": "tickets"
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        ",",
+        "configurable",
+        "id"
+      ],
+      "expect": {
+        "ok": "tickets"
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        ",",
+        "bogus",
+        "id"
+      ],
+      "expect": {
+        "error": "Unknown filter \"bogus\". Use all, enabled, configurable."
+      }
+    },
+    {
+      "fn": "moduleList",
+      "args": [
+        ",",
+        "all",
+        "bogus"
+      ],
+      "expect": {
+        "error": "Unknown format \"bogus\". Use id, name."
+      }
+    },
+    {
+      "fn": "moduleCount",
+      "args": [],
+      "expect": {
+        "ok": "2"
+      }
+    },
+    {
+      "fn": "moduleCount",
+      "args": [
+        "enabled"
+      ],
+      "expect": {
+        "ok": "1"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "name"
+      ],
+      "expect": {
+        "ok": "Billets"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "name"
+      ],
+      "locale": "en-US",
+      "expect": {
+        "ok": "Tickets"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "version"
+      ],
+      "expect": {
+        "ok": "1.2.0"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "commands"
+      ],
+      "expect": {
+        "ok": "ticket"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "features",
+        " "
+      ],
+      "expect": {
+        "ok": "transcripts claims"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "settings",
+        " "
+      ],
+      "expect": {
+        "ok": "category max-open style ping-staff"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "enabled"
+      ],
+      "expect": {
+        "ok": "true"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "welcome",
+        "enabled"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "ghost",
+        "installed"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "installed"
+      ],
+      "expect": {
+        "ok": "true"
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "ghost",
+        "name"
+      ],
+      "expect": {
+        "error": "Module \"ghost\" is not installed."
+      }
+    },
+    {
+      "fn": "moduleInfo",
+      "args": [
+        "tickets",
+        "nope"
+      ],
+      "expect": {
+        "error": "Unknown field \"nope\". Use installed, name, version, enabled, commands, features, settings."
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "transcripts"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "claims"
+      ],
+      "expect": {
+        "ok": "true"
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "transcripts",
+        "name"
+      ],
+      "locale": "fr",
+      "expect": {
+        "ok": "Transcriptions"
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "transcripts",
+        "name"
+      ],
+      "locale": "de",
+      "expect": {
+        "ok": "Transcriptions"
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "claims",
+        "requires",
+        " "
+      ],
+      "expect": {
+        "ok": "transcripts welcome:greeting"
+      }
+    },
+    {
+      "fn": "moduleFeature",
+      "args": [
+        "tickets",
+        "ghost"
+      ],
+      "expect": {
+        "error": "Module \"tickets\" has no feature \"ghost\"."
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "category"
+      ],
+      "expect": {
+        "ok": "123456789012345678"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "category",
+        "set"
+      ],
+      "expect": {
+        "ok": "true"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "max-open"
+      ],
+      "expect": {
+        "ok": "3"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "max-open",
+        "set"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "ping-staff"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "style",
+        "choices"
+      ],
+      "expect": {
+        "ok": "embed,plain"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "style",
+        "default"
+      ],
+      "expect": {
+        "ok": "embed"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "max-open",
+        "min"
+      ],
+      "expect": {
+        "ok": "1"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "max-open",
+        "max"
+      ],
+      "expect": {
+        "ok": "10"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "max-open",
+        "type"
+      ],
+      "expect": {
+        "ok": "number"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "category",
+        "label"
+      ],
+      "locale": "fr",
+      "expect": {
+        "ok": "Catégorie"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "category",
+        "label"
+      ],
+      "locale": "en",
+      "expect": {
+        "ok": "Category"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "category",
+        "description"
+      ],
+      "expect": {
+        "ok": "Où ils s’ouvrent"
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "transcript-channel"
+      ],
+      "expect": {
+        "error": "Module \"tickets\" has no setting \"transcript-channel\"."
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "tickets",
+        "secret"
+      ],
+      "expect": {
+        "error": "Module \"tickets\" has no setting \"secret\"."
+      }
+    },
+    {
+      "fn": "moduleSetting",
+      "args": [
+        "ghost",
+        "x"
+      ],
+      "expect": {
+        "error": "Module \"ghost\" is not installed."
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [],
+      "expect": {
+        "ok": "hello,ticket,welcome"
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [
+        " ",
+        "all"
+      ],
+      "expect": {
+        "ok": "hello ping ticket welcome"
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [
+        ",",
+        "custom"
+      ],
+      "expect": {
+        "ok": "hello"
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [
+        ",",
+        "module:tickets"
+      ],
+      "expect": {
+        "ok": "ticket"
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [
+        ",",
+        "module:ghost"
+      ],
+      "expect": {
+        "ok": ""
+      }
+    },
+    {
+      "fn": "commandList",
+      "args": [
+        ",",
+        "bogus"
+      ],
+      "expect": {
+        "error": "Unknown filter \"bogus\". Use slash, all, custom or module:<id>."
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket"
+      ],
+      "expect": {
+        "ok": "Open a ticket"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "description"
+      ],
+      "locale": "fr-FR",
+      "expect": {
+        "ok": "Ouvrir un billet"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "TICKET",
+        "name"
+      ],
+      "locale": "fr",
+      "expect": {
+        "ok": "billet"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "name"
+      ],
+      "locale": "en",
+      "expect": {
+        "ok": "ticket"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "module"
+      ],
+      "expect": {
+        "ok": "tickets"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "hello",
+        "module"
+      ],
+      "expect": {
+        "ok": ""
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "subcommands",
+        ","
+      ],
+      "expect": {
+        "ok": "open,staff claim"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "hello",
+        "options",
+        ","
+      ],
+      "expect": {
+        "ok": "who,style"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "usage",
+        " | "
+      ],
+      "expect": {
+        "ok": "/ticket open <reason> [note] | /ticket staff claim <who>"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "hello",
+        "usage"
+      ],
+      "expect": {
+        "ok": "/hello <who> [style]"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ping",
+        "type"
+      ],
+      "expect": {
+        "ok": "text"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "type"
+      ],
+      "expect": {
+        "ok": "slash"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ghost",
+        "exists"
+      ],
+      "expect": {
+        "ok": "false"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ticket",
+        "exists"
+      ],
+      "expect": {
+        "ok": "true"
+      }
+    },
+    {
+      "fn": "commandInfo",
+      "args": [
+        "ghost",
+        "description"
+      ],
+      "expect": {
+        "error": "Command \"ghost\" not found."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        "7"
+      ],
+      "expect": {
+        "ok": "mod_tickets_max_open=7"
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        "7,5"
+      ],
+      "expect": {
+        "ok": "mod_tickets_max_open=7.5"
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        "99"
+      ],
+      "expect": {
+        "error": "\"max-open\" must be at most 10."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        "0"
+      ],
+      "expect": {
+        "error": "\"max-open\" must be at least 1."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        "abc"
+      ],
+      "expect": {
+        "error": "\"max-open\" must be a number."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "max-open",
+        ""
+      ],
+      "expect": {
+        "ok": "mod_tickets_max_open="
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "style",
+        "plain"
+      ],
+      "expect": {
+        "ok": "mod_tickets_style=plain"
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "style",
+        "fancy"
+      ],
+      "expect": {
+        "error": "\"style\" must be one of: embed, plain."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "ping-staff",
+        "On"
+      ],
+      "expect": {
+        "ok": "mod_tickets_ping_staff=true"
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "ping-staff",
+        "maybe"
+      ],
+      "expect": {
+        "error": "\"ping-staff\" must be true or false."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "category",
+        "<#123456789012345678>"
+      ],
+      "expect": {
+        "ok": "mod_tickets_category=123456789012345678"
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "category",
+        "12"
+      ],
+      "expect": {
+        "error": "\"category\" must be a Discord ID."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "transcript-channel",
+        "123456789012345678"
+      ],
+      "expect": {
+        "error": "Module \"tickets\" has no setting \"transcript-channel\"."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "tickets",
+        "secret",
+        "x"
+      ],
+      "expect": {
+        "error": "Module \"tickets\" has no setting \"secret\"."
+      }
+    },
+    {
+      "fn": "validateWrite",
+      "args": [
+        "ghost",
+        "x",
+        "y"
+      ],
+      "expect": {
+        "error": "Module \"ghost\" is not installed."
+      }
+    }
+  ]
+}

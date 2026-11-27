@@ -1,4 +1,5 @@
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import type {
   CommandEventName,
   CommandEventPayload,
@@ -48,6 +49,9 @@ export interface BotRunnerHandle {
   deleteCommand?(commandId: string): Promise<void>;
   /** Une commande a été créée, modifiée ou supprimée : lance les handlers `commandCreated`/`Updated`/`Deleted`. */
   triggerCommandEvent?(eventName: CommandEventName, payload: CommandEventPayload): Promise<number>;
+  /** Événement de droit relayé par les Webhook Events de Discord (sans effet si le Gateway l'a déjà livré). */
+  triggerEntitlementEvent?(eventName: string, row: EntitlementLike): Promise<number>;
+  triggerAutomationAlert?(values: Record<string, string>): Promise<number>;
   triggerWebhook(
     pathKey: string,
     payload: unknown,
@@ -60,6 +64,11 @@ export interface BotRunnerHandle {
   getScheduledSnapshot?(): ScheduledSnapshot;
   /** Exécute une tâche planifiée tout de suite sans toucher à son minuteur. */
   runScheduledNow?(taskId: string): Promise<RunNowResult>;
+  /** Sauvegarde d'un serveur à la demande du Manager ; null si le client Discord n'est pas prêt. */
+  backupAction?(
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null;
   /** État des sources WebSocket du bot (compteurs, jamais de message ni de secret). */
   getWebSocketSnapshot?(): Array<Record<string, unknown>>;
   /** Une variable a été écrite par l'API du runner (hors scripts) : le runner vide ses lectures mises en cache. */
@@ -198,6 +207,16 @@ export class BotSupervisor {
   /** « Exécuter maintenant » : null si le bot ne tourne pas ou ne gère pas de tâches planifiées. */
   runScheduledNow(botId: string, taskId: string): Promise<RunNowResult> | null {
     return this.bots.get(botId)?.runner.runScheduledNow?.(taskId) ?? null;
+  }
+
+  /** Sauvegarde d'un serveur : undefined si le bot ne tourne pas, null si le client n'est pas prêt. */
+  backupAction(
+    botId: string,
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null | undefined {
+    const runner = this.bots.get(botId)?.runner;
+    return runner ? (runner.backupAction?.(action, options) ?? null) : undefined;
   }
 
   /** Tâches planifiées d'un bot qui tourne (null sinon). */
@@ -480,6 +499,22 @@ export class BotSupervisor {
       return;
     }
     await this.bots.get(botId)?.runner.triggerCommandEvent?.(eventName, payload);
+  }
+
+  /** Rend le nombre de handlers lancés ; le bot doit tourner (sinon le Manager garde l'événement). */
+  async triggerEntitlementEvent(botId: string, eventName: string, row: EntitlementLike): Promise<number> {
+    if (!this.isRunning(botId)) {
+      throw new Error(`Bot "${botId}" is not running.`);
+    }
+    return (await this.bots.get(botId)?.runner.triggerEntitlementEvent?.(eventName, row)) ?? 0;
+  }
+
+  /** Alerte d'automatisation par serveur : rend le nombre de handlers lancés ; le bot doit tourner. */
+  async triggerAutomationAlert(botId: string, values: Record<string, string>): Promise<number> {
+    if (!this.isRunning(botId)) {
+      throw new Error(`Bot "${botId}" is not running.`);
+    }
+    return (await this.bots.get(botId)?.runner.triggerAutomationAlert?.(values)) ?? 0;
   }
 
   async triggerInboundWebhook(

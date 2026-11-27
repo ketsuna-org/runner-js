@@ -1,9 +1,14 @@
 import { createHash } from 'node:crypto';
+import { lookup } from 'node:dns/promises';
 import { createRequire } from 'node:module';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { AttachmentBuilder } from 'discord.js';
 
 import { countChannelMessages } from '../runtime/channel-activity.js';
+import { GEIST_FONTS_BASE64 } from './fonts/geist-fonts.js';
 
 /**
  * Parité JS des fonctions du moteur BDFD (`$floorDiv`, `$mod`, `$hash`, `$seededRandom`,
@@ -111,7 +116,7 @@ export function createBcMath(): BcMath {
 // Variables atomiques et verrous nommés
 // ---------------------------------------------------------------------------
 
-type DbScope = 'user' | 'guild' | 'channel' | 'message' | 'guildMember' | 'global';
+type DbScope = 'user' | 'guild' | 'channel' | 'role' | 'message' | 'guildMember' | 'global';
 
 interface ScopedDb {
   get(key: string, id?: string): Promise<unknown>;
@@ -182,6 +187,12 @@ export interface BcCanvas {
   drawTiles(ctx: unknown, tiles: TileRect[]): void;
   /** Pièce jointe PNG (`$attachImage`) d'un canvas ou d'un Buffer : à mettre dans `files: [...]`. */
   attach(source: unknown, name?: string): AttachmentBuilder;
+  /** Police Geist (accents, grec, cyrillique) : `geist`, `geist-medium` ou `geist-bold`. Renvoie la valeur à mettre dans `ctx.font`, par exemple `bc.canvas.font('geist-bold', 32)`. Une autre valeur donne la police `sans-serif`. */
+  font(name: string, size: number): string;
+  /** Remplit un rectangle d'un dégradé linéaire de 2 à 4 couleurs (`$canvasDrawGradient`) : angle 0 = gauche vers droite, 90 = haut vers bas. */
+  /** Charge une image (https, jamais un réseau privé, 8 Mo au plus) pour `ctx.drawImage`. Renvoie une image node-canvas. */
+  loadImage(url: string): Promise<unknown>;
+  gradient(ctx: unknown, options: { x?: number; y?: number; width: number; height: number; colors: string[]; angle?: number }): void;
 }
 
 export interface BcActivity {
@@ -360,6 +371,82 @@ export function createBcGrid(): BcGrid {
 }
 
 const MAX_CANVAS_SIDE = 4096;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+/** Adresse privée, locale ou réservée (IPv4 et IPv6). */
+export function isPrivateAddress(address: string): boolean {
+  const a = address.toLowerCase();
+  if (a.includes(':')) {
+    if (a === '::1' || a === '::' || a.startsWith('fe80') || a.startsWith('fc') || a.startsWith('fd')) return true;
+    const mapped = a.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    return mapped ? isPrivateAddress(mapped[1]) : false;
+  }
+  const p = a.split('.').map(Number);
+  if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return true;
+  const [x, y] = p;
+  return x === 0 || x === 10 || x === 127 || (x === 169 && y === 254) || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 100 && y >= 64 && y <= 127) || x >= 224;
+}
+
+async function fetchPublicImage(raw: string): Promise<Buffer> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new Error('The image address is not valid.');
+  }
+  if (url.protocol !== 'https:') throw new Error('The image address must start with https://.');
+  const addresses = await lookup(url.hostname, { all: true });
+  if (addresses.length === 0 || addresses.some((x) => isPrivateAddress(x.address))) throw new Error('This image address is not allowed.');
+  const res = await fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(8000) });
+  if (!res.ok) throw new Error(`The image could not be downloaded (${res.status}).`);
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > MAX_IMAGE_BYTES) throw new Error('The image is larger than 8 MB.');
+  return buf;
+}
+
+let geistRegistered = false;
+function registerGeist(canvasLib: { registerFont?: (path: string, o: { family: string; weight?: string }) => void }): void {
+  if (geistRegistered || typeof canvasLib.registerFont !== 'function') return;
+  geistRegistered = true;
+  try {
+    const dir = mkdtempSync(join(tmpdir(), 'bc-geist-'));
+    for (const [key, family, weight] of [
+      ['medium', 'Geist Medium', 'normal'],
+      ['bold', 'Geist Bold', 'bold'],
+    ] as const) {
+      const file = join(dir, `${key}.ttf`);
+      writeFileSync(file, Buffer.from(GEIST_FONTS_BASE64[key], 'base64'));
+      canvasLib.registerFont(file, { family, weight });
+    }
+  } catch {
+    geistRegistered = false;
+  }
+}
+
+/** Valeur de `ctx.font` pour un nom de police Geist ; `sans-serif` sinon. */
+export function geistCssFont(name: string, size: number): string {
+  const px = Math.max(1, Math.min(512, Math.round(Number(size) || 16)));
+  switch (String(name).trim().toLowerCase()) {
+    case 'geist-bold':
+      return `bold ${px}px "Geist Bold"`;
+    case 'geist':
+    case 'geist-medium':
+      return `${px}px "Geist Medium"`;
+    default:
+      return `${px}px sans-serif`;
+  }
+}
+
+/** Points d'un dégradé linéaire sur un rectangle : t va de 0 à 1 d'un coin à l'autre selon l'angle. */
+export function gradientLine(x: number, y: number, w: number, h: number, angleDeg: number) {
+  const a = (angleDeg * Math.PI) / 180;
+  const dx = Math.cos(a);
+  const dy = Math.sin(a);
+  const half = (Math.abs(dx) * w + Math.abs(dy) * h) / 2;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  return { x0: cx - dx * half, y0: cy - dy * half, x1: cx + dx * half, y1: cy + dy * half };
+}
 
 export function createBcCanvas(): BcCanvas {
   const load = (): { createCanvas(w: number, h: number): any } => {
@@ -370,11 +457,41 @@ export function createBcCanvas(): BcCanvas {
     }
   };
   return {
+    font(name, size) {
+      try {
+        registerGeist(load() as never);
+      } catch {
+        /* la bibliothèque manque : create() le signalera */
+      }
+      return geistCssFont(name, size);
+    },
+    async loadImage(url) {
+      const lib = load() as unknown as { loadImage(b: Buffer): Promise<unknown> };
+      return lib.loadImage(await fetchPublicImage(String(url).trim()));
+    },
+    gradient(ctx, o) {
+      const colors = (o.colors ?? []).map((c) => String(c).trim()).filter(Boolean);
+      if (colors.length < 2 || colors.length > 4) throw new Error('A gradient takes 2 to 4 colors.');
+      const c = ctx as {
+        createLinearGradient(a: number, b: number, c: number, d: number): { addColorStop(o: number, c: string): void };
+        fillStyle: unknown;
+        fillRect(x: number, y: number, w: number, h: number): void;
+      };
+      const x = o.x ?? 0;
+      const y = o.y ?? 0;
+      const l = gradientLine(x, y, o.width, o.height, o.angle ?? 0);
+      const g = c.createLinearGradient(l.x0, l.y0, l.x1, l.y1);
+      colors.forEach((col, i) => g.addColorStop(i / (colors.length - 1), col));
+      c.fillStyle = g;
+      c.fillRect(x, y, o.width, o.height);
+    },
     create(width, height, background) {
       if (!Number.isInteger(width) || !Number.isInteger(height) || width < 1 || height < 1 || width > MAX_CANVAS_SIDE || height > MAX_CANVAS_SIDE) {
         throw new Error(`The canvas size must be integers between 1 and ${MAX_CANVAS_SIDE}.`);
       }
-      const canvas = load().createCanvas(width, height);
+      const lib = load();
+      registerGeist(lib as never);
+      const canvas = lib.createCanvas(width, height);
       if (background) {
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = background;
@@ -526,6 +643,227 @@ export function createBcForum(getClient: () => unknown): BcForum {
       const applied = resolveTags(thread.parent.availableTags ?? [], tags);
       if (audit) await thread.setAppliedTags(applied, audit);
       else await thread.setAppliedTags(applied);
+    },
+  };
+}
+
+// ── bc.entitlements : droits Discord (monétisation), parité avec `$hasEntitlement` et ses sœurs ──
+
+export interface BcEntitlement {
+  id: string;
+  skuId: string;
+  userId: string | null;
+  guildId: string | null;
+  type: number;
+  /** ISO 8601 ou null. */
+  startsAt: string | null;
+  endsAt: string | null;
+  deleted: boolean;
+  consumed: boolean;
+  /** Actif maintenant : non supprimé, commencé et non terminé. */
+  active: boolean;
+}
+
+export interface BcSku {
+  id: string;
+  name: string;
+  slug: string;
+  type: number;
+}
+
+export interface BcEntitlementTarget {
+  /** Utilisateur ; sans `userId` ni `guildId`, l'auteur du déclencheur. */
+  userId?: string;
+  /** Serveur (abonnement du serveur). */
+  guildId?: string;
+}
+
+export interface BcEntitlements {
+  /** `$hasEntitlement` : le droit de ce SKU est actif pour l'utilisateur et/ou le serveur. */
+  has(skuId: string, target?: BcEntitlementTarget): Promise<boolean>;
+  /** Droits actifs (`includeEnded: true` garde aussi les droits terminés ou supprimés). */
+  list(target?: BcEntitlementTarget & { skuId?: string; includeEnded?: boolean }): Promise<BcEntitlement[]>;
+  /** `$entitlementCount` : nombre de droits actifs. */
+  count(target?: BcEntitlementTarget): Promise<number>;
+  /** `$entitlementSKUs` : SKU distincts des droits actifs. */
+  skuIds(target?: BcEntitlementTarget): Promise<string[]>;
+  /** `$entitlementEndsAt` : fin en secondes Unix, `'never'` sans date de fin, `null` sans droit actif. */
+  endsAt(skuId: string, target?: BcEntitlementTarget): Promise<number | 'never' | null>;
+  /** `$entitlementStartsAt` : début le plus ancien en secondes Unix ; `null` sans droit actif ou sans date de début. */
+  startsAt(skuId: string, target?: BcEntitlementTarget): Promise<number | null>;
+  /** `$entitlementType` : type Discord du droit actif (8 abonnement de l'application, 4 achat de test…) ; `null` sans droit actif. */
+  type(skuId: string, target?: BcEntitlementTarget): Promise<number | null>;
+  /** `$skuIDs` / `$skuName` : produits de l'application. */
+  skus(): Promise<BcSku[]>;
+  skuName(skuId: string): Promise<string>;
+}
+
+export interface EntitlementLike {
+  id: string;
+  skuId: string;
+  userId?: string | null;
+  guildId?: string | null;
+  type?: number;
+  startsTimestamp?: number | null;
+  endsTimestamp?: number | null;
+  deleted?: boolean;
+  consumed?: boolean;
+}
+
+interface EntitlementClientLike {
+  application?: {
+    entitlements: {
+      fetch(options: Record<string, unknown>): Promise<Iterable<[string, EntitlementLike]> | Map<string, EntitlementLike>>;
+    };
+    fetchSKUs(): Promise<Iterable<[string, { id: string; name: string; slug: string; type: number }]>>;
+  } | null;
+}
+
+function snowflakeOf(raw: unknown, label: string): string {
+  const value = String(raw ?? '').trim();
+  if (!/^[0-9]+$/.test(value) || BigInt(value) <= 0n) throw new Error(`Invalid ${label} ID.`);
+  return value;
+}
+
+/** Droit tel que Discord l'envoie en REST/webhook (snake_case, dates ISO) vers la forme de discord.js. */
+export function entitlementFromDiscordRest(raw: Record<string, unknown>, forceDeleted = false): EntitlementLike {
+  const ts = (v: unknown): number | null => {
+    if (typeof v !== 'string' || v === '') return null;
+    const t = Date.parse(v);
+    return Number.isNaN(t) ? null : t;
+  };
+  const str = (v: unknown): string | null => (typeof v === 'string' && v !== '' ? v : null);
+  return {
+    id: String(raw.id ?? ''),
+    skuId: String(raw.sku_id ?? ''),
+    userId: str(raw.user_id),
+    guildId: str(raw.guild_id),
+    type: typeof raw.type === 'number' ? raw.type : undefined,
+    startsTimestamp: ts(raw.starts_at),
+    endsTimestamp: ts(raw.ends_at),
+    deleted: forceDeleted || raw.deleted === true,
+    consumed: raw.consumed === true,
+  };
+}
+
+export function toBcEntitlement(row: EntitlementLike, now: number = Date.now()): BcEntitlement {
+  const starts = row.startsTimestamp ?? null;
+  const ends = row.endsTimestamp ?? null;
+  const deleted = row.deleted === true;
+  return {
+    id: String(row.id),
+    skuId: String(row.skuId),
+    userId: row.userId ? String(row.userId) : null,
+    guildId: row.guildId ? String(row.guildId) : null,
+    type: row.type ?? 8,
+    startsAt: starts === null ? null : new Date(starts).toISOString(),
+    endsAt: ends === null ? null : new Date(ends).toISOString(),
+    deleted,
+    consumed: row.consumed === true,
+    active: !deleted && (starts === null || starts <= now) && (ends === null || ends > now),
+  };
+}
+
+export function createBcEntitlements(getClient: () => unknown, defaultUserId: () => string | undefined): BcEntitlements {
+  const application = () => {
+    const app = (getClient() as EntitlementClientLike).application;
+    if (!app) throw new Error('The application is not ready.');
+    return app;
+  };
+
+  /** Utilisateur et/ou serveur visés ; sans aucun des deux, l'auteur du déclencheur. */
+  function targets(target: BcEntitlementTarget = {}): { userId?: string; guildId?: string } {
+    const userId = target.userId?.toString().trim() ? snowflakeOf(target.userId, 'user') : undefined;
+    const guildId = target.guildId?.toString().trim() ? snowflakeOf(target.guildId, 'server') : undefined;
+    if (userId || guildId) return { userId, guildId };
+    const author = defaultUserId();
+    if (!author) throw new Error('Entitlement lookup needs a user.');
+    return { userId: snowflakeOf(author, 'user') };
+  }
+
+  async function fetchAll(userId: string | undefined, guildId: string | undefined, skuId: string | undefined, includeEnded: boolean) {
+    const out = new Map<string, BcEntitlement>();
+    let after: string | undefined;
+    for (let page = 0; page < 10; page += 1) {
+      const batch = await application().entitlements.fetch({
+        ...(userId ? { user: userId } : {}),
+        ...(guildId ? { guild: guildId } : {}),
+        ...(skuId ? { skus: [skuId] } : {}),
+        ...(after ? { after } : {}),
+        limit: 100,
+        excludeEnded: !includeEnded,
+        excludeDeleted: !includeEnded,
+        cache: false,
+      });
+      const rows = [...(batch as Map<string, EntitlementLike>).values()];
+      let highest = after;
+      for (const row of rows) {
+        out.set(String(row.id), toBcEntitlement(row));
+        if (highest === undefined || BigInt(row.id) > BigInt(highest)) highest = String(row.id);
+      }
+      if (rows.length < 100 || highest === undefined || highest === after) break;
+      after = highest;
+    }
+    return [...out.values()];
+  }
+
+  /** Droits actifs de l'utilisateur et du serveur visés, fusionnés (un droit de serveur compte aussi). */
+  async function active(target: BcEntitlementTarget | undefined, skuId?: string): Promise<BcEntitlement[]> {
+    const { userId, guildId } = targets(target);
+    const merged = new Map<string, BcEntitlement>();
+    if (userId) for (const e of await fetchAll(userId, undefined, skuId, false)) merged.set(e.id, e);
+    if (guildId) for (const e of await fetchAll(undefined, guildId, skuId, false)) merged.set(e.id, e);
+    return [...merged.values()].filter((e) => e.active && (!skuId || e.skuId === skuId));
+  }
+
+  return {
+    async has(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      return (await active(target, sku)).length > 0;
+    },
+    async list(options = {}) {
+      const { userId, guildId } = targets(options);
+      const sku = options.skuId ? snowflakeOf(options.skuId, 'SKU') : undefined;
+      const merged = new Map<string, BcEntitlement>();
+      if (userId) for (const e of await fetchAll(userId, undefined, sku, options.includeEnded === true)) merged.set(e.id, e);
+      if (guildId) for (const e of await fetchAll(undefined, guildId, sku, options.includeEnded === true)) merged.set(e.id, e);
+      return [...merged.values()].filter((e) => options.includeEnded === true || e.active);
+    },
+    async count(target) {
+      return (await active(target)).length;
+    },
+    async skuIds(target) {
+      return [...new Set((await active(target)).map((e) => e.skuId))];
+    },
+    async endsAt(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const rights = await active(target, sku);
+      if (rights.length === 0) return null;
+      if (rights.some((e) => e.endsAt === null)) return 'never';
+      return Math.floor(Math.max(...rights.map((e) => Date.parse(e.endsAt as string))) / 1000);
+    },
+    async startsAt(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const starts = (await active(target, sku)).flatMap((e) => (e.startsAt === null ? [] : [Date.parse(e.startsAt)]));
+      return starts.length === 0 ? null : Math.floor(Math.min(...starts) / 1000);
+    },
+    async type(skuId, target) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      const rights = await active(target, sku);
+      return rights.length === 0 ? null : rights[0].type;
+    },
+    async skus() {
+      const list = await application().fetchSKUs();
+      return [...(list as Map<string, { id: string; name: string; slug: string; type: number }>).values()].map((s) => ({
+        id: String(s.id),
+        name: s.name,
+        slug: s.slug,
+        type: s.type,
+      }));
+    },
+    async skuName(skuId) {
+      const sku = snowflakeOf(skuId, 'SKU');
+      return (await this.skus()).find((s) => s.id === sku)?.name ?? '';
     },
   };
 }

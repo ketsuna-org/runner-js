@@ -9,6 +9,7 @@ import {
   renderPrompt,
   validateLocaleTexts,
 } from '../src/runtime/voice/consent.js';
+import { VoiceQuotaError, type VoiceQuotaGateway } from '../src/runtime/voice/voice-quota.js';
 import { VoiceRecorderManager, voiceRecorderDisabled, type RecorderDeps } from '../src/runtime/voice/voice-recorder.js';
 
 const GUILD_VOICE_STATES = 128;
@@ -28,7 +29,9 @@ async function consent(store: ConsentStore, userId: string, external = false) {
   await store.set('g1', userId, { at: Date.now(), version: CONSENT_TEXT_VERSION, locale: '', hash: 'h', external });
 }
 
-function fixture(options: { intents?: number; meChannelId?: string | null; announceFails?: boolean; members?: string[] } = {}) {
+function fixture(
+  options: { intents?: number; meChannelId?: string | null; announceFails?: boolean; members?: string[]; quota?: VoiceQuotaGateway } = {},
+) {
   const sent: Array<string | { content: string }> = [];
   const subscribed: string[] = [];
   const speaking = new EventEmitter();
@@ -66,7 +69,12 @@ function fixture(options: { intents?: number; meChannelId?: string | null; annou
     guilds: { cache: new Map([['g1', guild]]) },
   });
   const store = new ConsentStore(memoryDb(), 'bot1');
-  const deps = { join: (() => connection) as unknown as RecorderDeps['join'], waitReady: async () => undefined };
+  const deps: RecorderDeps = {
+    join: (() => connection) as unknown as RecorderDeps['join'],
+    waitReady: async () => undefined,
+    quota: () => options.quota ?? null,
+    botId: 'bot1',
+  };
   const manager = new VoiceRecorderManager(client as never, () => undefined, store, deps, false);
   return { manager, guild: guild as never, client, store, sent, subscribed, speaking };
 }
@@ -187,10 +195,11 @@ describe('VoiceRecorderManager', () => {
     await expect(off.start(f.guild, base)).rejects.toThrow('disabled');
   });
 
-  it('est coupée par défaut, activée seulement par VOICE_RECORDER_ENABLED=1, coupe-circuit prioritaire', () => {
-    expect(voiceRecorderDisabled({})).toBe(true);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '0' })).toBe(true);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1' })).toBe(false);
-    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1', VOICE_RECORDER_DISABLED: '1' })).toBe(true);
+  it('est active d office sous un Manager, sur demande seulement sans Manager, coupe-circuit prioritaire', () => {
+    expect(voiceRecorderDisabled({}, false)).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '0' }, false)).toBe(true);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1' }, false)).toBe(false);
+    expect(voiceRecorderDisabled({}, true)).toBe(false);
+    expect(voiceRecorderDisabled({ VOICE_RECORDER_ENABLED: '1', VOICE_RECORDER_DISABLED: '1' }, true)).toBe(true);
   });
 });

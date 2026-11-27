@@ -10,7 +10,13 @@ import {
 import { normalizeScopedStorageKey, toScopedReferenceKey } from '../runtime/variable-keys.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
 
-export type DbScopeNamespace = 'user' | 'guild' | 'channel' | 'message' | 'guildMember';
+export type DbScopeNamespace =
+  | 'user'
+  | 'guild'
+  | 'channel'
+  | 'role'
+  | 'message'
+  | 'guildMember';
 
 export interface DbListEntry {
   id: string;
@@ -98,6 +104,8 @@ export class ScriptDb {
   readonly user: ScriptDbScopedApi;
   readonly guild: ScriptDbScopedApi;
   readonly channel: ScriptDbScopedApi;
+  /** Variables stored per role (the role ID is always passed). */
+  readonly role: ScriptDbScopedApi;
   readonly message: ScriptDbScopedApi;
   readonly guildMember: ScriptDbGuildMemberApi;
 
@@ -129,6 +137,7 @@ export class ScriptDb {
     this.user = this.createScopedApi('user');
     this.guild = this.createScopedApi('guild');
     this.channel = this.createScopedApi('channel');
+    this.role = this.createScopedApi('role');
     this.message = this.createScopedApi('message');
     this.guildMember = this.createGuildMemberApi();
   }
@@ -307,6 +316,8 @@ export class ScriptDb {
         return { guildId: trimmed };
       case 'channel':
         return { channelId: trimmed };
+      case 'role':
+        return { roleId: trimmed };
       case 'message':
         return { messageId: trimmed };
       default:
@@ -583,6 +594,8 @@ export class ScriptDb {
         return namespace === 'guild' ? contextId : null;
       case 'channel':
         return namespace === 'channel' ? contextId : null;
+      case 'role':
+        return namespace === 'role' ? contextId : null;
       case 'message':
         return namespace === 'message' ? contextId : null;
       default:
@@ -692,6 +705,7 @@ export class ScriptDb {
         target.userId ||
         target.guildId ||
         target.channelId ||
+        target.roleId ||
         target.messageId)
     ) {
       return false;

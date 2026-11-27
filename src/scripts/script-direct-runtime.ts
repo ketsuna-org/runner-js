@@ -3,7 +3,9 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { runnerPackageRoot } from '../config/env.js';
+import { loadRunnerEnv } from '../config/env.js';
 import { createCappedFetch } from '../runtime/memory-hygiene.js';
+import { createSsrfGuardedFetch } from '../runtime/ssrf-guard.js';
 import { sanitizeConfigForScript } from './script-config-sanitize.js';
 import type { ScriptExecutionContext, ScriptLogger } from './script-context.js';
 import { createBcGlobal } from './script-ai.js';
@@ -23,7 +25,18 @@ function createConsoleProxy(logger: ScriptLogger): Console {
   } as Console;
 }
 
-const cappedFetch = createCappedFetch(globalThis.fetch.bind(globalThis));
+let cappedFetchInstance: typeof fetch | undefined;
+let guardedFetchInstance: typeof fetch | undefined;
+
+/** Fetch of the scripts: bounded bodies; in pool mode (many bots per process) also limited to public addresses. */
+function scriptFetch(): typeof fetch {
+  if (loadRunnerEnv().poolMode) {
+    guardedFetchInstance ??= createCappedFetch(createSsrfGuardedFetch(globalThis.fetch.bind(globalThis)));
+    return guardedFetchInstance;
+  }
+  cappedFetchInstance ??= createCappedFetch(globalThis.fetch.bind(globalThis));
+  return cappedFetchInstance;
+}
 
 const tokenSafeClientProxies = new WeakMap<object, unknown>();
 
@@ -81,6 +94,7 @@ export const SCOPE_PARAM_NAMES = [
   'guild',
   'channel',
   'webhook',
+  'automation',
   'db',
   'sql',
   'pgsql',
@@ -134,6 +148,8 @@ export class ScriptDirectRuntime implements ScriptRuntime {
 
     const compiled = getOrCompileScript(trimmed, logger);
     // Même tableau pour le script et pour les fonctions du bot qu'il appelle (même portée ambiante).
+    // Annulé à l'expiration : stoppe les tours de `bc.ai.agent` (et leur débit de crédits) qui tournent encore.
+    const abort = new AbortController();
     const scopeValues: unknown[] = [
       createTokenSafeClientProxy(context.client),
       sanitizeConfigForScript(context.config),
@@ -144,6 +160,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       context.guild,
       context.channel,
       context.webhook ?? null,
+      context.automation ?? null,
       context.db,
       context.sql,
       context.pgsql,
@@ -152,12 +169,12 @@ export class ScriptDirectRuntime implements ScriptRuntime {
       createConsoleProxy(logger),
       // Bounded: the node hosts EVERY bot of the process, so an unbounded
       // script-side download is not a mistake local to the bot that made it.
-      cappedFetch,
+      scriptFetch(),
       moduleRequire,
       setTimeout,
       clearTimeout,
       // `bc.ai` : fonctions IA du langage (crédits du propriétaire du bot, via le Manager).
-      createBcGlobal(context, () => functionsRef?.fn as never),
+      createBcGlobal(context, () => functionsRef?.fn as never, undefined, (message) => logger.warn(message), abort.signal),
     ];
     let functionsRef: ReturnType<typeof createScriptFunctions> | undefined;
     const functions = createScriptFunctions({
@@ -181,6 +198,7 @@ export class ScriptDirectRuntime implements ScriptRuntime {
           timeoutTimer = setTimeout(() => {
             // Le script continue en arrière-plan (la course ne l'annule pas) : ses `fn.x()` tardifs sont refusés.
             functions.expire();
+            abort.abort();
             lifecycle?.onTimeout?.();
             reject(new Error(`Script execution timed out after ${timeoutMs}ms`));
           }, timeoutMs);

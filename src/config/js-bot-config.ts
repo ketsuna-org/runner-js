@@ -55,6 +55,11 @@ export const commandHandlerSchema = handlerBaseSchema.extend({
    */
   noPrefix: tolerant('commands.noPrefix', z.boolean()),
   options: z.array(z.record(z.unknown())).default([]),
+  /**
+   * Traductions de la commande (noms, descriptions, options, choix) pour le client Discord : voir
+   * `translations/command-localizations.ts`. Lue `data.localizations ?? localizations`.
+   */
+  localizations: tolerant('commands.localizations', z.record(z.unknown())),
   aliases: z.array(z.string()).default([]),
   /**
    * Discord `default_member_permissions` (a bitfield as text, e.g. "8" for
@@ -122,6 +127,8 @@ export const presenceSchema = z
 
 export const MAX_SCRIPT_TIMEOUT_MS = 15 * 60 * 1000;
 export const DEFAULT_SCRIPT_TIMEOUT_MS = MAX_SCRIPT_TIMEOUT_MS;
+/** Durée maximale d'une tâche planifiée (les gratuits n'en ont pas) : une heure, quelle que soit `scriptTimeoutMs`. */
+export const SCHEDULED_TASK_MAX_TIMEOUT_MS = 60 * 60 * 1000;
 
 export const databaseConfigSchema = z
   .object({
@@ -266,6 +273,12 @@ export const jsBotConfigSchema = z.object({
    */
   webSocketSources: z.array(z.record(z.unknown())).optional(),
   globalVariables: z.record(z.unknown()).default({}),
+  /** Modules préfaits installés (`{id: entrée}`) : lus par le panneau de config. */
+  modules: z.record(z.unknown()).optional(),
+  /** Commande qui ouvre le panneau de config des modules (`{name, id}`). */
+  moduleConfigCommand: z.record(z.unknown()).optional(),
+  /** Traductions du bot (`{locales, keys}`) : lues par `bc.t`. */
+  translations: z.record(z.unknown()).optional(),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
   scriptTimeoutMs: z
     .number()

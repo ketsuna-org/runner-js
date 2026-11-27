@@ -43,6 +43,19 @@ describe('ScriptDb', () => {
     return new ScriptDb('bot-1', configOverride, store, ctx, variables);
   }
 
+  it('stores a variable per role, the role ID being required', async () => {
+    const mutableConfig = structuredClone(config);
+    mutableConfig.scopedVariableDefinitions = [];
+    const db = await createDb(interactionCtx, {}, mutableConfig);
+
+    await db.role.set('points', 7, 'role-1');
+    await db.role.set('points', 9, 'role-2');
+    expect(await db.role.get('points', 'role-1')).toBe(7);
+    expect(await db.role.get('points', 'role-2')).toBe(9);
+    expect(mutableConfig.scopedVariableDefinitions).toEqual([{ key: 'points', scope: 'role' }]);
+    await expect(db.role.get('points')).rejects.toThrow('roleId');
+  });
+
   it('auto-creates scoped variables on set', async () => {
     const mutableConfig = structuredClone(config);
     mutableConfig.scopedVariableDefinitions = [];

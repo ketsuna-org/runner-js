@@ -53,6 +53,18 @@ const host = (gw: DocumentsGateway | null, guildId: string | undefined = 'g1') =
 });
 
 describe('bc.db', () => {
+  test('space(guild, id) names a server where the bot is present, without a current server', async () => {
+    const { gw, calls } = stub({ get: null });
+    const db = createBcDb({ ...host(gw, undefined), hasGuild: (id: string) => id === '222' });
+    db.space('guild', '222');
+    await db.exists('c', 'a');
+    db.space('guild');
+    expect(() => db.space('guild', '333')).toThrow('The bot is not in this server.');
+    expect(() => db.space('user', '222')).toThrow('Only the guild space takes a server ID.');
+    expect(() => db.space('guild', 'abc')).toThrow('Invalid guild ID.');
+    expect(calls.map((c) => c.space)).toEqual([{ kind: 'guild', id: '222' }]);
+  });
+
   test('uses the current server, then user and bot spaces on request', async () => {
     const { gw, calls } = stub({ get: { id: 'a', data: { n: 5 }, rev: 1 } });
     const db = createBcDb(host(gw));

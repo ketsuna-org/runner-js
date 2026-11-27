@@ -171,14 +171,22 @@ describe('ScriptDirectRuntime', () => {
 });
 
 describe('ScriptDirectRuntime : global fn', () => {
-  it('fn est le 21e et dernier paramètre de portée (bc juste avant, voice avant console)', async () => {
+  it('fn est le 22e et dernier paramètre de portée (bc juste avant, voice avant console)', async () => {
     const executor = createDirectExecutor();
     const result = await executor.execute(
       'return [arguments.length, typeof fn];',
       { client: {} as never, config: { token: 'x' } as never, variables: {} },
       createLogger(),
     );
-    expect(result).toEqual([21, 'object']);
+    expect(result).toEqual([22, 'object']);
+    executor.dispose();
+  });
+
+  it('expose les valeurs de l alerte d automatisation (global automation), null sinon', async () => {
+    const executor = createDirectExecutor();
+    const base = { client: {} as never, config: { token: 'x' } as never, variables: {} };
+    expect(await executor.execute('return automation.title;', { ...base, automation: { title: 'T' } }, createLogger())).toBe('T');
+    expect(await executor.execute('return automation;', base, createLogger())).toBeNull();
     executor.dispose();
   });
 

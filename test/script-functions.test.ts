@@ -469,6 +469,7 @@ const EXPECTED_SCOPE_NAMES = [
   'guild',
   'channel',
   'webhook',
+  'automation',
   'db',
   'sql',
   'pgsql',
@@ -490,7 +491,7 @@ function load(raw: unknown) {
 }
 
 describe('paramètres de portée', () => {
-  it('bc (services Bot Creator) puis fn terminent la liste, sans autre nouveau paramètre', () => {
+  it('automation (alerte d automatisation) après webhook, bc puis fn terminent la liste', () => {
     expect([...SCOPE_PARAM_NAMES]).toEqual(EXPECTED_SCOPE_NAMES);
   });
 });

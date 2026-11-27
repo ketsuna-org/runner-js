@@ -1,4 +1,5 @@
 import { getCommandStatsShipper } from '../runtime/command-stats-shipper.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import path from 'node:path';
 
 import { Client, Events } from 'discord.js';
@@ -40,12 +41,14 @@ import { applyPresence, presenceTextScript, stopPresenceRotation } from '../disc
 import { ScriptExecutor } from '../scripts/script-executor.js';
 import { mergeScopedVariableDefinitions } from '../runtime/scoped-context.js';
 import type { VariableDatabase } from '../runtime/variable-database.js';
+import { createBackupFile, restoreBackupFile } from '../scripts/backup-actions.js';
+import { getFilesGateway } from '../files/files-gateway.js';
 import { DatabaseManager } from '../runtime/database-manager.js';
 import { MusicManager } from '../runtime/music/music-manager.js';
 import { ConsentStore } from '../runtime/voice/consent.js';
 import { WebSocketSourceManager } from '../runtime/websocket/ws-manager.js';
 import { parseWebSocketSources } from '../runtime/websocket/ws-source.js';
-import { VoiceRecorderManager } from '../runtime/voice/voice-recorder.js';
+import { VoiceRecorderManager, defaultRecorderDeps } from '../runtime/voice/voice-recorder.js';
 import type { LogMeta, LogOrigin } from '../runtime/log-store.js';
 import {
   FileStartupGuard,
@@ -177,6 +180,18 @@ export class JsDiscordRunner {
   /** État des sources WebSocket pour `GET /bots/:id/websockets/live` (jamais de secret ni de message). */
   getWebSocketSnapshot(): Array<Record<string, unknown>> {
     return this.webSockets.snapshot();
+  }
+
+  /** Sauvegarde d'un serveur demandée par le Manager (écrans de l'app et du Studio) ; null si le client n'est pas prêt. */
+  backupAction(
+    action: 'create' | 'restore',
+    options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean },
+  ): Promise<unknown> | null {
+    const client = this.client;
+    if (!client || !client.isReady()) return null;
+    return action === 'create'
+      ? createBackupFile(client, getFilesGateway(), this.botId, options)
+      : restoreBackupFile(client, getFilesGateway(), this.botId, { guild: options.guild, backupId: options.backupId ?? '', dryRun: options.dryRun });
   }
 
   /** « Exécuter maintenant » : une tâche planifiée tout de suite, sans toucher à son minuteur. */
@@ -326,6 +341,7 @@ export class JsDiscordRunner {
       this.client,
       (level, message) => this.onLog(level, message, 'script'),
       new ConsentStore(this.variableStore, this.botId),
+      defaultRecorderDeps(this.botId),
     );
     this.registry = new HandlerRegistry(
       this.client,
@@ -564,6 +580,14 @@ export class JsDiscordRunner {
       return false;
     }
     return this.registry.triggerWebhook(pathKey, payload, headers, meta);
+  }
+
+  async triggerEntitlementEvent(eventName: string, row: EntitlementLike): Promise<number> {
+    return this.registry ? this.registry.triggerEntitlementEvent(eventName, row) : 0;
+  }
+
+  async triggerAutomationAlert(values: Record<string, string>): Promise<number> {
+    return this.registry ? this.registry.triggerAutomationAlert(values) : 0;
   }
 
   async triggerCommandEvent(eventName: CommandEventName, payload: CommandEventPayload): Promise<number> {

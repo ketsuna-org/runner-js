@@ -1,8 +1,10 @@
+import { installGuildAlertsApi } from './runtime/alerts/guild-alerts-api.js';
 import { join } from 'node:path';
 import { ManagedAiGateway } from './ai/ai-gateway.js';
 import { ManagedDocumentsGateway, setDocumentsGateway } from './documents/documents-gateway.js';
 import { LocalDocumentsGateway } from './documents/local-documents.js';
 import { ManagedFilesGateway } from './files/files-gateway.js';
+import { ManagedVoiceQuotaGateway } from './runtime/voice/voice-quota.js';
 import { LocalFilesGateway } from './files/local-files-gateway.js';
 import { loadRunnerEnv, validateRunnerWebConfiguration } from './config/env.js';
 import { createHttpServer } from './http/server.js';
@@ -38,6 +40,9 @@ export async function startMainServer(): Promise<void> {
 
   // Fonctions IA du langage (`bc.ai`) : seulement avec un Manager (runner géré ou pool).
   ManagedAiGateway.install(env);
+  installGuildAlertsApi(env);
+  // Quota de l'enregistrement vocal (`bc.recorder`) : Premium et heures mensuelles tenus par le Manager.
+  ManagedVoiceQuotaGateway.install(env);
   // Fichiers des bots (`bc.files`) : stockage du compte, via le Manager.
   // Sans Manager, un bot local (desktop) écrit dans un dossier du PC si BOT_CREATOR_LOCAL_FILES_DIR est posé.
   // Sans Manager (self-host, runner embarqué dans l'app desktop), les fichiers et la base vivent sur la machine, par

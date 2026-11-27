@@ -1139,7 +1139,7 @@ describe('tâche planifiée : timeout et fin réelle du script (exécution réel
     executor.dispose();
   });
 
-  it('registre : le timeout d’une tâche ne dépasse jamais scriptTimeoutMs', async () => {
+  it('registre : la tâche a son propre timeout (une heure au plus), indépendant de scriptTimeoutMs', async () => {
     const executor = new ScriptExecutor(5000);
     const registry = new HandlerRegistry(
       new EventEmitter() as unknown as Client,
@@ -1149,8 +1149,8 @@ describe('tâche planifiée : timeout et fin réelle du script (exécution réel
       { getGlobalVariables: async () => ({}) } as VariableDatabase,
       () => undefined,
     );
-    const outcome = await registry.runScheduled({ id: 'slow', script: sleepScript, timeoutMs: 5000 });
-    expect(outcome.error).toContain('timed out after 30ms');
+    const outcome = await registry.runScheduled({ id: 'slow', script: sleepScript, timeoutMs: 40 });
+    expect(outcome.error).toContain('timed out after 40ms');
     await outcome.settled;
     executor.dispose();
   });

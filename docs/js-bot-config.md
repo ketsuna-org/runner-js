@@ -409,7 +409,7 @@ secrets des webhooks et les identifiants de base de données ne sont pas exposé
 | `cron` | Expression à 5 champs ou macro (voir plus bas). **Prioritaire sur `everyMinutes`**, même si les deux sont présents. |
 | `timezone` | Fuseau IANA du `cron` (`Europe/Paris`). UTC si absent. Sans effet pour `everyMinutes`. |
 | `runOnStart` | `true` : un tir supplémentaire au démarrage du bot (voir plus bas). Défaut `false`. |
-| `timeoutMs` | Durée maximale de cette tâche. Jamais supérieure à `scriptTimeoutMs`. |
+| `timeoutMs` | Durée maximale de cette tâche. Une heure au plus, et une heure par défaut (`scriptTimeoutMs` ne vaut que pour les commandes et les événements). |
 
 Une entrée sans `cron` valide **ni** `everyMinutes` valide, ou au fuseau inconnu, est **ignorée avec un
 avertissement** (`Scheduled task <id> ignored: <raison>`, une fois par raison) ; elle ne fait jamais rejeter la
@@ -563,12 +563,22 @@ Même comportement que les fonctions BDFD du même nom.
 | `bc.grid.tiles({x, y, columns, rows, size, gap, colors})` | `$canvasTileGrid` (renvoie les rectangles à dessiner) |
 | `bc.canvas.create(w, h, fond?)` | `$canvasCreate` (canvas node-canvas, 1 à 4096 px ; dessinez avec `getContext('2d')`) |
 | `bc.canvas.drawTiles(ctx, tuiles)` | dessine le résultat de `bc.grid.tiles` |
+| `bc.canvas.font(nom, taille)` | valeur de `ctx.font` en police Geist (`geist`, `geist-medium`, `geist-bold` : accents, grec, cyrillique) |
+| `bc.canvas.gradient(ctx, {x, y, width, height, colors, angle})` | dégradé linéaire de 2 à 4 couleurs, angle 0 = gauche vers droite, 90 = haut vers bas |
 | `bc.canvas.attach(canvas, nom)` | `$attachImage` (pièce jointe PNG à mettre dans `files`) |
 | `bc.lock.tryLock(nom, secondes?)` / `bc.lock.unlock(nom)` | `$tryLock` / `$unlock` |
 | `await bc.oneTime.run(type, fn)` | `$onlyOneTime[script;type;erreur]` : exécute `fn` une seule fois par `'user'` (tous serveurs), `'server'` ou `'global'`, pour la commande en cours. Renvoie `{ ran: true, value }`, ou `{ ran: false }` si c'est déjà pris (à vous d'envoyer le message). La réclamation est prise avant `fn` ; si `fn` lève une erreur, elle est rendue. |
 | `await bc.oneTime.reset(type?, { userId?, command? })` | `$resetOneTime[type;userId;commande]` : réarme. Sans `type` : les types réclamés plus tôt dans l'exécution (`user` sinon). `command` = nom de la commande visée. |
 | `bc.forum.createPost(forumId, titre, message, {tags, archiveMinutes, files, reason})` | `$createForumPost` (`reason` : motif du journal d'audit) |
 | `bc.forum.tags(forumId)` / `bc.forum.setTags(threadId, tags, reason?)` | `$forumTags` / `$setThreadTags` |
+| `await bc.entitlements.has(skuId, { userId?, guildId? })` | `$hasEntitlement[sku;user;serveur]` : droit Discord actif (sans cible, l'auteur de l'appel ; un droit du serveur compte aussi) |
+| `await bc.entitlements.count(cible?)` / `bc.entitlements.skuIds(cible?)` | `$entitlementCount` / `$entitlementSKUs` |
+| `await bc.entitlements.endsAt(skuId, cible?)` | `$entitlementEndsAt` : secondes Unix, `'never'` sans fin, `null` sans droit actif |
+| `await bc.entitlements.startsAt(skuId, cible?)` / `bc.entitlements.type(skuId, cible?)` | `$entitlementStartsAt` / `$entitlementType` (type Discord : 8 abonnement de l'application, 4 achat de test) |
+| `await bc.entitlements.list({ userId?, guildId?, skuId?, includeEnded? })` | liste des droits (`id`, `skuId`, `userId`, `guildId`, `type`, `startsAt`, `endsAt`, `deleted`, `consumed`, `active`) |
+| `await bc.entitlements.skus()` / `bc.entitlements.skuName(skuId)` | `$skuIDs` / `$skuName` |
+
+Événements `entitlementCreate`, `entitlementUpdate`, `entitlementDelete` (monétisation Discord) : le droit arrive dans `webhook.payload` (mêmes champs que `list`), `webhook.path` porte le nom de l'événement. En BDFD, les variables sont `entitlement.id`, `.skuId`, `.userId`, `.guildId`, `.type`, `.startsAt`, `.endsAt`, `.deleted`, `.consumed`, `.active`. Les achats se font chez Discord : le SKU se crée au portail développeur.
 
 Motif du journal d'audit : les fonctions BDFD acceptent un dernier argument `reason` (ou `$auditLogReason[texte]` pour tout le script). En JavaScript, discord.js le fait déjà partout : `member.ban({ reason })`, `member.roles.add(role, reason)`, `channel.delete(reason)`, etc.
 

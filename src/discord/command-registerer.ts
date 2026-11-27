@@ -8,6 +8,7 @@ import {
   type CommandRest,
 } from './application-command-sync.js';
 import { transformCommandOptionsForDiscord } from './command-options.js';
+import { commandLocalizationsOf, localizeDiscordPayload } from '../translations/command-localizations.js';
 
 /** La commande telle que Discord l'attend. Sert à détecter qu'une inscription a changé. */
 interface DesiredApplicationCommand {
@@ -18,6 +19,8 @@ interface DesiredApplicationCommand {
   default_member_permissions?: string;
   contexts?: number[];
   integration_types?: number[];
+  name_localizations?: Record<string, string>;
+  description_localizations?: Record<string, string>;
 }
 
 const DISCORD_TYPE_MAP = {
@@ -57,16 +60,19 @@ export function toDiscordCommand(command: CommandHandler): DesiredApplicationCom
     }
     if (command.contexts !== undefined) payload.contexts = command.contexts;
     if (command.integrationTypes !== undefined) payload.integration_types = command.integrationTypes;
-    return payload;
+    // Traductions (name_localizations, description_localizations) de la commande, de ses options, choix,
+    // sous-commandes et groupes : les noms d'origine restent la référence de routage.
+    return localizeDiscordPayload(payload, commandLocalizationsOf(command), 'chat_input');
   }
   // Context menu commands have no description/options.
-  return {
+  const menu: DesiredApplicationCommand = {
     type, name: command.name,
     ...(command.defaultMemberPermissions !== undefined
       ? { default_member_permissions: `${command.defaultMemberPermissions}` } : {}),
     ...(command.contexts !== undefined ? { contexts: command.contexts } : {}),
     ...(command.integrationTypes !== undefined ? { integration_types: command.integrationTypes } : {}),
   };
+  return localizeDiscordPayload(menu, commandLocalizationsOf(command), type === ApplicationCommandType.User ? 'user' : 'message');
 }
 
 /** Execution changes do not require even a Discord registration lookup. */

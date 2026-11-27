@@ -1,4 +1,5 @@
 import { ONE_TIME_PREFIX } from '../scripts/script-db.js';
+import type { EntitlementLike } from '../scripts/script-bc-extras.js';
 import type { CommandHandler, JsBotConfig } from '../config/js-bot-config.js';
 import {
   commandHandlerSchema,
@@ -285,6 +286,14 @@ export class RuntimeController {
     await this.reloadBotIfRunning(botId);
   }
 
+  async triggerEntitlementEvent(botId: string, eventName: string, row: EntitlementLike): Promise<number> {
+    return this.processManager.triggerEntitlementEvent(botId, eventName, row);
+  }
+
+  async triggerAutomationAlert(botId: string, values: Record<string, string>): Promise<number> {
+    return this.processManager.triggerAutomationAlert(botId, values);
+  }
+
   async triggerInboundWebhook(
     botId: string,
     pathKey: string,
@@ -496,6 +505,10 @@ export class RuntimeController {
   /** « Exécuter maintenant » ; null si le bot ne tourne pas. */
   runScheduledNow(botId: string, taskId: string) {
     return this.processManager.runScheduledNow(botId, taskId);
+  }
+
+  backupAction(botId: string, action: 'create' | 'restore', options: { guild: string; label?: string; auto?: boolean; backupId?: string; dryRun?: boolean }) {
+    return this.processManager.backupAction(botId, action, options);
   }
 
   webSocketSnapshot(botId: string) {

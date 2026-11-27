@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars } from '../src/scripts/script-bc-extras.js';
+import { createBcEntitlements, createBcForum, createBcLock, createBcMath, createBcOneTime, createBcVars, toBcEntitlement } from '../src/scripts/script-bc-extras.js';
 
 describe('bc.math', () => {
   const m = createBcMath();
@@ -137,7 +137,7 @@ describe('bc.grid', () => {
   });
 });
 
-import { createBcCanvas } from '../src/scripts/script-bc-extras.js';
+import { createBcCanvas, isPrivateAddress } from '../src/scripts/script-bc-extras.js';
 describe('bc.canvas', () => {
   test('create, drawTiles and attach produce a PNG attachment', () => {
     const bc = createBcCanvas();
@@ -148,6 +148,38 @@ describe('bc.canvas', () => {
     expect((file.attachment as Buffer).subarray(1, 4).toString()).toBe('PNG');
     expect(() => bc.create(0, 10)).toThrow();
     expect(() => bc.create(5000, 10)).toThrow();
+  });
+
+  test('private and local addresses are refused', async () => {
+    for (const a of ['127.0.0.1', '10.1.2.3', '192.168.0.4', '172.20.0.1', '169.254.169.254', '::1', 'fd00::1', '::ffff:10.0.0.1']) expect(isPrivateAddress(a)).toBe(true);
+    for (const a of ['8.8.8.8', '104.16.0.1', '2606:4700::1']) expect(isPrivateAddress(a)).toBe(false);
+    const bc = createBcCanvas();
+    await expect(bc.loadImage('http://example.com/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('https://localhost/a.png')).rejects.toThrow();
+    await expect(bc.loadImage('not a url')).rejects.toThrow();
+  });
+
+  test('gradient goes left to right and font draws accented Geist text', () => {
+    const bc = createBcCanvas();
+    const canvas = bc.create(100, 40, '#000000') as {
+      getContext(t: string): { getImageData(x: number, y: number, w: number, h: number): { data: Uint8ClampedArray }; font: string; fillStyle: string; fillText(t: string, x: number, y: number): void };
+    };
+    const ctx = canvas.getContext('2d');
+    bc.gradient(ctx, { x: 0, y: 0, width: 100, height: 40, colors: ['#FF0000', '#0000FF'] });
+    const left = ctx.getImageData(1, 20, 1, 1).data;
+    const right = ctx.getImageData(98, 20, 1, 1).data;
+    expect(left[0]).toBeGreaterThan(200);
+    expect(right[2]).toBeGreaterThan(200);
+    expect(() => bc.gradient(ctx, { width: 10, height: 10, colors: ['red'] })).toThrow();
+    expect(bc.font('geist-bold', 32)).toBe('bold 32px "Geist Bold"');
+    expect(bc.font('nope', 12)).toBe('12px sans-serif');
+    ctx.font = bc.font('geist-bold', 24);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText('Éloïse Привет', 2, 30);
+    const px = ctx.getImageData(0, 0, 100, 40).data;
+    let lit = 0;
+    for (let i = 0; i < px.length; i += 4) if (px[i] > 200 && px[i + 1] > 200) lit++;
+    expect(lit).toBeGreaterThan(50);
   });
 });
 
@@ -200,5 +232,82 @@ describe('bc.oneTime', () => {
     await api.reset('user', { userId: '20', command: 'other' });
     expect((await host({ command: 'other' }, taken).api.run('user', () => 1)).ran).toBe(true);
     await expect(api.reset('everyone' as never)).rejects.toThrow('user, server or global');
+  });
+});
+
+describe('bc.entitlements', () => {
+  const NOW = Date.now();
+  const rows = [
+    { id: '1', skuId: '900', userId: '20', guildId: null, type: 8, startsTimestamp: Date.parse('2026-01-01T00:00:00.000Z'), endsTimestamp: NOW + 86_400_000 * 30 },
+    { id: '2', skuId: '901', userId: '20', guildId: null, type: 8, startsTimestamp: null, endsTimestamp: NOW - 1000 },
+    { id: '3', skuId: '902', userId: '20', guildId: null, type: 8, deleted: true, startsTimestamp: null, endsTimestamp: null },
+    { id: '4', skuId: '900', userId: null, guildId: '77', type: 8, startsTimestamp: null, endsTimestamp: null },
+  ];
+  const client = {
+    application: {
+      entitlements: {
+        fetch: async (o: { user?: string; guild?: string; skus?: string[] }) =>
+          new Map(
+            rows
+              .filter((r) => (!o.user || r.userId === o.user) && (!o.guild || r.guildId === o.guild) && (!o.skus || o.skus.includes(r.skuId)))
+              .map((r) => [r.id, r]),
+          ),
+      },
+      fetchSKUs: async () =>
+        new Map([
+          ['900', { id: '900', name: 'Premium', slug: 'premium', type: 5 }],
+          ['901', { id: '901', name: 'Pack', slug: 'pack', type: 2 }],
+        ]),
+    },
+  };
+  const e = createBcEntitlements(() => client, () => '20');
+
+  test('has reads active rights of the author, a user or a server (same fixtures as $hasEntitlement)', async () => {
+    expect(await e.has('900')).toBe(true);
+    expect(await e.has('901')).toBe(false);
+    expect(await e.has('902')).toBe(false);
+    expect(await e.has('900', { guildId: '77' })).toBe(true);
+    await expect(e.has('abc')).rejects.toThrow('Invalid SKU ID.');
+  });
+  test('count, skuIds and endsAt match the BDFD functions', async () => {
+    expect(await e.count({ userId: '20' })).toBe(1);
+    expect(await e.count({ guildId: '77' })).toBe(1);
+    expect(await e.skuIds({ userId: '20' })).toEqual(['900']);
+    expect(await e.endsAt('900', { userId: '20' })).toBe(Math.floor((NOW + 86_400_000 * 30) / 1000));
+    expect(await e.endsAt('900', { guildId: '77' })).toBe('never');
+    expect(await e.endsAt('902', { userId: '20' })).toBeNull();
+  });
+  test('startsAt and type match $entitlementStartsAt and $entitlementType', async () => {
+    expect(await e.startsAt('900', { userId: '20' })).toBe(1767225600);
+    expect(await e.startsAt('900', { guildId: '77' })).toBeNull();
+    expect(await e.startsAt('902', { userId: '20' })).toBeNull();
+    expect(await e.type('900', { userId: '20' })).toBe(8);
+    expect(await e.type('902', { userId: '20' })).toBeNull();
+  });
+  test('skus and skuName', async () => {
+    expect((await e.skus()).map((s) => s.id)).toEqual(['900', '901']);
+    expect(await e.skuName('900')).toBe('Premium');
+    expect(await e.skuName('999')).toBe('');
+  });
+  test('toBcEntitlement marks ended and deleted rights inactive', () => {
+    expect(toBcEntitlement(rows[1] as never).active).toBe(false);
+    expect(toBcEntitlement(rows[2] as never).active).toBe(false);
+    expect(toBcEntitlement(rows[0] as never).active).toBe(true);
+  });
+});
+
+describe('entitlementFromDiscordRest', () => {
+  test('lit un droit au format REST de Discord', async () => {
+    const { entitlementFromDiscordRest, toBcEntitlement } = await import('../src/scripts/script-bc-extras.js');
+    const row = entitlementFromDiscordRest({
+      id: '1', sku_id: '2', user_id: '3', guild_id: null, type: 8,
+      starts_at: '2026-01-01T00:00:00.000Z', ends_at: null, deleted: false,
+    });
+    expect(row.startsTimestamp).toBe(Date.parse('2026-01-01T00:00:00.000Z'));
+    expect(row.endsTimestamp).toBeNull();
+    expect(row.guildId).toBeNull();
+    expect(toBcEntitlement(row).active).toBe(true);
+    const gone = entitlementFromDiscordRest({ id: '1', sku_id: '2' }, true);
+    expect(toBcEntitlement(gone).active).toBe(false);
   });
 });
