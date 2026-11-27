@@ -24,7 +24,6 @@ import {
   type InboundWebhookHandler,
   type JsBotConfig,
 } from '../config/js-bot-config.js';
-import { tryHandlePanel } from '../modules/panel/module-panel-runtime.js';
 import { createInteractionMessageCompat } from './hybrid-message-compat.js';
 import {
   applyDefaultVisibility,
@@ -243,17 +242,6 @@ export class HandlerRegistry {
     this.disposers.push(() => this.client.off(Events.ClientReady, onClientReady));
 
     const onInteraction = async (interaction: Interaction) => {
-      // Le panneau de config des modules prend ses interactions (commande, clics, modales).
-      if (
-        await tryHandlePanel(interaction, {
-          botId: this.botId,
-          config: this.config as never,
-          store: this.variableStore,
-          log: (message) => this.emitLog('warn', message),
-        })
-      ) {
-        return;
-      }
       if (interaction.isAutocomplete()) {
         await this.handleAutocomplete(interaction);
         return;
