@@ -33,6 +33,8 @@ export interface PanelRuntimeContext {
 
 /** Renvoie vrai si l'interaction appartient au panneau (le routeur ne doit alors rien faire d'autre). */
 export async function tryHandlePanel(interaction: Interaction, ctx: PanelRuntimeContext): Promise<boolean> {
+  // Le module « config » est installé : /config et ses boutons sont des commandes et des workflows ordinaires, le panneau natif ne répond plus.
+  if (ctx.config.modules && Object.prototype.hasOwnProperty.call(ctx.config.modules, 'config')) return false;
   const anyI = interaction as any;
   const is = (method: string): boolean => typeof anyI[method] === 'function' && anyI[method]() === true;
   let customId = '';
