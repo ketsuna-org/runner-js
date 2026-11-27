@@ -51,6 +51,8 @@ export function createGuardedMakeRequest(
   base: MakeRequest,
   /** Reçoit chaque 401, 403 et 429 du transport (compteurs par bot) ; ne doit jamais gêner la requête. */
   onInvalidResponse?: (info: DiscordResponseInfo) => void,
+  /** Appelé avant chaque requête : lève pour couper les appels (disjoncteur du bot). */
+  beforeRequest?: () => void,
 ): MakeRequest {
   const report = (response: Awaited<ReturnType<MakeRequest>>, url: string, init: unknown): void => {
     if (!onInvalidResponse) return;
@@ -69,6 +71,7 @@ export function createGuardedMakeRequest(
   };
 
   return async (url, init) => {
+    beforeRequest?.();
     const remainingMs = discordIpBlockRemainingMs();
     if (remainingMs > 0) {
       throw new DiscordUnavailableError('blocked', remainingMs / 1000);
@@ -127,6 +130,8 @@ export function buildDiscordClientOptions(
   baseMakeRequest: MakeRequest = DefaultRestOptions.makeRequest,
   /** Compteurs par bot des réponses invalides (voir rest-observability.ts). */
   onInvalidResponse?: (info: DiscordResponseInfo) => void,
+  /** Disjoncteur du bot : lève quand ses appels Discord sont coupés. */
+  beforeRequest?: () => void,
 ): ClientOptions {
   const hasGuildMembers = Boolean(intentsMap['Guild Members']);
   const hasVoiceStates = Boolean(intentsMap['Guild Voice States']);
@@ -140,7 +145,7 @@ export function buildDiscordClientOptions(
       rejectOnRateLimit: (data) => isLoginCriticalRoute(data.route),
       // Alarme avant les 10 000 réponses invalides par 10 min et par IP (voir rest-observability.ts).
       invalidRequestWarningInterval: DISCORD_INVALID_REQUEST_WARNING_INTERVAL,
-      makeRequest: createGuardedMakeRequest(baseMakeRequest, onInvalidResponse),
+      makeRequest: createGuardedMakeRequest(baseMakeRequest, onInvalidResponse, beforeRequest),
     },
     makeCache: Options.cacheWithLimits({
       ...Options.DefaultMakeCacheSettings,

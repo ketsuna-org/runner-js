@@ -9,7 +9,9 @@ export class DiscordTokenUnauthorizedError extends Error {
 // Contrat Manager : `discord_temporarily_blocked` = blocage de l'IP de sortie (toute la
 // plateforme) ; `discord_rate_limited` = limite d'UN jeton (globale 50 req/s) ou d'une route.
 
-export type DiscordUnavailableKind = 'blocked' | 'rate_limited';
+export type DiscordUnavailableKind = 'blocked' | 'rate_limited' | 'bot_paused';
+// `bot_paused` : le disjoncteur de CE bot a coupé ses appels Discord (trop de réponses 401/403/429).
+// Ne concerne ni la plateforme ni les autres bots; le message n'est jamais relu comme un jeton refusé.
 
 const DEFAULT_RETRY_AFTER_SECONDS = 60;
 const MAX_RETRY_AFTER_SECONDS = 600;
@@ -29,21 +31,25 @@ export class DiscordUnavailableError extends Error {
   constructor(
     public readonly kind: DiscordUnavailableKind,
     retryAfterSeconds?: number | null,
-    options?: { cause?: unknown },
+    options?: { cause?: unknown; message?: string },
   ) {
     const retry = clampRetryAfterSeconds(retryAfterSeconds);
     super(
-      kind === 'blocked'
-        ? `Discord is temporarily blocking requests from this network (retry after ${retry}s)`
-        : `Discord is rate limiting this bot (retry after ${retry}s)`,
+      options?.message ??
+        (kind === 'blocked'
+          ? `Discord is temporarily blocking requests from this network (retry after ${retry}s)`
+          : kind === 'bot_paused'
+            ? `Discord calls of this bot are paused (retry after ${retry}s)`
+            : `Discord is rate limiting this bot (retry after ${retry}s)`),
       options,
     );
     this.name = 'DiscordUnavailableError';
     this.retryAfterSeconds = retry;
   }
 
-  get code(): 'discord_temporarily_blocked' | 'discord_rate_limited' {
-    return this.kind === 'blocked' ? 'discord_temporarily_blocked' : 'discord_rate_limited';
+  get code(): 'discord_temporarily_blocked' | 'discord_rate_limited' | 'bot_discord_calls_paused' {
+    if (this.kind === 'blocked') return 'discord_temporarily_blocked';
+    return this.kind === 'bot_paused' ? 'bot_discord_calls_paused' : 'discord_rate_limited';
   }
 }
 
