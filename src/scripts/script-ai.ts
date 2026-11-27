@@ -1,4 +1,5 @@
 import { createBcTranslations, type BcTranslate } from '../translations/bc-translations.js';
+import { createBcModules, type BcCommand, type BcModule } from './script-bc-modules.js';
 import { randomUUID } from 'node:crypto';
 
 import { createBcWs, type BcWs } from './script-ws.js';
@@ -77,7 +78,7 @@ export interface BcAi {
 
 export interface BcAiContext {
   /** Configuration du bot (section `translations` pour `bc.t`). */
-  config?: { translations?: unknown };
+  config?: { translations?: unknown; modules?: Record<string, unknown>; commands?: unknown[] };
   client?: { user?: { id?: unknown } | null; application?: { id?: unknown } | null; guilds?: { cache?: { has(id: string): boolean } } };
   message?: unknown;
   interaction?: unknown;
@@ -231,7 +232,7 @@ export function createBcGlobal(
   warn: (message: string) => void = () => undefined,
   /** Annulé à l'expiration du script : stoppe les tours IA (et leur débit) encore en cours. */
   signal?: AbortSignal,
-): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; entitlements: BcEntitlements; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; backup: BcBackup; ws: BcWs; files: BcFiles; db: BcDb } {
+): { t: BcTranslate; locale: string; guildLocale: string; module: BcModule; command: BcCommand; ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; entitlements: BcEntitlements; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; backup: BcBackup; ws: BcWs; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -419,7 +420,10 @@ export function createBcGlobal(
       }, ''),
   };
   const translations = createBcTranslations(context, warn);
+  const modules = createBcModules(context as never);
   return {
+    module: modules.module,
+    command: modules.command,
     ai,
     t: translations.t,
     get locale(): string {
