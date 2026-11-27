@@ -277,6 +277,8 @@ export const jsBotConfigSchema = z.object({
   modules: z.record(z.unknown()).optional(),
   /** Commande qui ouvre le panneau de config des modules (`{name, id}`). */
   moduleConfigCommand: z.record(z.unknown()).optional(),
+  /** Alertes par serveur activées par le propriétaire (le Manager garde la commande de config). */
+  automationsPanel: z.boolean().optional(),
   /** Traductions du bot (`{locales, keys}`) : lues par `bc.t`. */
   translations: z.record(z.unknown()).optional(),
   scopedVariableDefinitions: z.array(z.record(z.unknown())).default([]),
