@@ -2,6 +2,7 @@ import { createBcTranslations, type BcTranslate } from '../translations/bc-trans
 import { randomUUID } from 'node:crypto';
 
 import { createBcWs, type BcWs } from './script-ws.js';
+import { createBcAlert, type BcAlert } from './script-bc-alert.js';
 import { getDocumentsGateway } from '../documents/documents-gateway.js';
 import { getFilesGateway } from '../files/files-gateway.js';
 import { createBcDb, type BcDb } from './script-documents.js';
@@ -231,7 +232,7 @@ export function createBcGlobal(
   warn: (message: string) => void = () => undefined,
   /** Annulé à l'expiration du script : stoppe les tours IA (et leur débit) encore en cours. */
   signal?: AbortSignal,
-): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; entitlements: BcEntitlements; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; backup: BcBackup; ws: BcWs; files: BcFiles; db: BcDb } {
+): { t: BcTranslate; locale: string; guildLocale: string;  ai: BcAi; math: BcMath; vars: BcVars; lock: BcLock; oneTime: BcOneTime; forum: BcForum; entitlements: BcEntitlements; activity: BcActivity; grid: BcGrid; canvas: BcCanvas; recorder: unknown; backup: BcBackup; ws: BcWs; alert: BcAlert; files: BcFiles; db: BcDb } {
   let lastError = '';
   const botId = (): string => text(context.client?.user?.id ?? context.client?.application?.id);
 
@@ -450,6 +451,12 @@ export function createBcGlobal(
     recorder: context.recorder,
     backup: createBcBackup(() => context.client, () => text(guildIdOf(context))),
     ws: createBcWs(context.ws?.bridge, context.ws?.event),
+    alert: createBcAlert({
+      botId,
+      guildId: () => text(guildIdOf(context)),
+      userId: () => text(triggerUserId(context)),
+      getClient: () => context.client,
+    }),
     files: createBcFiles(getFilesGateway, botId),
     db: createBcDb({
       gateway: getDocumentsGateway,
