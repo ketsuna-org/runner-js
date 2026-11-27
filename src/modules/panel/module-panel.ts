@@ -43,6 +43,8 @@ const ACCENT_OFF = 0x949ba4;
 const ACCENT_ERR = 0xed4245;
 
 export { MAX_COMPONENTS };
+// Briques partagées avec l'écran « Alertes » (module-panel-automations.ts).
+export { text as panelText, sep as panelSeparator, button as panelButton, row as panelRow, container as panelContainer, message as panelMessage };
 
 /** custom_id : `mcfg:<vue>:<module>:<argument>` (sans état stocké, 100 caractères au plus). */
 export function panelId(view: string, module = '', arg = ''): string {
@@ -83,6 +85,7 @@ export function countComponents(node: unknown): number {
 }
 
 const clip = (s: string, max: number): string => (s.length <= max ? s : `${s.substring(0, max - 1)}…`);
+export { clip as panelClip };
 const clamp = (n: number, lo: number, hi: number): number => Math.min(Math.max(n, lo), hi);
 
 function shown(s: Json, lang: string): string {
@@ -155,6 +158,9 @@ export function renderHome(input: Json): Json {
         },
       ]),
     );
+  }
+  if (input.automations === true) {
+    children.push(row([button(panelId('auto', 'list', '0'), ps(lang, 'auto.open'))]));
   }
   children.push(
     row([
@@ -406,6 +412,7 @@ export async function handlePanelInteraction(args: {
   language: string;
   values?: string[];
   modal?: Record<string, string>;
+  automations?: boolean;
 }): Promise<PanelResult> {
   const { doc, customId, read, language } = args;
   const values = args.values ?? [];
@@ -414,7 +421,7 @@ export async function handlePanelInteraction(args: {
   if (!id) return { writes: [] };
 
   const home = async (page: number): Promise<PanelResult> => ({
-    message: renderHome({ ...(await panelHomeInput(doc, read, language, page)), language }),
+    message: renderHome({ ...(await panelHomeInput(doc, read, language, page)), language, ...(args.automations ? { automations: true } : {}) }),
     writes: [],
   });
   const moduleView = async (m: string, page: number): Promise<PanelResult> => {

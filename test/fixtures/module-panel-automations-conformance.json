@@ -1,0 +1,3207 @@
+{
+  "cases": [
+    {
+      "name": "liste",
+      "fn": "list",
+      "input": {
+        "language": "en",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alerts\n-# 1 / 3 active on this server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS feed · <#111> · Running"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pause",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch channel · <#222> · Paused\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Start",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Home",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "New alert",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste vide",
+      "fn": "list",
+      "input": {
+        "language": "fr",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": []
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alertes\n-# 1 / 3 actives sur ce serveur"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "Aucune alerte pour l'instant. Créez-en une pour suivre un flux RSS, une chaîne YouTube, une chaîne Twitch ou un compte Bluesky."
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Accueil",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Nouvelle alerte",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste après création",
+      "fn": "list",
+      "input": {
+        "language": "en",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ],
+        "created": true
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alerts\n-# 1 / 3 active on this server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "-# Alert created and paused. Press Start when you are ready."
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS feed · <#111> · Running"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pause",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch channel · <#222> · Paused\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Start",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Home",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "New alert",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste, page hors limites",
+      "fn": "list",
+      "input": {
+        "language": "en",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ],
+        "page": 9
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alerts\n-# 1 / 3 active on this server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS feed · <#111> · Running"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pause",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch channel · <#222> · Paused\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Start",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Home",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "New alert",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "plafond du bot atteint",
+      "fn": "list",
+      "input": {
+        "language": "en",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 50
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alerts\n-# 1 / 3 active on this server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS feed · <#111> · Running"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pause",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch channel · <#222> · Paused\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Start",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Delete",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Home",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "New alert",
+                    "custom_id": "mcfg:auto:new:",
+                    "disabled": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fermée (offre)",
+      "fn": "closed",
+      "input": {
+        "language": "en",
+        "paid": false
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "## ❌ Value refused\nAlerts need a paid plan on the bot owner's account.\nNothing was changed."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Back",
+                    "custom_id": "mcfg:home::0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "fermée (interrupteur)",
+      "fn": "closed",
+      "input": {
+        "language": "en",
+        "paid": true
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "## ❌ Value refused\nThe bot owner has not turned on alerts for this bot.\nNothing was changed."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Back",
+                    "custom_id": "mcfg:home::0"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation",
+      "fn": "confirm",
+      "input": {
+        "language": "en",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "Delete **Blog**? This cannot be undone."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Alerts",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Yes, delete",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale",
+      "fn": "modal",
+      "input": {
+        "language": "en"
+      },
+      "expect": {
+        "title": "New alert",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Name",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Source",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "RSS feed",
+                  "value": "rss"
+                },
+                {
+                  "label": "YouTube channel",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Twitch channel",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Bluesky account",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Address, channel or account",
+            "description": "Feed URL, channel name or handle",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Channel for the alerts",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "What the bot does",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Run the bot's alert workflow",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Post a message",
+                  "value": "message"
+                },
+                {
+                  "label": "Both",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "création valide",
+      "fn": "body",
+      "input": {
+        "modal": {
+          "name": " Blog ",
+          "kind": "rss",
+          "source": "https://example.org/feed.xml",
+          "channel": "333",
+          "action": "both"
+        },
+        "guildId": "999",
+        "actorId": "42"
+      },
+      "expect": {
+        "guild_id": "999",
+        "actor_id": "42",
+        "name": "Blog",
+        "source_kind": "rss",
+        "source": {
+          "url": "https://example.org/feed.xml"
+        },
+        "channel_id": "333",
+        "action": "both"
+      }
+    },
+    {
+      "name": "création sans action",
+      "fn": "body",
+      "input": {
+        "modal": {
+          "name": "Chaîne",
+          "kind": "youtube",
+          "source": "@canal",
+          "channel": "333"
+        },
+        "guildId": "999",
+        "actorId": "42"
+      },
+      "expect": {
+        "guild_id": "999",
+        "actor_id": "42",
+        "name": "Chaîne",
+        "source_kind": "youtube",
+        "source": {
+          "channel": "@canal"
+        },
+        "channel_id": "333",
+        "action": "workflow"
+      }
+    },
+    {
+      "name": "création incomplète",
+      "fn": "body",
+      "input": {
+        "modal": {
+          "name": "x",
+          "kind": "twitch"
+        },
+        "guildId": "999",
+        "actorId": "42"
+      },
+      "expect": null
+    },
+    {
+      "name": "accueil avec alertes",
+      "fn": "home",
+      "input": {
+        "language": "en",
+        "customId": "mcfg:home::0"
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## ⚙️ Server modules\n-# 2 installed · 1 active · 2 to configure"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 9,
+                "components": [
+                  {
+                    "type": 10,
+                    "content": "**Levels**\n-# ⚠️ To configure: Channel"
+                  }
+                ],
+                "accessory": {
+                  "type": 2,
+                  "style": 1,
+                  "label": "Configure",
+                  "custom_id": "mcfg:module:levels:0"
+                }
+              },
+              {
+                "type": 9,
+                "components": [
+                  {
+                    "type": 10,
+                    "content": "**Welcome**\n-# ⚠️ To configure: Welcome channel"
+                  }
+                ],
+                "accessory": {
+                  "type": 2,
+                  "style": 1,
+                  "label": "Configure",
+                  "custom_id": "mcfg:module:welcome:0"
+                }
+              },
+              {
+                "type": 10,
+                "content": "-# Page 1 / 1"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 3,
+                    "custom_id": "mcfg:goto::",
+                    "placeholder": "Go to a module…",
+                    "options": [
+                      {
+                        "label": "Levels",
+                        "value": "levels"
+                      },
+                      {
+                        "label": "Welcome",
+                        "value": "welcome"
+                      }
+                    ]
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Alerts",
+                    "custom_id": "mcfg:auto:list:0"
+                  }
+                ]
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:home::-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:home::1",
+                    "disabled": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (fr)",
+      "fn": "list",
+      "input": {
+        "language": "fr",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alertes\n-# 1 / 3 actives sur ce serveur"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# Flux RSS · <#111> · En marche"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Mettre en pause",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Supprimer",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Chaîne Twitch · <#222> · En pause\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Démarrer",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Supprimer",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Accueil",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Nouvelle alerte",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (fr)",
+      "fn": "modal",
+      "input": {
+        "language": "fr"
+      },
+      "expect": {
+        "title": "Nouvelle alerte",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Nom",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Source",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "Flux RSS",
+                  "value": "rss"
+                },
+                {
+                  "label": "Chaîne YouTube",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Chaîne Twitch",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Compte Bluesky",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Adresse, chaîne ou compte",
+            "description": "URL du flux, nom ou identifiant de la chaîne",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Salon des alertes",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Que fait le bot ?",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Lancer le workflow « Alerte reçue »",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Publier un message",
+                  "value": "message"
+                },
+                {
+                  "label": "Les deux",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (fr)",
+      "fn": "confirm",
+      "input": {
+        "language": "fr",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "Supprimer **Blog** ? Cette action est définitive."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Alertes",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Oui, supprimer",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (de)",
+      "fn": "list",
+      "input": {
+        "language": "de",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Benachrichtigungen\n-# 1 / 3 aktiv auf diesem Server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS-Feed · <#111> · Aktiv"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pausieren",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Löschen",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch-Kanal · <#222> · Pausiert\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Starten",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Löschen",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Start",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Neue Benachrichtigung",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (de)",
+      "fn": "modal",
+      "input": {
+        "language": "de"
+      },
+      "expect": {
+        "title": "Neue Benachrichtigung",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Name",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Quelle",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "RSS-Feed",
+                  "value": "rss"
+                },
+                {
+                  "label": "YouTube-Kanal",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Twitch-Kanal",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Bluesky-Konto",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Adresse, Kanal oder Konto",
+            "description": "Feed-URL, Kanalname oder Handle",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Kanal für Benachrichtigungen",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Was der Bot tut",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Alert-Workflow des Bots starten",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Nachricht senden",
+                  "value": "message"
+                },
+                {
+                  "label": "Beides",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (de)",
+      "fn": "confirm",
+      "input": {
+        "language": "de",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "**Blog** löschen? Das lässt sich nicht rückgängig machen."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Benachrichtigungen",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Ja, löschen",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (ja)",
+      "fn": "list",
+      "input": {
+        "language": "ja",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## アラート\n-# このサーバーで 1 / 3 件が有効"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS フィード · <#111> · 稼働中"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "一時停止",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "削除",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch チャンネル · <#222> · 停止中\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "開始",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "削除",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ ホーム",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "新しいアラート",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (ja)",
+      "fn": "modal",
+      "input": {
+        "language": "ja"
+      },
+      "expect": {
+        "title": "新しいアラート",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "名前",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "ソース",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "RSS フィード",
+                  "value": "rss"
+                },
+                {
+                  "label": "YouTube チャンネル",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Twitch チャンネル",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Bluesky アカウント",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "アドレス、チャンネル、アカウント",
+            "description": "フィード URL、チャンネル名、ハンドル",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "アラートのチャンネル",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "ボットの動作",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "ボットのアラートワークフローを実行",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "メッセージを投稿",
+                  "value": "message"
+                },
+                {
+                  "label": "両方",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (ja)",
+      "fn": "confirm",
+      "input": {
+        "language": "ja",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "**Blog** を削除しますか？ 元に戻せません。"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ アラート",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "削除する",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (pt)",
+      "fn": "list",
+      "input": {
+        "language": "pt",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alertas\n-# 1 / 3 ativos neste servidor"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# Feed RSS · <#111> · Ativo"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pausar",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Excluir",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Canal da Twitch · <#222> · Pausado\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Iniciar",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Excluir",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Início",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Novo alerta",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (pt)",
+      "fn": "modal",
+      "input": {
+        "language": "pt"
+      },
+      "expect": {
+        "title": "Novo alerta",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Nome",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Fonte",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "Feed RSS",
+                  "value": "rss"
+                },
+                {
+                  "label": "Canal do YouTube",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Canal da Twitch",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Conta do Bluesky",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Endereço, canal ou conta",
+            "description": "URL do feed, nome ou identificador do canal",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Canal dos alertas",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "O que o bot faz",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Executar o fluxo de alerta do bot",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Publicar uma mensagem",
+                  "value": "message"
+                },
+                {
+                  "label": "Ambos",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (pt)",
+      "fn": "confirm",
+      "input": {
+        "language": "pt",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "Excluir **Blog**? Isso não pode ser desfeito."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Alertas",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Sim, excluir",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (tr)",
+      "fn": "list",
+      "input": {
+        "language": "tr",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Uyarılar\n-# Bu sunucuda 1 / 3 etkin"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# RSS akışı · <#111> · Çalışıyor"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Duraklat",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Sil",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Twitch kanalı · <#222> · Duraklatıldı\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Başlat",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Sil",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Ana sayfa",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Yeni uyarı",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (tr)",
+      "fn": "modal",
+      "input": {
+        "language": "tr"
+      },
+      "expect": {
+        "title": "Yeni uyarı",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Ad",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Kaynak",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "RSS akışı",
+                  "value": "rss"
+                },
+                {
+                  "label": "YouTube kanalı",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Twitch kanalı",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Bluesky hesabı",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Adres, kanal veya hesap",
+            "description": "Akış URL’si, kanal adı veya kullanıcı adı",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Uyarı kanalı",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Bot ne yapar",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Botun uyarı iş akışını çalıştır",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Mesaj gönder",
+                  "value": "message"
+                },
+                {
+                  "label": "İkisi de",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (tr)",
+      "fn": "confirm",
+      "input": {
+        "language": "tr",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "**Blog** silinsin mi? Bu geri alınamaz."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Uyarılar",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Evet, sil",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (es)",
+      "fn": "list",
+      "input": {
+        "language": "es",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alertas\n-# 1 / 3 activas en este servidor"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# Feed RSS · <#111> · Activa"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pausar",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Eliminar",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Canal de Twitch · <#222> · En pausa\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Iniciar",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Eliminar",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Inicio",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Nueva alerta",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (es)",
+      "fn": "modal",
+      "input": {
+        "language": "es"
+      },
+      "expect": {
+        "title": "Nueva alerta",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Nombre",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Fuente",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "Feed RSS",
+                  "value": "rss"
+                },
+                {
+                  "label": "Canal de YouTube",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Canal de Twitch",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Cuenta de Bluesky",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Dirección, canal o cuenta",
+            "description": "URL del feed, nombre o identificador del canal",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Canal de las alertas",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Qué hace el bot",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Ejecutar el flujo de alerta del bot",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Publicar un mensaje",
+                  "value": "message"
+                },
+                {
+                  "label": "Ambos",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (es)",
+      "fn": "confirm",
+      "input": {
+        "language": "es",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "¿Eliminar **Blog**? No se puede deshacer."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Alertas",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Sí, eliminar",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (it)",
+      "fn": "list",
+      "input": {
+        "language": "it",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Avvisi\n-# 1 / 3 attivi su questo server"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# Feed RSS · <#111> · Attivo"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Pausa",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Elimina",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Canale Twitch · <#222> · In pausa\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Avvia",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Elimina",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Home",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Nuovo avviso",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (it)",
+      "fn": "modal",
+      "input": {
+        "language": "it"
+      },
+      "expect": {
+        "title": "Nuovo avviso",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Nome",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Fonte",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "Feed RSS",
+                  "value": "rss"
+                },
+                {
+                  "label": "Canale YouTube",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Canale Twitch",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Account Bluesky",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Indirizzo, canale o account",
+            "description": "URL del feed, nome o identificatore del canale",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Canale degli avvisi",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Cosa fa il bot",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Esegui il workflow di avviso del bot",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Pubblica un messaggio",
+                  "value": "message"
+                },
+                {
+                  "label": "Entrambi",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (it)",
+      "fn": "confirm",
+      "input": {
+        "language": "it",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "Eliminare **Blog**? L’azione è definitiva."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Avvisi",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Sì, elimina",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "liste (pl)",
+      "fn": "list",
+      "input": {
+        "language": "pl",
+        "view": {
+          "enabled": true,
+          "paid": true,
+          "limits": {
+            "max_active_per_guild": 3,
+            "max_total_per_bot": 50
+          },
+          "active": 1,
+          "total_in_bot": 2
+        },
+        "automations": [
+          {
+            "id": "a1",
+            "name": "Blog",
+            "source_kind": "rss",
+            "channel_id": "111",
+            "status": "active",
+            "last_error": ""
+          },
+          {
+            "id": "a2",
+            "name": "Stream",
+            "source_kind": "twitch",
+            "channel_id": "222",
+            "status": "paused",
+            "last_error": "source unreachable"
+          }
+        ]
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 8150256,
+            "components": [
+              {
+                "type": 10,
+                "content": "## Alerty\n-# 1 / 3 aktywnych na tym serwerze"
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 10,
+                "content": "**Blog**\n-# Kanał RSS · <#111> · Działa"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "Wstrzymaj",
+                    "custom_id": "mcfg:auto:off:a1"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Usuń",
+                    "custom_id": "mcfg:auto:del:a1"
+                  }
+                ]
+              },
+              {
+                "type": 10,
+                "content": "**Stream**\n-# Kanał Twitch · <#222> · Wstrzymany\n-# source unreachable"
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 3,
+                    "label": "Uruchom",
+                    "custom_id": "mcfg:auto:on:a2"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Usuń",
+                    "custom_id": "mcfg:auto:del:a2"
+                  }
+                ]
+              },
+              {
+                "type": 14,
+                "divider": true,
+                "spacing": 1
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Start",
+                    "custom_id": "mcfg:home::"
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀",
+                    "custom_id": "mcfg:auto:list:-1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "▶",
+                    "custom_id": "mcfg:auto:list:1",
+                    "disabled": true
+                  },
+                  {
+                    "type": 2,
+                    "style": 1,
+                    "label": "Nowy alert",
+                    "custom_id": "mcfg:auto:new:"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "modale (pl)",
+      "fn": "modal",
+      "input": {
+        "language": "pl"
+      },
+      "expect": {
+        "title": "Nowy alert",
+        "custom_id": "mcfg:auto:save:",
+        "components": [
+          {
+            "type": 18,
+            "label": "Nazwa",
+            "component": {
+              "type": 4,
+              "custom_id": "name",
+              "style": 1,
+              "required": true,
+              "max_length": 60
+            }
+          },
+          {
+            "type": 18,
+            "label": "Źródło",
+            "component": {
+              "type": 3,
+              "custom_id": "kind",
+              "options": [
+                {
+                  "label": "Kanał RSS",
+                  "value": "rss"
+                },
+                {
+                  "label": "Kanał YouTube",
+                  "value": "youtube"
+                },
+                {
+                  "label": "Kanał Twitch",
+                  "value": "twitch"
+                },
+                {
+                  "label": "Konto Bluesky",
+                  "value": "bluesky"
+                }
+              ]
+            }
+          },
+          {
+            "type": 18,
+            "label": "Adres, kanał lub konto",
+            "description": "Adres URL kanału, nazwa lub identyfikator",
+            "component": {
+              "type": 4,
+              "custom_id": "source",
+              "style": 1,
+              "required": true,
+              "max_length": 300
+            }
+          },
+          {
+            "type": 18,
+            "label": "Kanał alertów",
+            "component": {
+              "type": 8,
+              "custom_id": "channel",
+              "channel_types": [
+                0,
+                5
+              ],
+              "min_values": 1,
+              "max_values": 1
+            }
+          },
+          {
+            "type": 18,
+            "label": "Co robi bot",
+            "component": {
+              "type": 3,
+              "custom_id": "action",
+              "options": [
+                {
+                  "label": "Uruchom workflow alertu bota",
+                  "value": "workflow",
+                  "default": true
+                },
+                {
+                  "label": "Opublikuj wiadomość",
+                  "value": "message"
+                },
+                {
+                  "label": "Oba",
+                  "value": "both"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "confirmation (pl)",
+      "fn": "confirm",
+      "input": {
+        "language": "pl",
+        "automation": {
+          "id": "a1",
+          "name": "Blog"
+        }
+      },
+      "expect": {
+        "flags": 32832,
+        "components": [
+          {
+            "type": 17,
+            "accent_color": 15548997,
+            "components": [
+              {
+                "type": 10,
+                "content": "Usunąć **Blog**? Tej operacji nie można cofnąć."
+              },
+              {
+                "type": 1,
+                "components": [
+                  {
+                    "type": 2,
+                    "style": 2,
+                    "label": "◀ Alerty",
+                    "custom_id": "mcfg:auto:list:0"
+                  },
+                  {
+                    "type": 2,
+                    "style": 4,
+                    "label": "Tak, usuń",
+                    "custom_id": "mcfg:auto:delyes:a1"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
